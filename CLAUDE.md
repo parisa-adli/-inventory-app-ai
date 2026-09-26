@@ -51,3 +51,17 @@ docs/
 3. `02-categories-suppliers.md`, then `03-products.md` (products depend on categories/suppliers existing), then `04-stock-movements.md` (depends on products), then `05-dashboard.md` (depends on products + movements), then `06-polish-qa.md`.
 4. After each task file, run the app and verify the acceptance checklist at the bottom of that file before moving on. Don't batch multiple task files into one uncommitted pass.
 5. If a task file references a decision not in the PRD, stop and ask rather than inventing one.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues using the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Uses the default five-role vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout: one `CONTEXT.md` at the repo root, ADRs in `docs/adr/`. See `docs/agents/domain.md`.

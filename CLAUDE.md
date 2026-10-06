@@ -33,17 +33,18 @@ This file is the entry point for Claude Code on this repo. Read this first, then
   /types          (express.d.ts adds req.user)
   seed.ts         (npm run seed)
 /client/src
-  /pages          (Dashboard, Login, ...)
-  /layouts        (AppLayout, AuthLayout)
-  /components/ui  (shadcn components)
-  /lib            (axios.ts cookie-based API client, queryClient.ts, utils.ts)
+  main.tsx        (entry: renders <App />)
+  /app            (App.tsx, providers.tsx, router.tsx, queryClient.ts, /layouts: AppLayout, AuthLayout)
+  /features       (one folder per slice, e.g. auth/, dashboard/; each owns its pages/, components/, hooks/, api/ as needed)
+  /components/ui  (shadcn components; shared, feature-agnostic UI only)
+  /lib            (axios.ts cookie-based API client, utils.ts)
 /shared
   /constants /schemas /types /seed-data
 /tests            (Playwright e2e)
 /docs             (PRD.md, PRDs/ per-phase specs, seed-data-strategy/)
 /tasks            (TASK.md)
 ```
-Directories like `controllers/`, `hooks/` and `api/` from the original plan do not exist yet; create them only when a task needs them. Request/form Zod schemas live in `shared/schemas` (not duplicated in server or client).
+Directories like `controllers/` (server) and a feature's `hooks/` / `api/` do not exist yet; create them only when a task needs them. Client code goes in `features/<name>/`; only code shared by 2+ features moves to `components/`, `lib/` or `app/`. Request/form Zod schemas live in `shared/schemas` (not duplicated in server or client).
 
 ## Commands (run from the repo root)
 - `npm ci` install · `npm run dev` runs server (`:5000`) and client (`:5173`, proxies `/api`) · `npm run seed` resets and reseeds the database.

@@ -12,7 +12,7 @@ This approach ensures that:
 ## Critical Files
 
 **Existing seed data (ready to use):**
-- `/shared/seed-data/users.ts` - 6 users (1 admin, 2 managers, 2 staff, 1 pending, 1 rejected)
+- `/shared/seed-data/users.ts` - 7 users (1 admin, 3 active staff, 2 pending [1 verified, 1 unverified], 1 rejected)
 - `/shared/seed-data/categories.ts` - 8 categories
 - `/shared/seed-data/suppliers.ts` - 8 suppliers  
 - `/shared/seed-data/products.ts` - 32 products across all categories

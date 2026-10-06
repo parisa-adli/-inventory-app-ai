@@ -8,6 +8,11 @@
   "exports": {
     ".": "./index.ts",
     "./constants": "./constants/index.ts",
+    "./schemas": "./schemas/index.ts",
+    "./types": "./types/index.ts",
     "./seed-data": "./seed-data/index.ts"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
   }
 }

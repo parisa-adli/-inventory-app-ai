@@ -35,15 +35,15 @@ import { USER_ROLES, ACCOUNT_STATUS } from '../../shared/constants';
 
 ## Constants
 
-- **roles.ts** - User role definitions (admin, manager, staff) with hierarchy
-- **account-status.ts** - Account status values (pending, approved, rejected)
+- **roles.ts** - User role definitions (admin, staff) with hierarchy
+- **account-status.ts** - Account status values (pending, active, rejected)
 - **stock-movement-types.ts** - Stock transaction types (receive, ship, adjust)
 
 ## Seed Data
 
 All seed data files export arrays of objects ready for database seeding:
 
-- **users.ts** - 6 users including admin, managers, staff, and test accounts for pending/rejected states
+- **users.ts** - 7 users including admin, staff, and test accounts for pending/rejected states
 - **categories.ts** - 8 product categories covering common inventory types
 - **suppliers.ts** - 8 suppliers with complete contact information
 - **products.ts** - 32 products across all categories with varied stock levels (in-stock, low-stock, out-of-stock, archived)

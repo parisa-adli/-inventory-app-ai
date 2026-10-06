@@ -34,7 +34,7 @@ npm run seed
 
 ### Existing Seed Data Location
 All seed data is ready to use in `/shared/seed-data/`:
-- `users.ts` - 6 users
+- `users.ts` - 7 users
 - `categories.ts` - 8 categories
 - `suppliers.ts` - 8 suppliers
 - `products.ts` - 32 products
@@ -42,7 +42,7 @@ All seed data is ready to use in `/shared/seed-data/`:
 
 ## Important Notes
 
-- **Manager role handling**: Manager users in seed data will be converted to `staff` role to match PRD requirements
+- **Roles**: the seed data contains only `admin` and `staff` (the former manager user is seeded directly as `staff`)
 - **Stock movements are source of truth**: Every product quantity change must have a corresponding StockMovement record
 - **Reference resolution required**: Seed data uses string references (email, SKU, title, name) that must be resolved to ObjectIds during seeding
 - **No transient token seeding**: EmailToken, OtpCode, and RefreshToken are runtime-generated only

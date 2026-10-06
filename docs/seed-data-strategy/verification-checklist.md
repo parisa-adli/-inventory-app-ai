@@ -18,7 +18,7 @@ Use this checklist after seeding each phase to ensure data integrity and proper 
 - [ ] Passwords are hashed (not plain text in database)
 - [ ] Admin user exists with `role: 'admin'`, `status: 'active'`, `emailVerified: true`
 - [ ] Staff users exist with `role: 'staff'`, `status: 'active'`, `emailVerified: true`
-- [ ] Manager users are converted to `role: 'staff'`
+- [ ] No `manager` role exists; Sarah is seeded directly as `staff`
 - [ ] Pending user exists with `status: 'pending'`, `emailVerified: true`
 - [ ] Rejected user exists with `status: 'rejected'`
 - [ ] No `EmailToken`, `OtpCode`, or `RefreshToken` documents seeded
@@ -33,7 +33,7 @@ npm run seed
 use inventory_db
 db.users.find().pretty()
 db.users.countDocuments({ role: 'admin' })  # Should be 1
-db.users.countDocuments({ role: 'staff' })  # Should be 4 (2 original staff + 2 converted managers)
+db.users.countDocuments({ role: 'staff' })  # Should be 6 (3 active + 2 pending + 1 rejected)
 db.users.countDocuments({ status: 'active' })  # Should be 4
 ```
 
@@ -258,7 +258,7 @@ mongosh inventory_db --eval "
 
 Expected output after Phase 03:
 ```
-Users: 6
+Users: 7
 Categories: 8
 Suppliers: 8
 Products: 32

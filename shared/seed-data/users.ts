@@ -10,7 +10,7 @@ export const seedUsers = [
     email: 'admin@inventory.local',
     password: 'Admin@123',  // Will be hashed
     role: USER_ROLES.ADMIN,
-    status: ACCOUNT_STATUS.APPROVED,
+    status: ACCOUNT_STATUS.ACTIVE,
     emailVerified: true,
     telegramChatId: null,
   },
@@ -18,8 +18,8 @@ export const seedUsers = [
     name: 'Sarah Manager',
     email: 'sarah.manager@inventory.local',
     password: 'Manager@123',  // Will be hashed
-    role: USER_ROLES.MANAGER,
-    status: ACCOUNT_STATUS.APPROVED,
+    role: USER_ROLES.STAFF,
+    status: ACCOUNT_STATUS.ACTIVE,
     emailVerified: true,
     telegramChatId: '123456789',
   },
@@ -28,7 +28,7 @@ export const seedUsers = [
     email: 'john.staff@inventory.local',
     password: 'Staff@123',  // Will be hashed
     role: USER_ROLES.STAFF,
-    status: ACCOUNT_STATUS.APPROVED,
+    status: ACCOUNT_STATUS.ACTIVE,
     emailVerified: true,
     telegramChatId: null,
   },
@@ -37,7 +37,7 @@ export const seedUsers = [
     email: 'emily.staff@inventory.local',
     password: 'Staff@123',  // Will be hashed
     role: USER_ROLES.STAFF,
-    status: ACCOUNT_STATUS.APPROVED,
+    status: ACCOUNT_STATUS.ACTIVE,
     emailVerified: true,
     telegramChatId: '987654321',
   },
@@ -48,6 +48,15 @@ export const seedUsers = [
     role: USER_ROLES.STAFF,
     status: ACCOUNT_STATUS.PENDING,
     emailVerified: true,
+    telegramChatId: null,
+  },
+  {
+    name: 'Unverified User',
+    email: 'unverified@inventory.local',
+    password: 'Unverified@123',  // Will be hashed
+    role: USER_ROLES.STAFF,
+    status: ACCOUNT_STATUS.PENDING,
+    emailVerified: false,  // Admin cannot activate until email is verified
     telegramChatId: null,
   },
   {

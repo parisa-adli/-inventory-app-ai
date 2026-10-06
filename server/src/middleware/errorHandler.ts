@@ -1,10 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
+import { ZodError } from 'zod';
 import { AppError } from '../utils/errors.js';
 
 export const errorHandler = (
   err: Error,
   req: Request,
   res: Response,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Express needs the 4-arg signature
   next: NextFunction
 ) => {
   console.error('Error:', err);
@@ -14,6 +16,16 @@ export const errorHandler = (
       error: {
         code: err.code,
         message: err.message,
+      },
+    });
+  }
+
+  // Handle Zod request-validation errors
+  if (err instanceof ZodError) {
+    return res.status(400).json({
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: err.issues.map((i) => `${i.path.map(String).join('.') || 'body'}: ${i.message}`).join('; '),
       },
     });
   }

@@ -1,11 +1,16 @@
 import { ReactNode } from 'react';
 import { Link } from 'react-router';
+import { Button } from '@/components/ui/button';
+import { useAuthUser, useLogout } from '@/features/auth/hooks/useAuth';
 
 interface AppLayoutProps {
   children: ReactNode;
 }
 
 export default function AppLayout({ children }: AppLayoutProps) {
+  const { data: user } = useAuthUser();
+  const logout = useLogout();
+
   return (
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white shadow-xs border-b">
@@ -41,6 +46,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   Suppliers
                 </Link>
               </div>
+            </div>
+            <div className="flex items-center gap-3">
+              {user && <span className="hidden sm:inline text-sm text-gray-600">{user.name}</span>}
+              <Button variant="outline" size="sm" disabled={logout.isPending} onClick={() => logout.mutate()}>
+                Log out
+              </Button>
             </div>
           </div>
         </div>

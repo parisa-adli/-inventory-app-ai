@@ -4,7 +4,7 @@ Derived from `docs/PRD.md`, the phase files in `docs/PRDs/` (00–06), and `docs
 
 Work phases in order. Each phase ends with its acceptance checklist, and should be verified (and committed) before the next one starts. Seed data is added **incrementally per phase**, not at the end.
 
-**Fresh session?** Read `CLAUDE.md` (conventions, library versions, commands), then [Current state](#current-state-as-of-commit-eabaff0-pushed-to-originmain), [Dev Environment](#dev-environment), and the section for the part you are doing. Task status is the checkbox on each task line; `[x]` = done and verified.
+**Fresh session?** Read `CLAUDE.md` (conventions, library versions, commands), then [Current state](#current-state), [Dev Environment](#dev-environment), and the section for the part you are doing. Task status is the checkbox on each task line; `[x]` = done and verified.
 
 ## Conventions
 
@@ -16,19 +16,19 @@ Work phases in order. Each phase ends with its acceptance checklist, and should 
 - Every list endpoint: pagination; TanStack Query keys include all filter/sort/page params.
 - Error shape: `{ error: { code, message } }`.
 
-## Current state (as of commit `eabaff0`, pushed to `origin/main`)
+## Current state
 
-History: `c127d2c` scaffold → `b173a2a` Phase 1 Part A + server dependency upgrades → `eabaff0` full dependency modernization.
+History: `c127d2c` scaffold → `b173a2a` Phase 1 Part A + server dependency upgrades → `eabaff0` full dependency modernization → `72fd3c2` client `app/` + `features/` structure → `4af5afb` Phase 1 Part B server → Part B client (latest commit).
 
 | Area | State |
 | --- | --- |
-| Monorepo | npm workspaces `client/`, `server/`, `shared/`; `tests/` (Playwright smoke tests in `tests/smoke.spec.ts`); `.nvmrc` = Node 24; `package-lock.json` is tracked; CI (`.github/workflows/playwright.yml`) runs Playwright. All code is **TypeScript** (`.ts`/`.tsx`), not `.js` as the older docs show. |
-| Server (`server/src`) | `index.ts` (Express 5: json, cookie-parser, CORS with credentials, error handler), `config/{database,env,load-env}.ts`, `models/{User,EmailToken,OtpCode,RefreshToken}.ts`, `services/{jwt,password}.ts`, `middleware/{auth,roleGuard,validate,errorHandler}.ts`, `utils/{errors,crypto}.ts`, `types/express.d.ts` (`req.user`), `routes/health.ts` (**the only route — no auth or users routes yet**), `seed.ts` (`seedUsers()` only). |
-| Client (`client/src`) | React 19 + Vite 8 + Tailwind 4. shadcn components in `components/ui` (badge, button, card, dialog, dropdown-menu, form, input, label, select, sonner, table, tabs); `lib/{axios,utils}.ts`; `app/{App,providers,router,queryClient}` and `app/layouts/{AppLayout,AuthLayout}`; feature folders `features/auth/pages/Login` and `features/dashboard/pages/Dashboard` (stubs); the router only has `/` and `/login`. No auth logic yet. |
+| Monorepo | npm workspaces `client/`, `server/`, `shared/`; `tests/` (Playwright smoke tests in `tests/smoke.spec.ts`); `.nvmrc` = Node 24; server tests that touch Mongo use the separate `inventory_app_claude_test` database; `package-lock.json` is tracked; CI (`.github/workflows/playwright.yml`) runs Playwright. All code is **TypeScript** (`.ts`/`.tsx`), not `.js` as the older docs show. |
+| Server (`server/src`) | `index.ts` (Express 5: json, cookie-parser, CORS with credentials, error handler), `config/{database,env,load-env}.ts`, `models/{User,EmailToken,OtpCode,RefreshToken}.ts`, `services/{jwt,password}.ts`, `middleware/{auth,roleGuard,validate,errorHandler}.ts`, `utils/{errors,crypto}.ts`, `types/express.d.ts` (`req.user`), `app.ts` (`createApp()`, importable by tests; `index.ts` only connects and listens), `routes/{health,auth}.ts` (**auth routes under `/api/auth` exist; no users routes yet**), `services/{email,emailToken}.ts`, `middleware/rateLimit.ts`, `utils/authUser.ts`, `test/db.ts`, `seed.ts` (`seedUsers()` only). |
+| Client (`client/src`) | React 19 + Vite 8 + Tailwind 4. shadcn components in `components/ui` (badge, button, card, dialog, dropdown-menu, form, input, label, select, sonner, table, tabs); `lib/{axios,utils}.ts`; `app/{App,providers,router,queryClient}` and `app/layouts/{AppLayout,AuthLayout}`; `features/auth/{api,hooks,components,pages}` (login, register, verify-email, forgot/reset password, awaiting-approval, rejected, route guards) and `features/dashboard/pages/Dashboard` (stub); router groups: public-only, open email-link pages, pending/rejected screens, active app shell, admin-only (empty until Part D). Logout button in the app shell. |
 | Shared (`shared/`) | `constants` (roles, account-status, stock-movement-types), `schemas/auth.ts`, `types/auth.ts` (`AuthUser`), `seed-data/` for every entity (only users are consumed so far). |
 | Tooling | TypeScript 6.0.3 (TS 7 is blocked by typescript-eslint), ESLint 10 flat config, Vitest 5 (22 server unit tests passing), `tsdown` server bundle (`server/dist/index.mjs`), `npm audit`: 0 vulnerabilities. Commands are in `CLAUDE.md`. |
 
-**Progress:** Phase 0 is done except the unchecked items below (P0.2 and P0.8 are partial, P0.9 is deferred). **Phase 1: Part A done; Parts B, C and D not started.** Phases 2–6 not started.
+**Progress:** Phase 0 is done except the unchecked items below (P0.2 and P0.8 are partial, P0.9 is deferred). **Phase 1: Parts A and B done; Parts C and D not started.** Phases 2–6 not started.
 
 ---
 
@@ -36,7 +36,9 @@ History: `c127d2c` scaffold → `b173a2a` Phase 1 Part A + server dependency upg
 
 - **Runtime:** Node 24 (`.nvmrc`), npm workspaces, install with `npm ci`. Server `http://localhost:5000`, client `http://localhost:5173` (Vite proxies `/api` to the server). `npm run dev` starts both.
 - **MongoDB:** local instance, database **`inventory_app_claude`** (`MONGODB_URI=mongodb://localhost:27017/inventory_app_claude` in `server/.env`). `server/.env` is gitignored: copy `server/.env.example`, which defaults to a database named `inventory`, and set the URI. `npm run seed` wipes and recreates the seeded collections in that database.
-- **Email (Brevo SMTP) is NOT configured.** There are no real `BREVO_SMTP_*` credentials, and `.env.example` only has placeholders. Part B must implement the development **"log-the-link" fallback** in `services/email`: when SMTP is not configured (missing or placeholder values), print the verification/reset link to the server console instead of sending, so every flow can be tested locally.
+- **Email (Brevo SMTP) is NOT configured.** There are no real `BREVO_SMTP_*` credentials, and `.env.example` only has placeholders. `services/email` implements the development **"log-the-link" fallback**: when SMTP is not configured (missing or placeholder `your-…` values) and `NODE_ENV` is not `production`, the verification/reset link is printed to the server console (`[email:dev] …`). In production without SMTP nothing is ever logged and mail-sending routes answer 503 `EMAIL_UNAVAILABLE`. Links use `CLIENT_URL`.
+- **Server tests:** `npm test` needs the local MongoDB. DB-backed tests run against `inventory_app_claude_test` (set in `server/vitest.config.ts`); `server/src/test/db.ts` refuses to touch any database whose name does not end in `_test`, and the test DB is dropped afterwards.
+- **Rate limits** are in memory and per IP (login 10 / register 10 / forgot 5 / reset 10 / resend 10 per 15 min). Restart the dev server to reset them after heavy manual or e2e testing.
 - **Playwright:** the Chromium download times out on this network. Run e2e against the installed Edge with `PW_CHROMIUM_CHANNEL=msedge npx playwright test --project=chromium` (or `PW_CHROMIUM_CHANNEL=msedge npm run test:e2e -- --project=chromium`). The config starts the client dev server itself (reuses one already running). Firefox and WebKit have not been run locally; CI runs all three.
 - **Cookies:** auth cookies are `httpOnly; Secure; SameSite=Strict`; the refresh cookie is scoped to `path=/api/auth`. `Secure` cookies are still accepted on `http://localhost` by Chromium and Firefox, but not by Safari.
 - **Seeded test accounts** (`npm run seed`; source `shared/seed-data/users.ts`; the `telegramChatId` values in it are fake):
@@ -70,7 +72,7 @@ Source: `docs/PRDs/00-project-setup.md`. Deps: none.
 ### Server
 - [x] **P0.1 [S] Audit existing scaffold against spec.** Confirm Express app boots; JSON parser, cookie parser, CORS (`credentials: true`, origin = client URL), centralized error handler returning `{ error: { code, message } }`.
 - [ ] **P0.2 [S] Env vars.** Ensure `server/.env.example` documents: `MONGODB_URI`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `COOKIE_DOMAIN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_MODE` (`webhook|polling`), `BREVO_SMTP_HOST`, `BREVO_SMTP_PORT`, `BREVO_SMTP_USER`, `BREVO_SMTP_PASS`, `APP_URL`, `PORT`. Add a typed, validated (Zod) env loader that fails fast on missing values. Add the global `LOW_STOCK_THRESHOLD` constant (used by P3 and P5, single definition in `shared/`).
-  - *Status: partial.* `.env.example` is complete, and `server/src/config/env.ts` validates (Zod, fail-fast) only `NODE_ENV`, the two JWT secrets, `COOKIE_DOMAIN` and the token TTLs. Still to add: `BREVO_SMTP_*`, `APP_URL`, `CLIENT_URL`, `TELEGRAM_*` (as each part needs them) and `LOW_STOCK_THRESHOLD`. `config/database.ts` and `index.ts` still read some vars from `process.env` directly.
+  - *Status: partial.* `.env.example` is complete, and `server/src/config/env.ts` validates (Zod, fail-fast) only `NODE_ENV`, the two JWT secrets, `COOKIE_DOMAIN` and the token TTLs. Part B added `PORT`, `MONGODB_URI`, `CLIENT_URL`, `EMAIL_FROM` and `BREVO_SMTP_*` (the mail settings stay optional in the schema on purpose, see Part B decisions), `APP_URL` was dropped (Open Question #13), and `database.ts`/`index.ts` now read from `env`. Still to add: `TELEGRAM_*` (Part C) and `LOW_STOCK_THRESHOLD`.
 - [x] **P0.3 [S] Mongoose connection** via `MONGODB_URI` (`config/database.ts`).
 - [x] **P0.4 [S] `GET /api/health`** returns 200.
 - [x] **P0.5 [S] Seed skeleton.** `seed.ts` connects, exposes `runSeed()`, clears + inserts per entity, disconnects, exits non-zero on failure. Script `npm run seed` in `server/package.json`. *(Seed strategy Phase 00.)*
@@ -78,8 +80,8 @@ Source: `docs/PRDs/00-project-setup.md`. Deps: none.
 ### Client
 - [x] **P0.6 [C] Providers & defaults.** TanStack Query provider (`retry: 1`, `refetchOnWindowFocus: false`); sonner `<Toaster />` mounted.
 - [x] **P0.7 [C] API wrapper** (`lib/axios.ts`): `withCredentials`/`credentials: 'include'`; response interceptor that calls `/api/auth/refresh` **once** on 401 and retries the original request (guard against refresh loops and concurrent-refresh stampedes). *Implemented, but see the deadlock risk under Part B known issues.*
-- [ ] **P0.8 [C] Router** (react-router) with route groups: public (login/register/verify/forgot/reset), pending/rejected screens, protected app shell (Dashboard/Products/Categories/Suppliers/Stock Movements), admin-only group (Users). No auth logic yet.
-  - *Status: partial.* The router currently has only `/` and `/login`. The route groups are completed in Part B (P1.18).
+- [x] **P0.8 [C] Router** (react-router) with route groups: public (login/register/verify/forgot/reset), pending/rejected screens, protected app shell (Dashboard/Products/Categories/Suppliers/Stock Movements), admin-only group (Users). No auth logic yet.
+  - *Done in Part B (P1.18).* The admin-only group exists but has no routes until Part D.
 - [ ] **P0.9 [C] Missing shadcn components** if needed later (`toast` via sonner already present; add `checkbox`, `textarea`, `popover`/`calendar` for date range, `tooltip`, `skeleton` as phases need them).
 - [x] **P0.10 [C] `client/.env.example`** documents API base URL / proxy target; Vite dev proxy to the server.
 
@@ -102,7 +104,7 @@ Phase 1 is built and committed in four parts, one session and one commit per par
 | Part | Scope | Tasks | Status |
 | --- | --- | --- | --- |
 | **A — Foundation** | constants/schemas, models, JWT + password services, auth middleware, `seedUsers()` | P1.1, P1.2, P1.3, P1.7, P1.16, P1.22 | ✅ done (`b173a2a`) |
-| **B — Email/password flow** | email service, register, verify-email, login, refresh/logout/me, forgot/reset, rate limiting for those routes; client auth context + email/password pages | P1.4, P1.8, P1.10 (verify-email only), P1.11, P1.13, P1.14, P1.17 (B's routes), P1.18, P1.19 (B's pages), P1.21 | ⏳ next |
+| **B — Email/password flow** | email service, register, verify-email, login, refresh/logout/me, forgot/reset, rate limiting for those routes; client auth context + email/password pages | P1.4, P1.8, P1.10 (verify-email only), P1.11, P1.13, P1.14, P1.17 (B's routes), P1.18, P1.19 (B's pages), P1.21 | ✅ done |
 | **C — Telegram** | OTP service, Telegram bot, signup webhook + link-telegram merge, OTP routes; client OTP tab + Telegram signup page | P1.5, P1.6, P1.9, P1.12, plus the Telegram extensions of P1.10, P1.17, P1.19 | not started |
 | **D — Admin user management** | users API + Admin Users page; run the full Phase 1 acceptance checklist | P1.15, P1.20, acceptance | not started |
 
@@ -123,7 +125,7 @@ Phase 1 is built and committed in four parts, one session and one commit per par
 
 ---
 
-### Part B — Email/password flow ⏳ next
+### Part B — Email/password flow ✅
 
 **Work order and dependencies** (✅ = already done in Part A):
 
@@ -143,24 +145,34 @@ Phase 1 is built and committed in four parts, one session and one commit per par
 Mount the new routers under `/api/auth` from `server/src/routes/index.ts`. Part B routes need an *active* user only for data routes; the `/auth/*` routes use `requireAuth` alone where they need a session (`/me`, `/logout`).
 
 #### Server
-- [ ] **P1.4 [S · B] `services/email`**: Nodemailer + Brevo SMTP; templates for verification and password reset (the telegram-link template is added in Part C but design the service to support it); **dev fallback** that logs the link to the console when SMTP is not configured (see [Dev Environment](#dev-environment)). Links point at the client landing pages — see Open Question #13. Deps: P0.2.
-- [ ] **P1.8 [S · B] `POST /api/auth/register`**: `validate(registerSchema)`; 409 `DUPLICATE_EMAIL` ("This email is already registered.") if the email exists (explicit, intentional); else create the user as `pending` / `staff` / `emailVerified: false`, create a `verify-email` `EmailToken` (hashed, expiring, single-use), and email the link. Deps: P1.2, P1.4, P1.7.
-- [ ] **P1.10 [S · B] `GET /api/auth/verify-email/:token`**: single-use, expiring; look the token up by `sha256`, mark it consumed, set `emailVerified: true`. Handle only `verify-email` tokens here; Part C adds the `link-telegram` branch, so structure it as a switch on token type. Deps: P1.2.
-- [ ] **P1.11 [S · B] `POST /api/auth/login`**: `validate(loginSchema)`; check credentials with `verifyPassword`; `rejected` → 403 with a rejected message; `pending` → tokens are still issued (the client routes by `/me`); `active` → normal. Use `issueSession`. Deps: P1.3.
-- [ ] **P1.13 [S · B] `POST /api/auth/refresh`** (`rotateRefreshToken` from the `refresh_token` cookie), **`POST /api/auth/logout`** (revoke the refresh token + `clearAuthCookies`), **`GET /api/auth/me`** (`requireAuth`; returns `AuthUser`: `{ id, name, email, role, status, emailVerified }`). Deps: P1.3, P1.16.
-- [ ] **P1.14 [S · B] `POST /api/auth/forgot-password`** (always the same generic 200; if the account exists create a `reset-password` token and email the link) and **`POST /api/auth/reset-password/:token`** (`validate(resetPasswordSchema)`, consume the token, set the new hash, and revoke the user's refresh tokens with `revokeAllUserTokens`). Deps: P1.4.
-- [ ] **P1.17 [S · B] Rate limiting** (`express-rate-limit`) on register, login, forgot-password and reset-password. The OTP routes are limited in Part C. Limits are not specified in the PRD — see Open Question #14. Deps: the routes above.
+- [x] **P1.4 [S · B] `services/email`**: Nodemailer + Brevo SMTP; templates for verification and password reset (the telegram-link template is added in Part C but design the service to support it); **dev fallback** that logs the link to the console when SMTP is not configured (see [Dev Environment](#dev-environment)). Links point at the client landing pages — see Open Question #13. Deps: P0.2.
+- [x] **P1.8 [S · B] `POST /api/auth/register`**: `validate(registerSchema)`; 409 `DUPLICATE_EMAIL` ("This email is already registered.") if the email exists (explicit, intentional); else create the user as `pending` / `staff` / `emailVerified: false`, create a `verify-email` `EmailToken` (hashed, expiring, single-use), and email the link. Deps: P1.2, P1.4, P1.7.
+- [x] **P1.10 [S · B] `GET /api/auth/verify-email/:token`**: single-use, expiring; look the token up by `sha256`, mark it consumed, set `emailVerified: true`. Handle only `verify-email` tokens here; Part C adds the `link-telegram` branch, so structure it as a switch on token type. Deps: P1.2.
+- [x] **P1.11 [S · B] `POST /api/auth/login`**: `validate(loginSchema)`; check credentials with `verifyPassword`; `rejected` → 403 with a rejected message; `pending` → tokens are still issued (the client routes by `/me`); `active` → normal. Use `issueSession`. Deps: P1.3.
+- [x] **P1.13 [S · B] `POST /api/auth/refresh`** (`rotateRefreshToken` from the `refresh_token` cookie), **`POST /api/auth/logout`** (revoke the refresh token + `clearAuthCookies`), **`GET /api/auth/me`** (`requireAuth`; returns `AuthUser`: `{ id, name, email, role, status, emailVerified }`). Deps: P1.3, P1.16.
+- [x] **P1.14 [S · B] `POST /api/auth/forgot-password`** (always the same generic 200; if the account exists create a `reset-password` token and email the link) and **`POST /api/auth/reset-password/:token`** (`validate(resetPasswordSchema)`, consume the token, set the new hash, and revoke the user's refresh tokens with `revokeAllUserTokens`). Deps: P1.4.
+- [x] **P1.17 [S · B] Rate limiting** (`express-rate-limit`) on register, login, forgot-password and reset-password. The OTP routes are limited in Part C. Limits are not specified in the PRD — see Open Question #14. Deps: the routes above.
 
 #### Client
-- [ ] **P1.18 [C · B] Auth context/hook** over `GET /api/auth/me` (TanStack Query) gating the router: unauthenticated → public routes; `pending` → Awaiting Approval; `rejected` → Rejected; `active` → app shell. Also complete **P0.8**: route groups for public, pending/rejected, protected app shell and an admin-only group. Deps: P0.8, P1.13.
-- [ ] **P1.19 [C · B] Pages (all React Hook Form + Zod, using the shared schemas)**: Login (**password form only** — the Telegram OTP tab is Part C), Register, Verify-Email landing (reads the token from the URL and calls the API), Forgot Password, Reset Password, Awaiting Approval, Rejected/Revoked. Toast on every mutation. Deps: P1.18.
-- [ ] **P1.21 [C · B] Logout** action in the app shell; clear the Query cache on logout. Deps: P1.13, P1.18.
+- [x] **P1.18 [C · B] Auth context/hook** over `GET /api/auth/me` (TanStack Query) gating the router: unauthenticated → public routes; `pending` → Awaiting Approval; `rejected` → Rejected; `active` → app shell. Also complete **P0.8**: route groups for public, pending/rejected, protected app shell and an admin-only group. Deps: P0.8, P1.13.
+- [x] **P1.19 [C · B] Pages (all React Hook Form + Zod, using the shared schemas)**: Login (**password form only** — the Telegram OTP tab is Part C), Register, Verify-Email landing (reads the token from the URL and calls the API), Forgot Password, Reset Password, Awaiting Approval, Rejected/Revoked. Toast on every mutation. Deps: P1.18.
+- [x] **P1.21 [C · B] Logout** action in the app shell; clear the Query cache on logout. Deps: P1.13, P1.18.
 
 #### Part B: known issues and hand-offs
-- **Refresh-interceptor deadlock to fix (`client/src/lib/axios.ts`).** On a 401, the response interceptor calls `POST /auth/refresh`. If that refresh request itself returns 401 (or `/auth/me` is called while logged out), the refresh request goes through the same interceptor, sees `isRefreshing === true` and queues itself behind the refresh it is part of — it never settles. Exclude `/auth/refresh` (and ideally `/auth/login`, `/auth/me`) from the retry logic and verify that an unauthenticated visit to `/` ends on the login page and does not hang.
+- **Refresh-interceptor deadlock: fixed in Part B (`client/src/lib/axios.ts`).** Original problem: On a 401, the response interceptor calls `POST /auth/refresh`. If that refresh request itself returns 401 (or `/auth/me` is called while logged out), the refresh request goes through the same interceptor, sees `isRefreshing === true` and queues itself behind the refresh it is part of — it never settles. The retry now skips `/auth/refresh`, `/auth/login`, `/auth/register`, `/auth/forgot-password` and `/auth/reset-password`. `/auth/me` is deliberately **still retried**, so a reload after the 15-minute access token expired refreshes silently; excluding it would log the user out. Verified: an unauthenticated visit to `/` ends on `/login`.
 - The `link-telegram` verification branch (P1.10), OTP routes/limits (P1.17), the OTP login tab and the Telegram signup page (P1.19) belong to **Part C**. Do not build them in Part B.
 - A pending user cannot be approved until Part D exists. Test the pending/rejected/unverified screens with the seeded accounts in [Dev Environment](#dev-environment).
 - Cookies are `Secure`; see Dev Environment for browser notes.
+
+#### Decisions made in Part B (deviations from the original task text)
+- **Emailed links use `CLIENT_URL`** (`/verify-email/:token`, `/reset-password/:token`); `APP_URL` was removed. Verify-email token 24 h, reset token 1 h.
+- **Added `POST /api/auth/resend-verification`** (needs a session, rate-limited, 204, no-op if already verified) and a "Resend" button on Awaiting Approval for unverified users. Not in the PRD; approved by the user because an unverified user could otherwise never be approved.
+- **`POST /auth/logout` has no `requireAuth`**: it revokes the refresh cookie's token if present, clears both cookies, and always returns 204, so an expired access token cannot block logout.
+- **Registration issues no session**; the client shows "check your email". Reset-password revokes all sessions and the client redirects to Login (no auto-login).
+- **Login**: wrong password, unknown email and passwordless accounts all return 401 `INVALID_CREDENTIALS` (dummy bcrypt compare for unknown emails); `rejected` returns 403 `ACCOUNT_REJECTED` only after a correct password. Error codes: `VALIDATION_ERROR`, `INVALID_CREDENTIALS`, `UNAUTHORIZED`, `ACCOUNT_REJECTED`, `DUPLICATE_EMAIL`, `INVALID_TOKEN`, `RATE_LIMITED`, `EMAIL_UNAVAILABLE`.
+- **Mail down in production** fails every mail-sending request the same way (503, checked before any DB access) so forgot-password cannot reveal which accounts exist; a failed register send deletes the new user and token. This is a request-time failure, not a startup failure, so the SMTP variables stay optional in `env.ts`.
+- **Route gating**: unauthenticated → `/login` with a return-to path; pending → `/awaiting-approval`; rejected → `/rejected`; active users on `/login` are redirected home. Unknown paths redirect to `/` (the Products, Categories and Suppliers nav links land on the dashboard until their phases).
+- **Known gap:** a non-401 error from `/auth/me` (for example the API being down) is treated as logged out by the guards.
 
 #### Part B acceptance (subset of the Phase 1 checklist below)
 Register → pending, unverified, link arrives in the console/inbox and sets `emailVerified` · duplicate register → explicit error · password login works · pending user sees only Awaiting Approval · rejected user is blocked · access token silently refreshes, logout clears both cookies · forgot-password is identical for known and unknown emails · seeded accounts can log in. Also run `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` and the Playwright smoke tests.
@@ -192,18 +204,18 @@ Deps: Parts B (login and the auth context) and A (`requireRole`).
 ---
 
 ### Acceptance (from `01-identity-auth.md`, tagged by the part that makes it testable)
-- [ ] **B** Register new email → pending, unverified; verification link arrives (or is logged in dev) and sets `emailVerified`.
-- [ ] **B** Register same email again → explicit duplicate error.
+- [x] **B** Register new email → pending, unverified; verification link arrives (or is logged in dev) and sets `emailVerified`.
+- [x] **B** Register same email again → explicit duplicate error.
 - [ ] **C** Telegram signup, new email → pending user + verification email.
 - [ ] **C** Telegram signup, existing email → no duplicate; confirm email; click links the chatId to the existing account.
 - [ ] **B / C** Login works by password (B) and by Telegram OTP (C) once active.
 - [ ] **C** OTP: 2-min expiry, 3 attempts, 60-s resend cooldown.
-- [ ] **B** Pending user can log in but sees only Awaiting Approval.
+- [x] **B** Pending user can log in but sees only Awaiting Approval.
 - [ ] **D** Admin cannot activate an unverified user.
 - [ ] **B / D** Rejected user is blocked (B); admin can reactivate (D).
-- [ ] **B** Access token expires and silently refreshes; logout clears both cookies.
-- [ ] **B** Forgot-password response identical whether or not the email exists.
-- [ ] **B** Seeded users can log in (`admin@inventory.local` / `Admin@123`, `john.staff@inventory.local` / `Staff@123`).
+- [x] **B** Access token expires and silently refreshes; logout clears both cookies.
+- [x] **B** Forgot-password response identical whether or not the email exists.
+- [x] **B** Seeded users can log in (`admin@inventory.local` / `Admin@123`, `john.staff@inventory.local` / `Staff@123`).
 
 ---
 
@@ -352,8 +364,8 @@ These need a decision (PRD wins by default; per `CLAUDE.md`, stop and ask rather
 10. **Image handling:** `imageUrl` only (URL input), or an upload endpoint? Task 03 says "URL input or simple upload-to-URL placeholder".
 11. **Adjustment `quantity` semantics:** PRD says signed delta for adjustment; the API body has a single `quantity` field — confirm that negative numbers are allowed for `adjustment` only.
 12. **Chart treatment of adjustments:** excluded from In/Out chart (PRD says received vs shipped only) — confirm.
-13. **Base URL of the emailed links (needed in Part B).** `.env.example` has `APP_URL=http://localhost:5000` (the API), but verification and reset links open client pages (Verify-Email landing, Reset Password) that then call the API, and the client runs on `CLIENT_URL` (`http://localhost:5173`). *Proposed:* build links from the client origin (`${CLIENT_URL}/verify-email/:token`, `${CLIENT_URL}/reset-password/:token`) and either point `APP_URL` at the client or drop it. Ask before building P1.4.
-14. **Unspecified numbers (needed in Part B).** The PRD says tokens are "expiring" and auth routes are "rate-limited" but gives no values. *Proposed:* verify-email token 24 h, reset-password token 1 h; per-IP limits on register/login/forgot/reset (e.g. 10 requests per 15 min). Confirm or change before P1.4 / P1.17.
+13. ✅ **Resolved in Part B — base URL of emailed links.** Links are built from `CLIENT_URL`; `APP_URL` was dropped. Original question: `.env.example` has `APP_URL=http://localhost:5000` (the API), but verification and reset links open client pages (Verify-Email landing, Reset Password) that then call the API, and the client runs on `CLIENT_URL` (`http://localhost:5173`). *Proposed:* build links from the client origin (`${CLIENT_URL}/verify-email/:token`, `${CLIENT_URL}/reset-password/:token`) and either point `APP_URL` at the client or drop it. Ask before building P1.4.
+14. ✅ **Resolved in Part B — token lifetimes and rate limits.** Verify 24 h, reset 1 h; per-IP, 15-min window: login 10, register 10, forgot-password 5, reset-password 10, resend-verification 10 (429 `RATE_LIMITED`). Original question: The PRD says tokens are "expiring" and auth routes are "rate-limited" but gives no values. *Proposed:* verify-email token 24 h, reset-password token 1 h; per-IP limits on register/login/forgot/reset (e.g. 10 requests per 15 min). Confirm or change before P1.4 / P1.17.
 
 ---
 

@@ -3,7 +3,7 @@
 ## Server
 - Init Express app (`/server`), TypeScript optional but recommended.
 - Connect Mongoose to MongoDB via `MONGODB_URI` env var.
-- Env vars: `MONGODB_URI`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `COOKIE_DOMAIN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_MODE` (webhook|polling), `BREVO_SMTP_HOST`, `BREVO_SMTP_PORT`, `BREVO_SMTP_USER`, `BREVO_SMTP_PASS`, `APP_URL` (for building verification/reset links), `PORT`.
+- Env vars: `MONGODB_URI`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `COOKIE_DOMAIN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_MODE` (webhook|polling), `BREVO_SMTP_HOST`, `BREVO_SMTP_PORT`, `BREVO_SMTP_USER`, `BREVO_SMTP_PASS`, `CLIENT_URL` (CORS origin and the base of verification/reset links), `EMAIL_FROM`, `PORT`.
 - Global middleware: JSON body parser, cookie parser, CORS (credentials: true, origin = client URL), centralized error handler returning `{ error: { code, message } }`.
 - Health check route `GET /api/health`.
 

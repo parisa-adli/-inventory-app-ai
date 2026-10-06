@@ -7,6 +7,19 @@ export const axiosInstance = axios.create({
   withCredentials: true,
 });
 
+// Auth-entry calls never trigger a refresh: a 401 there means bad credentials, and /auth/refresh
+// itself must not queue behind the refresh it is part of (that deadlocks). /auth/me is deliberately
+// NOT listed, so a reload after the 15-minute access token expired still refreshes silently.
+const NO_REFRESH_PATHS = [
+  '/auth/refresh',
+  '/auth/login',
+  '/auth/register',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+];
+
+const skipsRefresh = (url?: string) => NO_REFRESH_PATHS.some((path) => url?.startsWith(path));
+
 let isRefreshing = false;
 let failedQueue: Array<{
   resolve: (value?: unknown) => void;
@@ -32,7 +45,11 @@ axiosInstance.interceptors.response.use(
       _retry?: boolean;
     };
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
+      !skipsRefresh(originalRequest.url)
+    ) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });

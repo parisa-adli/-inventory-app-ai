@@ -1,10 +1,13 @@
 # CLAUDE.md — Product Inventory Manager
 
-This file is the entry point for Claude Code on this repo. Read this first, then work through `docs/tasks/*.md` **in numeric order**. Each task file is self-contained (server + client subtasks for one feature slice) and assumes everything in earlier task files already works.
+This file is the entry point for Claude Code on this repo. Read this first, then `tasks/TASK.md`: it holds the build plan, task IDs (`P<phase>.<n>`), what is already done, the dev environment and the open questions. The per-phase specs in `docs/PRDs/` are self-contained (server + client subtasks for one feature slice) and assume everything in earlier phases already works.
+
+**Starting a fresh session?** (1) Read this file. (2) In `tasks/TASK.md` read *Current state*, *Dev Environment*, and the section for the part you were asked to do. (3) Before building, check the *Open Questions* that the part depends on and ask the user about unresolved ones.
 
 ## Source of truth
 - `docs/PRD.md` — full product spec. If a task file and the PRD ever disagree, the PRD wins; flag the conflict instead of guessing.
-- `docs/tasks/00-project-setup.md` through `docs/tasks/06-polish-qa.md` — build order.
+- `docs/PRDs/00-project-setup.md` through `docs/PRDs/06-polish-qa.md` — per-phase specs and acceptance checklists, in build order.
+- `tasks/TASK.md` — the working task list derived from the above (task IDs, parts, progress, decisions). Keep its checkboxes and *Current state* up to date when you finish work.
 
 ## Tech stack (do not substitute without asking)
 - Client: React + Vite, Tailwind CSS, shadcn/ui, TanStack Query, TanStack Table, React Hook Form + Zod, Recharts
@@ -12,6 +15,7 @@ This file is the entry point for Claude Code on this repo. Read this first, then
 - Auth: JWT access+refresh in httpOnly Secure cookies, rotation on refresh
 - Email: Nodemailer + Brevo SMTP
 - Telegram: grammY or node-telegram-bot-api (support both webhook and polling; polling is what actually runs in prod)
+- Monorepo: npm workspaces (`client`, `server`, `shared`); everything is TypeScript. `shared/` (`@inventory/shared`) holds constants, Zod schemas, types and seed data, imported by both sides.
 
 ### Library versions to code against (latest majors; do not write code for older APIs)
 - React 19 (ref is a plain prop, no `forwardRef`), React Router 8 (import everything from `react-router`; `react-router-dom` no longer exists), Tailwind CSS 4 (CSS-first config in `client/src/index.css`, `@tailwindcss/vite`, no `tailwind.config.js`), Vite 8, TanStack Table 9 (`useTable` + `tableFeatures`, not v8's `useReactTable`), Zod 4 (`z.email()`, `error` param instead of `message`), Express 5 (async handlers may throw), Mongoose 9, ESLint 10 flat config (`eslint.config.js`).
@@ -19,42 +23,48 @@ This file is the entry point for Claude Code on this repo. Read this first, then
 
 ## Repo layout
 ```
-/server
-  /src
-    /models        (Mongoose schemas)
-    /routes
-    /controllers
-    /middleware     (auth, role-guard, error handler)
-    /services       (otp, email, telegram, jwt)
-    /validation     (Zod schemas)
-    seed.js
-/client
-  /src
-    /pages          (Dashboard, Products, Categories, Suppliers, StockMovements, auth pages)
-    /components
-    /hooks          (TanStack Query hooks)
-    /schemas        (Zod, mirrored from server/validation where practical)
-    /api            (fetch wrappers, cookie-based, credentials: 'include')
-docs/
-  PRD.md
-  tasks/
+/server/src
+  /config         (env.ts validated env, load-env.ts, database.ts)
+  /models         (Mongoose schemas: User, EmailToken, OtpCode, RefreshToken, ...)
+  /routes         (Express routers, mounted from routes/index.ts under /api)
+  /middleware     (auth: requireAuth/requireActive, roleGuard: requireRole, validate, errorHandler)
+  /services       (jwt, password, email, otp, telegram, ...)
+  /utils          (errors: AppError + subclasses, crypto: sha256/randomToken)
+  /types          (express.d.ts adds req.user)
+  seed.ts         (npm run seed)
+/client/src
+  /pages          (Dashboard, Login, ...)
+  /layouts        (AppLayout, AuthLayout)
+  /components/ui  (shadcn components)
+  /lib            (axios.ts cookie-based API client, queryClient.ts, utils.ts)
+/shared
+  /constants /schemas /types /seed-data
+/tests            (Playwright e2e)
+/docs             (PRD.md, PRDs/ per-phase specs, seed-data-strategy/)
+/tasks            (TASK.md)
 ```
+Directories like `controllers/`, `hooks/` and `api/` from the original plan do not exist yet; create them only when a task needs them. Request/form Zod schemas live in `shared/schemas` (not duplicated in server or client).
+
+## Commands (run from the repo root)
+- `npm ci` install · `npm run dev` runs server (`:5000`) and client (`:5173`, proxies `/api`) · `npm run seed` resets and reseeds the database.
+- Checks, run all four before committing: `npm run typecheck` · `npm run lint` · `npm test` (server Vitest) · `npm run build` (client build + bundled server).
+- `npm run test:e2e` runs Playwright. On this machine use `PW_CHROMIUM_CHANNEL=msedge` and `--project=chromium` (details in `tasks/TASK.md` → Dev Environment).
 
 ## Working conventions
 - Every mutating server route is guarded by auth middleware + role-guard middleware — never trust the client for role checks.
 - Every stock quantity change (receive, ship, adjustment, or the inline +/- buttons) MUST write a `StockMovement` record in the same transaction/operation as the quantity update. Movements are the audit source of truth — do not let `product.quantity` drift from the sum of its history.
-- Every form: React Hook Form + Zod resolver. Every server mutation route: validate the body with the matching Zod schema before touching the DB.
+- Every form: React Hook Form + Zod resolver. Every server mutation route: validate the body with the matching Zod schema (from `@inventory/shared`, via the `validate()` middleware) before touching the DB.
 - Every server read list endpoint (products, stock-movements, users) supports pagination; wire these into TanStack Query with proper `queryKey`s so filters/sort/page all invalidate correctly.
-- Toast on every mutation's success/error (shadcn toast).
+- Toast on every mutation's success/error (sonner).
 - Auth endpoints (login, register, OTP request/verify) are rate-limited.
 - Password-reset responses are always generic (no account enumeration). Registration explicitly reveals duplicate emails (confirmed trade-off, see PRD §3).
 
 ## How to work through this repo
-1. Do `00-project-setup.md` first — nothing else compiles without it.
-2. Do `01-identity-auth.md` next and get it fully working (register, verify, login both ways, pending/rejected screens, admin approval) before touching any other feature — every other page sits behind this.
-3. `02-categories-suppliers.md`, then `03-products.md` (products depend on categories/suppliers existing), then `04-stock-movements.md` (depends on products), then `05-dashboard.md` (depends on products + movements), then `06-polish-qa.md`.
-4. After each task file, run the app and verify the acceptance checklist at the bottom of that file before moving on. Don't batch multiple task files into one uncommitted pass.
-5. If a task file references a decision not in the PRD, stop and ask rather than inventing one.
+1. Follow the phase order in `tasks/TASK.md`: Phase 0 (setup), Phase 1 (identity & auth), then categories/suppliers, products, stock movements, dashboard, polish. Every other page sits behind auth, so finish Phase 1 before touching any other feature.
+2. Phase 1 is built in four parts (A foundation, B email/password flow, C Telegram, D admin user management), one session and one commit per part. The part boundaries and the tasks in each are defined in `tasks/TASK.md`. Check its *Current state* for which parts are done.
+3. After each part or phase, run the app and verify its acceptance checklist before moving on. Don't batch multiple phases into one uncommitted pass.
+4. If a task references a decision not in the PRD, stop and ask rather than inventing one (see *Open Questions* in `tasks/TASK.md`).
+5. Update `tasks/TASK.md` (checkboxes, *Current state*, resolved questions) as part of the same commit as the work.
 
 ## Agent skills
 

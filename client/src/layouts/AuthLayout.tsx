@@ -11,7 +11,7 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
         <div className="text-center">
           <h1 className="text-3xl font-bold text-gray-900">Inventory Manager</h1>
         </div>
-        <div className="bg-white py-8 px-6 shadow rounded-lg">
+        <div className="bg-white py-8 px-6 shadow-sm rounded-lg">
           {children}
         </div>
       </div>

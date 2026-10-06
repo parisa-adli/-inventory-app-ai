@@ -157,7 +157,7 @@ Source: `docs/PRDs/03-products.md`, PRD §4–§6.2. Deps: **P2**.
 
 ### Client
 - [ ] **P3.9 [C] Products page header**: search (debounced), Category select, Supplier select (+ "Unassigned"), Stock Status (All/In/Low/Out), Active/Archived tabs. Filters stored in URL search params so the dashboard can deep-link (P5).
-- [ ] **P3.10 [C] TanStack Table**: Title, SKU, Category, Supplier ("Unassigned" badge), Cost, Sale, Quantity with inline −/+ (− disabled at 0; disable while pending), Unit, Status badge, Actions menu. Server-side sort + pagination; query keys include filters/sort/page.
+- [ ] **P3.10 [C] TanStack Table** (v9 API: `tableFeatures` + `useTable`, row models declared on the features object): Title, SKU, Category, Supplier ("Unassigned" badge), Cost, Sale, Quantity with inline −/+ (− disabled at 0; disable while pending), Unit, Status badge, Actions menu. Server-side sort + pagination; query keys include filters/sort/page.
 - [ ] **P3.11 [C] Create/Edit form** (RHF+Zod, shared schema): all fields incl. SKU, unit select, image URL, category, optional supplier.
 - [ ] **P3.12 [C] Adjust Stock modal**: tabs Receive / Ship / Manual Adjustment; adjustment requires reason; ship validates against on-hand. Surface server errors in toasts.
 - [ ] **P3.13 [C] Stock History modal** (per product: date, type, qty, resulting qty, note, user).

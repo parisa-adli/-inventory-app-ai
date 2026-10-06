@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './config/load-env.js';
 import mongoose from 'mongoose';
 import { seedUsers as seedUserData } from '@inventory/shared';
 import { connectDatabase } from './config/database.js';

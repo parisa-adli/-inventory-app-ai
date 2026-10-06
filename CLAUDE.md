@@ -13,6 +13,10 @@ This file is the entry point for Claude Code on this repo. Read this first, then
 - Email: Nodemailer + Brevo SMTP
 - Telegram: grammY or node-telegram-bot-api (support both webhook and polling; polling is what actually runs in prod)
 
+### Library versions to code against (latest majors; do not write code for older APIs)
+- React 19 (ref is a plain prop, no `forwardRef`), React Router 8 (import everything from `react-router`; `react-router-dom` no longer exists), Tailwind CSS 4 (CSS-first config in `client/src/index.css`, `@tailwindcss/vite`, no `tailwind.config.js`), Vite 8, TanStack Table 9 (`useTable` + `tableFeatures`, not v8's `useReactTable`), Zod 4 (`z.email()`, `error` param instead of `message`), Express 5 (async handlers may throw), Mongoose 9, ESLint 10 flat config (`eslint.config.js`).
+- TypeScript is 6.x on purpose: typescript-eslint does not support TS 7 yet. `@types/node` is 24 to match the Node 24 runtime (`.nvmrc`).
+
 ## Repo layout
 ```
 /server

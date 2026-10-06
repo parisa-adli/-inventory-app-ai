@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.22.0"
   },
   "description": "Product Inventory Manager - Monorepo",
   "workspaces": [
@@ -19,7 +19,12 @@
     "build:client": "npm run build -w client",
     "lint:server": "npm run lint -w server",
     "lint:client": "npm run lint -w client",
-    "seed": "npm run seed -w server"
+    "seed": "npm run seed -w server",
+    "build": "npm run build:server && npm run build:client",
+    "lint": "npm run lint:server && npm run lint:client",
+    "typecheck": "npm run typecheck -w shared -w server -w client",
+    "test": "npm test -w server",
+    "test:e2e": "playwright test"
   },
   "keywords": [
     "inventory",
@@ -31,7 +36,7 @@
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "@types/node": "^24.19.1",
-    "concurrently": "^8.2.2"
+    "concurrently": "^10.0.5"
   },
   "allowScripts": {
     "bcrypt@6.0.0": true,

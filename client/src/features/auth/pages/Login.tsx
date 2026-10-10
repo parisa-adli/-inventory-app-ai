@@ -12,6 +12,7 @@ export default function Login() {
   const login = useLogin();
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
+    mode: 'onTouched',
     defaultValues: { email: '', password: '' },
   });
 

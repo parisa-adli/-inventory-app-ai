@@ -14,6 +14,7 @@ export default function ResetPassword() {
   const reset = useResetPassword();
   const form = useForm<ResetPasswordInput>({
     resolver: zodResolver(resetPasswordSchema),
+    mode: 'onTouched',
     defaultValues: { password: '' },
   });
 

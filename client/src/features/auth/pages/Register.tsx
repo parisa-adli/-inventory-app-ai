@@ -12,6 +12,7 @@ export default function Register() {
   const register = useRegister();
   const form = useForm<RegisterInput>({
     resolver: zodResolver(registerSchema),
+    mode: 'onTouched',
     defaultValues: { name: '', email: '', password: '' },
   });
 

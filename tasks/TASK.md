@@ -181,15 +181,46 @@ Register → pending, unverified, link arrives in the console/inbox and sets `em
 
 ### Part C — Telegram
 
-Deps: Part B (the email service and the verify-email route are extended here). Needs a Telegram test bot token (`TELEGRAM_BOT_TOKEN`; see P6.9 for local testing).
+Deps: Part B (the email service and the verify-email route are extended here). A real bot exists (`@inventory_app_claude_bot`, token in the gitignored `server/.env`). Telegram allows **one polling consumer per token**; see P6.9.
 
-- [ ] **P1.5 [S · C] `services/otp`**: generate a 6-digit code, store it hashed; 2-min expiry, max 3 attempts then invalidate, 60-s resend cooldown. Deps: P1.2.
-- [ ] **P1.6 [S · C] `services/telegram`**: grammY bot; **polling** mode (prod) and **webhook** mode selected by `TELEGRAM_MODE`; conversation to collect name + email for signup → calls the signup logic; sends OTP codes to `telegramChatId`. Deps: P1.4, P1.5.
-- [ ] **P1.9 [S · C] `POST /api/auth/telegram/signup-webhook`**: new email → create the user with `telegramChatId` + verification email; existing email → **no duplicate**, create a `link-telegram` `EmailToken` carrying the new chatId, email a confirm link. See Open Question #9 for how the endpoint is authenticated. Deps: P1.6, P1.8.
-- [ ] **P1.12 [S · C] `POST /api/auth/otp/request` and `/otp/verify`**: look up `telegramChatId` by email, send the code via the bot, verify with the OTP policy, issue tokens (`issueSession`). Decide the behavior for an unknown email or no linked Telegram without leaking more than the PRD permits. Deps: P1.5, P1.6, P1.3.
-- [ ] **P1.10 (extension) [S · C]** add the `link-telegram` branch to verify-email: on click, attach the stored `telegramChatId` to the existing account.
-- [ ] **P1.17 (extension) [S · C]** rate-limit the OTP request/verify routes.
-- [ ] **P1.19 (extension) [C · C]** Login page **Telegram OTP tab** (email → code, with a resend countdown) and the "Sign up with Telegram" instructions page with a bot deep link.
+#### Decisions made for Part C (grilling session; the PRD is otherwise unchanged)
+- **Scope:** all of Part C ships in one part: signup (new email and existing-email merge), the `link-telegram` branch, and OTP login.
+- **No public `signup-webhook` HTTP route (PRD deviation, resolves Open Question #9).** The bot runs in the server process and calls a `signupWithTelegram()` service function directly, so there is no unauthenticated "create a user and email any address" endpoint. `TELEGRAM_WEBHOOK_SECRET` is used only as Telegram's `secret_token` for webhook mode.
+- **Bot unconfigured** (token missing or a `your-…` placeholder), non-production: the bot does not start and OTP codes are printed to the console (`[telegram:dev]`), so OTP login works with the seeded users. Production without a token: OTP request/verify answer 503 `TELEGRAM_UNAVAILABLE`, checked before any DB access.
+- **Modes:** `TELEGRAM_MODE=polling` (default, prod) or `webhook`. Webhook mode serves Telegram updates at `POST /api/telegram/webhook` (grammY `webhookCallback`, `secret_token` checked) and calls `setWebhook(PUBLIC_URL + path)` on boot. `PUBLIC_URL` and a non-placeholder `TELEGRAM_WEBHOOK_SECRET` are required only in webhook mode. Only polling is tested locally.
+- **Bot commands:** `/start` (also with the `signup` deep-link payload) and `/cancel` only. `/start` asks for the name, then the email, both validated with the shared `registerSchema` field rules (invalid → re-ask). Other text gets "Send /start to sign up." Private chats only. Conversation state is in memory with a ~10 min timeout. The conversation is a pure `handleMessage(chatId, text)` state machine so it is testable without grammY.
+- **Signup outcomes (reply wording is generic about the account):**
+  1. New email → create pending, unverified, staff user with `telegramChatId` and no password, send the verify-email link. If the mail cannot go out, delete the user and token and tell the user to try later (same rule as `/register`).
+  2. Email already registered → reveal it (PRD), discard older pending `link-telegram` tokens for that user, create a new one carrying the chatId, email the confirm link.
+  3. This chat is already linked to an account → create nothing; reply "this Telegram is already linked, log in with a code".
+- **Link click** (`GET /api/auth/verify-email/:token`, `link-telegram` branch): attaches the chatId **only** (no `emailVerified` change, per PRD). If the account already has a different chatId it is **replaced**. If the chatId has meanwhile been linked to another account → `INVALID_TOKEN`, nothing linked. `link-telegram` token TTL 24 h. The response carries the token type so the landing page can say "Telegram linked".
+- **OTP request** always returns the same generic 200 for unknown email, no linked Telegram, cooldown, rejected account or a failed send (sent fire-and-forget, errors logged). Cooldown is enforced silently; the client starts its own 60 s countdown after any request.
+- **OTP verify:** wrong / expired / used / exhausted / never-requested all give 401 `INVALID_CODE` with no attempts-left count. The 3rd wrong attempt invalidates the code. Success consumes it. One live code per user; a resend replaces it. Pending and unverified users can log in (session, routed by `/me`); a `rejected` user gets 403 `ACCOUNT_REJECTED` only after a correct code.
+- **Rate limits** (per IP, 15 min, 429 `RATE_LIMITED`): `otp/request` 5, `otp/verify` 10. No per-email limit (the cooldown and attempt cap are the controls).
+- **Client bot handle** comes from `VITE_TELEGRAM_BOT_USERNAME` (also in `client/.env.example`); the deep link is `https://t.me/<handle>?start=signup`.
+- **Out of Part C (follow-ups):** Telegram notifications when an admin activates/rejects a user (not in the PRD; add after Part D); connecting Telegram from a profile page (no profile page exists).
+- **Accepted risk:** anyone can Telegram-signup with another person's email, leaving a pending, unverified account whose chat can OTP-log in. Identical to the password signup path (PRD §3), so no extra mitigation.
+
+#### Server
+- [ ] **P0.2 (finish) [S · C] Env**: add to `config/env.ts`: `TELEGRAM_BOT_TOKEN` (optional; placeholder detection like email), `TELEGRAM_BOT_USERNAME` (`^[A-Za-z0-9_]{5,32}$`), `TELEGRAM_MODE` (`polling|webhook`, default `polling`), `TELEGRAM_WEBHOOK_SECRET`, `PUBLIC_URL`; the last two required only when mode is `webhook`. Fix `.env.example` (`PUBLIC_URL` was the wrong port; document that it is the public HTTPS origin, webhook mode only).
+- [ ] **P1.5 [S · C] `services/otp`**: 6-digit code via `crypto.randomInt`, stored as sha256; 2-min expiry, atomic attempt counter (max 3, then invalid), 60-s resend cooldown, one live `OtpCode` per user, consumed on success. Deps: P1.2.
+- [ ] **P1.6 [S · C] `services/telegram`**: grammY bot, polling/webhook per `TELEGRAM_MODE`, the `/start`/`/cancel` conversation, `sendOtp(chatId, code)` with the dev console fallback, `assertTelegramAvailable()`. Started from `index.ts` (not from `createApp()`, so tests never start a bot). Deps: P1.4, P1.5.
+- [ ] **P1.9 [S · C] `services/telegramSignup` — `signupWithTelegram({ chatId, name, email })`**: the three outcomes above; extends `createEmailToken` with an optional `telegramChatId` and the `link-telegram` TTL; adds a link-telegram email template to `services/email`. (Replaces the HTTP route; see decisions.) Deps: P1.6, P1.8.
+- [ ] **P1.12 [S · C] `POST /api/auth/otp/request` and `/otp/verify`**: as decided above; verify issues the session with `issueSession` and returns `{ user }`. Deps: P1.5, P1.6, P1.3.
+- [ ] **P1.10 (extension) [S · C]** `link-telegram` branch in verify-email (`consumeEmailToken(raw, ['verify-email', 'link-telegram'])`, switch on type).
+- [ ] **P1.17 (extension) [S · C]** `otpRequestLimiter` (5) and `otpVerifyLimiter` (10) in `middleware/rateLimit.ts`.
+
+#### Client
+- [ ] **P1.19 (extension) [C · C]** Login page **Password | Telegram** tabs. The Telegram tab: email → code (two steps, shared `otpRequestSchema`/`otpVerifySchema`, 60 s resend countdown, "use a different email", help text for users with no Telegram linked). On success refresh `/me` and navigate like password login. Toasts on every mutation.
+- [ ] **P1.19 (extension) [C · C]** Public "Sign up with Telegram" page (`/signup/telegram`): steps plus the deep-link button, linked from Register and Login. Verify-email landing page handles the `link-telegram` response.
+
+#### Tests
+- Vitest (Mongo test DB): OTP service (expiry, 3 attempts, cooldown, replace-on-resend, single use); `signupWithTelegram` outcomes 1–3; link-telegram consume incl. replace and chat-already-linked-elsewhere; the conversation state machine; OTP route rules (generic responses, rejected-after-correct-code).
+- Manual with the real bot (polling): new-email signup, existing-email merge, repeat `/start`, OTP login of the linked account, wrong code ×3, resend cooldown.
+- Playwright smoke: Login page shows the Telegram tab and the OTP email step; signup page renders the deep link.
+
+#### Part C acceptance
+Telegram signup with a new email → pending user + verification email · with an existing email → no duplicate, confirm email, click links the chatId · repeat `/start` from a linked chat creates nothing · OTP login works once linked; 2-min expiry, 3 attempts, 60-s cooldown · OTP request is identical for known and unknown emails · pending user logs in by OTP and sees only Awaiting Approval · rejected user is blocked · `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` pass.
 
 ---
 
@@ -360,7 +391,7 @@ These need a decision (PRD wins by default; per `CLAUDE.md`, stop and ask rather
 6. **Initial quantity on product create:** if a product is created with quantity > 0, should that write an initial `receive` movement (keeps quantities = Σ history)? *Proposed:* yes, auto-write an initial `receive` movement, or start all products at 0.
 7. **Deleting a product that has movements:** block, cascade-delete movements, or keep orphans? Affects audit-trail guarantee.
 8. **Seed vs. PRD "first Admin via seed script":** the dev seed (`admin@inventory.local` / `Admin@123`) must not be run in production; need a separate minimal admin-bootstrap path (env-provided credentials).
-9. **Telegram signup webhook auth:** how does the bot-triggered endpoint authenticate (shared secret header vs. in-process call when running polling mode)?
+9. ✅ **Resolved for Part C — Telegram signup webhook auth.** There is no HTTP `signup-webhook` route: the in-process bot calls `signupWithTelegram()` directly (a deliberate deviation from the PRD route list, to avoid an unauthenticated user-creating endpoint). Telegram's own webhook updates (webhook mode only) use a separate `/api/telegram/webhook` guarded by `secret_token`. See *Decisions made for Part C*.
 10. **Image handling:** `imageUrl` only (URL input), or an upload endpoint? Task 03 says "URL input or simple upload-to-URL placeholder".
 11. **Adjustment `quantity` semantics:** PRD says signed delta for adjustment; the API body has a single `quantity` field — confirm that negative numbers are allowed for `adjustment` only.
 12. **Chart treatment of adjustments:** excluded from In/Out chart (PRD says received vs shipped only) — confirm.

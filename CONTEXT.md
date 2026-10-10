@@ -20,4 +20,18 @@ A logged-in browser: a short-lived access cookie plus a longer-lived refresh coo
 _Avoid_: "token" for the whole thing (a token is one cookie's value).
 
 **Emailed link**
-A single-use, expiring link sent to a user's email address, used to verify the email or to reset the password. Using it twice, or after it expires, fails the same way as a link that never existed.
+A single-use, expiring link sent to a user's email address, used to verify the email, to reset the password, or to confirm a **Telegram link**. Using it twice, or after it expires, fails the same way as a link that never existed.
+
+## Telegram
+
+**Telegram link**
+The association between one account and one Telegram chat. An account has at most one, and a chat belongs to at most one account. It is created by **Telegram signup**, or by confirming an **Emailed link** when the email already had an account; confirming a new one replaces the old. It does not make the email a **Verified email**.
+_Avoid_: "connected", "paired".
+
+**Telegram signup**
+Creating an account by talking to the bot (name, then email). It always yields a `pending` staff account with no password. If the email already has an account, nothing is created or linked until the owner confirms by **Emailed link**.
+_Avoid_: "Telegram registration", "webhook signup".
+
+**Login code**
+A 6-digit code the bot sends to an account's **Telegram link** so its owner can log in without a password. Valid for 2 minutes, 3 attempts, and at most one new code per minute. Asking for one never reveals whether an account exists or has a **Telegram link**.
+_Avoid_: "OTP" in user-facing text, "PIN".

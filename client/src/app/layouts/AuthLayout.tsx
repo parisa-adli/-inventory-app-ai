@@ -1,4 +1,6 @@
 import { ReactNode } from 'react';
+import { Boxes } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
 
 interface AuthLayoutProps {
   children: ReactNode;
@@ -6,15 +8,16 @@ interface AuthLayoutProps {
 
 export default function AuthLayout({ children }: AuthLayoutProps) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full space-y-8">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900">Inventory Manager</h1>
-        </div>
-        <div className="bg-white py-8 px-6 shadow-sm rounded-lg">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
+      <Card className="w-full max-w-sm">
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-2 font-semibold">
+            <Boxes className="size-5" />
+            Inventory
+          </div>
           {children}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

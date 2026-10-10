@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { registerSchema, type RegisterInput } from '@inventory/shared';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
+import { AuthTabs } from '../components/AuthTabs';
 import { TextField } from '../components/TextField';
 import { useRegister } from '../hooks/useAuth';
 
@@ -17,8 +18,8 @@ export default function Register() {
   if (register.isSuccess) {
     return (
       <div className="space-y-4 text-center">
-        <h2 className="text-2xl font-bold">Check your email</h2>
-        <p className="text-gray-600">
+        <h1 className="text-lg font-semibold">Check your email</h1>
+        <p className="text-muted-foreground">
           We sent a verification link to <strong>{form.getValues('email')}</strong>. Verify your address, then log in.
           An administrator will review your account after that.
         </p>
@@ -31,7 +32,11 @@ export default function Register() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-center">Create an account</h2>
+      <div className="space-y-1.5 text-center">
+        <h1 className="text-lg font-semibold">Create an account</h1>
+        <p className="text-sm text-muted-foreground">Sign up to start managing inventory.</p>
+      </div>
+      <AuthTabs value="register" />
       <Form {...form}>
         <form onSubmit={form.handleSubmit((values) => register.mutate(values))} className="space-y-4" noValidate>
           <TextField control={form.control} name="name" label="Name" autoComplete="name" />
@@ -48,9 +53,9 @@ export default function Register() {
           </Button>
         </form>
       </Form>
-      <p className="text-center text-sm text-gray-600">
+      <p className="text-center text-sm text-muted-foreground">
         Already have an account?{' '}
-        <Link to="/login" className="hover:underline">
+        <Link to="/login" className="text-foreground hover:underline">
           Log in
         </Link>
       </p>

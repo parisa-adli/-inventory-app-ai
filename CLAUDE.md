@@ -4,6 +4,9 @@ This file is the entry point for Claude Code on this repo. Read this first, then
 
 **Starting a fresh session?** (1) Read this file. (2) In `tasks/TASK.md` read *Current state*, *Dev Environment*, and the section for the part you were asked to do. (3) Before building, check the *Open Questions* that the part depends on and ask the user about unresolved ones.
 
+## Design
+For any UI work, read and follow docs/DESIGN.md first (shadcn/ui; screenshots in docs/design/).
+
 ## Source of truth
 - `docs/PRD.md` — full product spec. If a task file and the PRD ever disagree, the PRD wins; flag the conflict instead of guessing.
 - `docs/PRDs/00-project-setup.md` through `docs/PRDs/06-polish-qa.md` — per-phase specs and acceptance checklists, in build order.

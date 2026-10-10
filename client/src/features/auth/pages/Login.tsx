@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { loginSchema, type LoginInput } from '@inventory/shared';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
+import { AuthTabs } from '../components/AuthTabs';
 import { TextField } from '../components/TextField';
 import { useLogin } from '../hooks/useAuth';
 
@@ -17,7 +18,11 @@ export default function Login() {
   // On success the route guard redirects, so there is nothing to navigate to here
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-center">Log in</h2>
+      <div className="space-y-1.5 text-center">
+        <h1 className="text-lg font-semibold">Sign in</h1>
+        <p className="text-sm text-muted-foreground">Sign in to manage your inventory.</p>
+      </div>
+      <AuthTabs value="login" />
       <Form {...form}>
         <form onSubmit={form.handleSubmit((values) => login.mutate(values))} className="space-y-4" noValidate>
           <TextField control={form.control} name="email" label="Email" type="email" autoComplete="email" />
@@ -29,18 +34,15 @@ export default function Login() {
             autoComplete="current-password"
           />
           <Button type="submit" className="w-full" disabled={login.isPending}>
-            {login.isPending ? 'Logging in…' : 'Log in'}
+            {login.isPending ? 'Signing in…' : 'Sign in'}
           </Button>
         </form>
       </Form>
-      <div className="flex justify-between text-sm">
-        <Link to="/forgot-password" className="text-gray-600 hover:underline">
+      <p className="text-center text-sm text-muted-foreground">
+        <Link to="/forgot-password" className="hover:text-foreground hover:underline">
           Forgot password?
         </Link>
-        <Link to="/register" className="text-gray-600 hover:underline">
-          Create an account
-        </Link>
-      </div>
+      </p>
     </div>
   );
 }

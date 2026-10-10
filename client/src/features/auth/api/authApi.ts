@@ -5,6 +5,8 @@ import type {
   LoginInput,
   RegisterInput,
   ResetPasswordInput,
+  TelegramCompleteInput,
+  TelegramVerifyInput,
 } from '@inventory/shared';
 import api from '@/lib/axios';
 
@@ -28,25 +30,59 @@ export const register = (input: RegisterInput) => api.post('/auth/register', inp
 
 export const logout = () => api.post('/auth/logout');
 
-/** A QR login attempt: `deepLink` goes into the QR code, `pollToken` stays in this browser. */
-export interface TelegramLoginSession {
+/** A Telegram sign in / sign up attempt: `deepLink` goes into the QR code; the session id stays in an httpOnly cookie. */
+export interface TelegramAuthSession {
   deepLink: string;
-  pollToken: string;
   /** ISO timestamp. */
   expiresAt: string;
 }
 
-export type TelegramLoginPoll =
-  | { status: 'pending' | 'unlinked' | 'expired' }
-  | { status: 'approved'; user: AuthUser };
+export type TelegramAuthStatus = 'PENDING' | 'AWAITING_OTP' | 'AWAITING_PROFILE' | 'COMPLETED' | 'EXPIRED' | 'LOCKED';
 
-export const startTelegramLogin = async (): Promise<TelegramLoginSession> => {
-  const { data } = await api.post<TelegramLoginSession>('/auth/telegram/login');
+export interface TelegramStatusView {
+  status: TelegramAuthStatus;
+  expiresAt?: string;
+  otpExpiresAt?: string;
+  /** When "Resend code" is available again; null once the resend limit is used. */
+  resendAvailableAt?: string | null;
+  prefillDisplayName?: string;
+}
+
+export type TelegramVerifyResult =
+  | { status: 'COMPLETED'; user: AuthUser }
+  | { status: 'AWAITING_PROFILE'; prefillDisplayName?: string };
+
+export interface TelegramResendResult {
+  otpExpiresAt: string;
+  resendAvailableAt: string | null;
+}
+
+export type TelegramCompleteResult =
+  | { status: 'COMPLETED'; outcome: 'created'; user: AuthUser }
+  | { status: 'COMPLETED'; outcome: 'link-sent' | 'already-linked' };
+
+export const startTelegramAuth = async (): Promise<TelegramAuthSession> => {
+  const { data } = await api.post<TelegramAuthSession>('/auth/telegram/start');
   return data;
 };
 
-export const pollTelegramLogin = async (pollToken: string): Promise<TelegramLoginPoll> => {
-  const { data } = await api.post<TelegramLoginPoll>('/auth/telegram/login/poll', { pollToken });
+export const getTelegramStatus = async (): Promise<TelegramStatusView> => {
+  const { data } = await api.get<TelegramStatusView>('/auth/telegram/status');
+  return data;
+};
+
+export const verifyTelegramCode = async (input: TelegramVerifyInput): Promise<TelegramVerifyResult> => {
+  const { data } = await api.post<TelegramVerifyResult>('/auth/telegram/verify', input);
+  return data;
+};
+
+export const resendTelegramCode = async (): Promise<TelegramResendResult> => {
+  const { data } = await api.post<TelegramResendResult>('/auth/telegram/resend');
+  return data;
+};
+
+export const completeTelegramSignup = async (input: TelegramCompleteInput): Promise<TelegramCompleteResult> => {
+  const { data } = await api.post<TelegramCompleteResult>('/auth/telegram/complete', input);
   return data;
 };
 

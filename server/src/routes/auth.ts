@@ -1,11 +1,13 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
+import { env } from '../config/env.js';
 import {
   ACCOUNT_STATUS,
   forgotPasswordSchema,
   loginSchema,
   registerSchema,
   resetPasswordSchema,
-  telegramLoginPollSchema,
+  telegramCompleteSchema,
+  telegramVerifySchema,
 } from '@inventory/shared';
 import { requireAuth } from '../middleware/auth.js';
 import {
@@ -14,8 +16,11 @@ import {
   registerLimiter,
   resendVerificationLimiter,
   resetPasswordLimiter,
-  telegramLoginPollLimiter,
-  telegramLoginStartLimiter,
+  telegramCompleteLimiter,
+  telegramResendLimiter,
+  telegramStartLimiter,
+  telegramStatusLimiter,
+  telegramVerifyLimiter,
 } from '../middleware/rateLimit.js';
 import { validate } from '../middleware/validate.js';
 import { EmailToken } from '../models/EmailToken.js';
@@ -42,10 +47,13 @@ import {
 import { hashPassword, verifyPassword } from '../services/password.js';
 import { assertTelegramAvailable, telegramDeepLink } from '../services/telegram.js';
 import {
-  LOGIN_START_PREFIX,
-  createTelegramLogin,
-  pollTelegramLogin,
-} from '../services/telegramLogin.js';
+  completeTelegramSignup,
+  createAuthSession,
+  discardAuthSession,
+  getAuthSessionStatus,
+  resendOtp,
+  verifyOtp,
+} from '../services/telegramAuth.js';
 import { toAuthUser } from '../utils/authUser.js';
 import { randomToken } from '../utils/crypto.js';
 import { AppError, UnauthorizedError } from '../utils/errors.js';
@@ -141,43 +149,78 @@ router.post('/login', loginLimiter, validate(loginSchema), async (req, res) => {
   res.json({ user: toAuthUser(user) });
 });
 
-// Telegram QR login: the browser shows a QR code, the phone presses Start in the bot, the browser polls.
-router.post('/telegram/login', telegramLoginStartLimiter, async (_req, res) => {
-  assertTelegramAvailable();
-  const { startToken, pollToken, expiresAt } = await createTelegramLogin();
+// Telegram sign in / sign up: QR -> code from the bot -> code on the website (-> username + email if new).
+// The browser is identified by an httpOnly cookie holding the raw session id; the nonce only travels in the deep link.
+const TELEGRAM_SESSION_COOKIE = 'tg_auth_session';
+const TELEGRAM_COOKIE_PATH = '/api/auth/telegram';
+const TELEGRAM_COOKIE_MAX_AGE_MS = 15 * 60_000;
 
-  res.status(201).json({
-    deepLink: telegramDeepLink(`${LOGIN_START_PREFIX}${startToken}`),
-    pollToken,
-    expiresAt: expiresAt.toISOString(),
-  });
+const telegramCookieOptions = {
+  httpOnly: true,
+  secure: true,
+  sameSite: 'lax',
+  path: TELEGRAM_COOKIE_PATH,
+  ...(env.COOKIE_DOMAIN ? { domain: env.COOKIE_DOMAIN } : {}),
+} as const;
+
+const telegramSessionId = (req: Request): string | undefined => req.cookies?.[TELEGRAM_SESSION_COOKIE];
+
+/** A rejected account never gets a session, whichever way it arrives. */
+const assertNotRejected = (user: { status: string }) => {
+  if (user.status === ACCOUNT_STATUS.REJECTED) {
+    throw new AppError(403, 'ACCOUNT_REJECTED', 'Your account has been rejected or revoked.');
+  }
+};
+
+router.post('/telegram/start', telegramStartLimiter, async (req, res) => {
+  assertTelegramAvailable();
+  const previous = telegramSessionId(req);
+  if (previous) await discardAuthSession(previous);
+
+  const { sessionId, nonce, expiresAt } = await createAuthSession();
+  res.cookie(TELEGRAM_SESSION_COOKIE, sessionId, { ...telegramCookieOptions, maxAge: TELEGRAM_COOKIE_MAX_AGE_MS });
+  res.status(201).json({ deepLink: telegramDeepLink(nonce), expiresAt: expiresAt.toISOString() });
 });
 
-// POST (not GET) so the poll secret never lands in URLs or access logs
-router.post(
-  '/telegram/login/poll',
-  telegramLoginPollLimiter,
-  validate(telegramLoginPollSchema),
-  async (req, res) => {
-    assertTelegramAvailable();
-    const result = await pollTelegramLogin(req.body.pollToken);
-    if (result.status !== 'approved') {
-      res.json({ status: result.status });
-      return;
-    }
+router.get('/telegram/status', telegramStatusLimiter, async (req, res) => {
+  assertTelegramAvailable();
+  res.json(await getAuthSessionStatus(telegramSessionId(req)));
+});
 
-    const user = await User.findById(result.userId);
-    if (!user) throw new AppError(401, 'UNAUTHORIZED', 'This login is no longer valid.');
-
-    if (user.status === ACCOUNT_STATUS.REJECTED) {
-      throw new AppError(403, 'ACCOUNT_REJECTED', 'Your account has been rejected or revoked.');
-    }
-
-    // Pending users still get a session; the client routes them by /auth/me
-    await issueSession(res, user);
-    res.json({ status: 'approved', user: toAuthUser(user) });
+router.post('/telegram/verify', telegramVerifyLimiter, validate(telegramVerifySchema), async (req, res) => {
+  assertTelegramAvailable();
+  const result = await verifyOtp(telegramSessionId(req), req.body.code);
+  if (result.status === 'AWAITING_PROFILE') {
+    res.json({ status: 'AWAITING_PROFILE', prefillDisplayName: result.prefillDisplayName });
+    return;
   }
-);
+
+  assertNotRejected(result.user);
+  // Pending users still get a session; the client routes them by /auth/me
+  await issueSession(res, result.user);
+  res.clearCookie(TELEGRAM_SESSION_COOKIE, telegramCookieOptions);
+  res.json({ status: 'COMPLETED', user: toAuthUser(result.user) });
+});
+
+router.post('/telegram/resend', telegramResendLimiter, async (req, res) => {
+  assertTelegramAvailable();
+  res.json(await resendOtp(telegramSessionId(req)));
+});
+
+router.post('/telegram/complete', telegramCompleteLimiter, validate(telegramCompleteSchema), async (req, res) => {
+  assertTelegramAvailable();
+  assertEmailAvailable();
+  const result = await completeTelegramSignup(telegramSessionId(req), req.body);
+
+  res.clearCookie(TELEGRAM_SESSION_COOKIE, telegramCookieOptions);
+  if (result.outcome === 'created') {
+    await issueSession(res, result.user);
+    res.status(201).json({ status: 'COMPLETED', outcome: 'created', user: toAuthUser(result.user) });
+    return;
+  }
+  // 'link-sent': the email belongs to an account; the owner confirms by link. Nobody is signed in.
+  res.json({ status: 'COMPLETED', outcome: result.outcome });
+});
 
 router.post('/refresh', async (req, res) => {
   const raw = req.cookies?.[REFRESH_COOKIE];

@@ -21,10 +21,13 @@ export const loginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 });
 
-/** The browser polls a QR login with the secret it received when the QR code was created. */
-export const telegramLoginPollSchema = z.object({
-  pollToken: z.string().min(1).max(128),
+/** The 6-digit code the bot sent (digits only; length is part of the contract). */
+export const telegramVerifySchema = z.object({
+  code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code'),
 });
+
+/** Last step of Telegram sign up: the verified Telegram account still needs a username and an email. */
+export const telegramCompleteSchema = registerSchema.pick({ name: true, email: true });
 
 /** Sign-up form: the server schema plus the confirm field (only name, email, password are sent). */
 export const registerFormSchema = registerSchema
@@ -44,7 +47,8 @@ export const resetPasswordSchema = z.object({
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
-export type TelegramLoginPollInput = z.infer<typeof telegramLoginPollSchema>;
+export type TelegramVerifyInput = z.infer<typeof telegramVerifySchema>;
+export type TelegramCompleteInput = z.infer<typeof telegramCompleteSchema>;
 export type RegisterFormInput = z.infer<typeof registerFormSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

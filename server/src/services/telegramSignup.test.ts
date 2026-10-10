@@ -26,7 +26,7 @@ beforeEach(async () => {
 
 describe('signupWithTelegram', () => {
   it('outcome 1: a new email creates a pending, unverified, passwordless staff user and mails a verify link', async () => {
-    const outcome = await signupWithTelegram({ chatId: '111', name: 'Tele Gram', email: 'tele@inventory.local' });
+    const { outcome } = await signupWithTelegram({ chatId: '111', name: 'Tele Gram', email: 'tele@inventory.local' });
     expect(outcome).toBe('created');
 
     const user = (await User.findOne({ email: 'tele@inventory.local' }))!;
@@ -58,7 +58,7 @@ describe('signupWithTelegram', () => {
   it('outcome 2: an existing email gets a confirm link carrying the chat id and changes nothing yet', async () => {
     await User.create({ name: 'Existing', email: 'existing@inventory.local', passwordHash: 'x' });
 
-    const outcome = await signupWithTelegram({ chatId: '222', name: 'Other', email: 'existing@inventory.local' });
+    const { outcome } = await signupWithTelegram({ chatId: '222', name: 'Other', email: 'existing@inventory.local' });
     expect(outcome).toBe('link-sent');
     expect(await User.countDocuments()).toBe(1);
 
@@ -88,7 +88,7 @@ describe('signupWithTelegram', () => {
   it('outcome 3: a chat that is already linked creates nothing and sends nothing', async () => {
     await User.create({ name: 'Linked', email: 'linked@inventory.local', telegramChatId: '444' });
 
-    const outcome = await signupWithTelegram({ chatId: '444', name: 'New', email: 'brand-new@inventory.local' });
+    const { outcome } = await signupWithTelegram({ chatId: '444', name: 'New', email: 'brand-new@inventory.local' });
     expect(outcome).toBe('already-linked');
     expect(await User.countDocuments()).toBe(1);
     expect(await EmailToken.countDocuments()).toBe(0);

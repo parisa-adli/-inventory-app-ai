@@ -1,5 +1,6 @@
 import { EmailToken } from '../models/EmailToken.js';
-import { User } from '../models/User.js';
+import type { HydratedDocument } from 'mongoose';
+import { User, type UserDoc } from '../models/User.js';
 import { sendTelegramLinkEmail, sendVerificationEmail } from './email.js';
 import { createEmailToken, discardPendingTokens } from './emailToken.js';
 
@@ -11,6 +12,11 @@ export type TelegramSignupOutcome =
   /** This Telegram chat is already linked to an account; nothing was created. */
   | 'already-linked';
 
+export interface TelegramSignupResult {
+  outcome: TelegramSignupOutcome;
+  user?: HydratedDocument<UserDoc>;
+}
+
 interface TelegramSignupInput {
   chatId: string;
   name: string;
@@ -19,15 +25,17 @@ interface TelegramSignupInput {
 }
 
 /**
- * Telegram signup (PRD §3). Called by the in-process bot; there is deliberately no public HTTP route.
+ * Telegram signup (PRD §3). Called by `completeTelegramSignup` once the Telegram account proved itself with
+ * the bot's one-time code; there is deliberately no public "create a user" route.
  * Throws when the email cannot be sent, after cleaning up anything it created.
+ * `user` is set only for 'created': the one outcome that may be signed in.
  */
 export const signupWithTelegram = async ({
   chatId,
   name,
   email,
-}: TelegramSignupInput): Promise<TelegramSignupOutcome> => {
-  if (await User.exists({ telegramChatId: chatId })) return 'already-linked';
+}: TelegramSignupInput): Promise<TelegramSignupResult> => {
+  if (await User.exists({ telegramChatId: chatId })) return { outcome: 'already-linked' };
 
   const existing = await User.findOne({ email });
   if (existing) {
@@ -40,7 +48,7 @@ export const signupWithTelegram = async ({
       await discardPendingTokens(existing._id, 'link-telegram');
       throw err;
     }
-    return 'link-sent';
+    return { outcome: 'link-sent' };
   }
 
   // No password: the account is Telegram-only until the owner sets one via password reset
@@ -54,5 +62,5 @@ export const signupWithTelegram = async ({
     await User.deleteOne({ _id: user._id });
     throw err;
   }
-  return 'created';
+  return { outcome: 'created', user };
 };

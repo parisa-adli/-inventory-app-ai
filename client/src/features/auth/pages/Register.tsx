@@ -5,7 +5,7 @@ import { registerFormSchema, PASSWORD_MIN_LENGTH, type RegisterFormInput } from 
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { AuthMethodTabs } from '../components/AuthMethodTabs';
-import { TelegramSignupPanel } from '../components/TelegramQrPanel';
+import { TelegramAuthPanel } from '../components/TelegramAuthPanel';
 import { TextField } from '../components/TextField';
 import { useRegister } from '../hooks/useAuth';
 
@@ -68,7 +68,7 @@ export default function Register() {
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-semibold">Create an account</h1>
-      <AuthMethodTabs email={<EmailSignupForm />} telegram={<TelegramSignupPanel />} />
+      <AuthMethodTabs email={<EmailSignupForm />} telegram={<TelegramAuthPanel />} />
       <p className="text-center text-sm text-muted-foreground">
         Already have an account?{' '}
         <Link to="/login" className="text-foreground hover:underline">

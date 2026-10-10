@@ -20,6 +20,7 @@
     "lint:server": "npm run lint -w server",
     "lint:client": "npm run lint -w client",
     "seed": "npm run seed -w server",
+    "generate-secrets": "npm run generate-secrets -w server --silent",
     "build": "npm run build:server && npm run build:client",
     "lint": "npm run lint:server && npm run lint:client",
     "typecheck": "npm run typecheck -w shared -w server -w client",

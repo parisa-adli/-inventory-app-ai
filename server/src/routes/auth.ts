@@ -5,6 +5,7 @@ import {
   loginSchema,
   registerSchema,
   resetPasswordSchema,
+  telegramLoginPollSchema,
 } from '@inventory/shared';
 import { requireAuth } from '../middleware/auth.js';
 import {
@@ -13,6 +14,8 @@ import {
   registerLimiter,
   resendVerificationLimiter,
   resetPasswordLimiter,
+  telegramLoginPollLimiter,
+  telegramLoginStartLimiter,
 } from '../middleware/rateLimit.js';
 import { validate } from '../middleware/validate.js';
 import { EmailToken } from '../models/EmailToken.js';
@@ -37,6 +40,12 @@ import {
   rotateRefreshToken,
 } from '../services/jwt.js';
 import { hashPassword, verifyPassword } from '../services/password.js';
+import { assertTelegramAvailable, telegramDeepLink } from '../services/telegram.js';
+import {
+  LOGIN_START_PREFIX,
+  createTelegramLogin,
+  pollTelegramLogin,
+} from '../services/telegramLogin.js';
 import { toAuthUser } from '../utils/authUser.js';
 import { randomToken } from '../utils/crypto.js';
 import { AppError, UnauthorizedError } from '../utils/errors.js';
@@ -81,20 +90,36 @@ router.post('/register', registerLimiter, validate(registerSchema), async (req, 
 });
 
 router.get('/verify-email/:token', async (req, res) => {
-  const token = await consumeEmailToken(req.params.token, ['verify-email']);
+  const token = await consumeEmailToken(req.params.token, ['verify-email', 'link-telegram']);
 
-  // Part C adds the 'link-telegram' case here
   switch (token.type) {
     case 'verify-email': {
       const user = await User.findByIdAndUpdate(token.user, { emailVerified: true });
       if (!user) throw invalidTokenError();
-      break;
+      res.json({ type: 'verify-email', message: 'Email verified.' });
+      return;
+    }
+    case 'link-telegram': {
+      // Attaches the chat only; confirming a Telegram link does not verify the email (PRD §3)
+      const chatId = token.telegramChatId;
+      if (!chatId) throw invalidTokenError();
+      // The chat may have been linked to another account since this link was emailed
+      if (await User.exists({ telegramChatId: chatId, _id: { $ne: token.user } })) throw invalidTokenError();
+
+      try {
+        // An already linked, different chat is replaced
+        const user = await User.findByIdAndUpdate(token.user, { telegramChatId: chatId });
+        if (!user) throw invalidTokenError();
+      } catch (err) {
+        if ((err as { code?: number }).code === 11000) throw invalidTokenError();
+        throw err;
+      }
+      res.json({ type: 'link-telegram', message: 'Telegram linked.' });
+      return;
     }
     default:
       throw invalidTokenError();
   }
-
-  res.json({ message: 'Email verified.' });
 });
 
 router.post('/login', loginLimiter, validate(loginSchema), async (req, res) => {
@@ -115,6 +140,44 @@ router.post('/login', loginLimiter, validate(loginSchema), async (req, res) => {
   await issueSession(res, user);
   res.json({ user: toAuthUser(user) });
 });
+
+// Telegram QR login: the browser shows a QR code, the phone presses Start in the bot, the browser polls.
+router.post('/telegram/login', telegramLoginStartLimiter, async (_req, res) => {
+  assertTelegramAvailable();
+  const { startToken, pollToken, expiresAt } = await createTelegramLogin();
+
+  res.status(201).json({
+    deepLink: telegramDeepLink(`${LOGIN_START_PREFIX}${startToken}`),
+    pollToken,
+    expiresAt: expiresAt.toISOString(),
+  });
+});
+
+// POST (not GET) so the poll secret never lands in URLs or access logs
+router.post(
+  '/telegram/login/poll',
+  telegramLoginPollLimiter,
+  validate(telegramLoginPollSchema),
+  async (req, res) => {
+    assertTelegramAvailable();
+    const result = await pollTelegramLogin(req.body.pollToken);
+    if (result.status !== 'approved') {
+      res.json({ status: result.status });
+      return;
+    }
+
+    const user = await User.findById(result.userId);
+    if (!user) throw new AppError(401, 'UNAUTHORIZED', 'This login is no longer valid.');
+
+    if (user.status === ACCOUNT_STATUS.REJECTED) {
+      throw new AppError(403, 'ACCOUNT_REJECTED', 'Your account has been rejected or revoked.');
+    }
+
+    // Pending users still get a session; the client routes them by /auth/me
+    await issueSession(res, user);
+    res.json({ status: 'approved', user: toAuthUser(user) });
+  }
+);
 
 router.post('/refresh', async (req, res) => {
   const raw = req.cookies?.[REFRESH_COOKIE];

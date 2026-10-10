@@ -9,6 +9,9 @@ export const RATE_LIMITS = {
   forgotPassword: 5,
   resetPassword: 10,
   resendVerification: 10,
+  telegramLoginStart: 10,
+  // The browser polls every 2 s while the QR code is shown (5 min = ~150 requests)
+  telegramLoginPoll: 600,
 } as const;
 
 export const createLimiter = (max: number, windowMs = WINDOW_MS) =>
@@ -31,3 +34,5 @@ export const registerLimiter = createLimiter(RATE_LIMITS.register);
 export const forgotPasswordLimiter = createLimiter(RATE_LIMITS.forgotPassword);
 export const resetPasswordLimiter = createLimiter(RATE_LIMITS.resetPassword);
 export const resendVerificationLimiter = createLimiter(RATE_LIMITS.resendVerification);
+export const telegramLoginStartLimiter = createLimiter(RATE_LIMITS.telegramLoginStart);
+export const telegramLoginPollLimiter = createLimiter(RATE_LIMITS.telegramLoginPoll);

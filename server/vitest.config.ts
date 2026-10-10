@@ -14,6 +14,9 @@ export default defineConfig({
       JWT_REFRESH_SECRET: 'test-refresh-secret-test-refresh-secret',
       ACCESS_TOKEN_TTL: '15m',
       REFRESH_TOKEN_TTL: '7d',
+      // A placeholder, so a real token in server/.env can never make tests talk to Telegram
+      TELEGRAM_BOT_TOKEN: 'your-telegram-bot-token-for-tests',
+      TELEGRAM_MODE: 'polling',
     },
   },
 });

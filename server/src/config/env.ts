@@ -17,9 +17,40 @@ const envSchema = z.object({
   BREVO_SMTP_PORT: z.coerce.number().int().positive().default(587),
   BREVO_SMTP_USER: z.string().optional(),
   BREVO_SMTP_PASS: z.string().optional(),
+  // Telegram. The token is optional on purpose: see services/telegram.ts for how "not configured" behaves.
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
+  TELEGRAM_BOT_USERNAME: z
+    .string()
+    .regex(/^[A-Za-z0-9_]{5,32}$/, 'TELEGRAM_BOT_USERNAME must be 5-32 letters, digits or underscores')
+    .optional(),
+  TELEGRAM_MODE: z.enum(['polling', 'webhook']).default('polling'),
+  TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
+  PUBLIC_URL: z.url().optional(),
 });
 
-const parsed = envSchema.safeParse(process.env);
+const PLACEHOLDER_PREFIX = 'your-';
+const isPlaceholder = (value?: string) => !value || value.toLowerCase().startsWith(PLACEHOLDER_PREFIX);
+
+// Webhook mode needs a public HTTPS origin and a real secret_token; polling needs neither.
+const checkedSchema = envSchema.superRefine((value, ctx) => {
+  if (value.TELEGRAM_MODE !== 'webhook') return;
+  if (!value.PUBLIC_URL || !value.PUBLIC_URL.startsWith('https://')) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['PUBLIC_URL'],
+      message: 'PUBLIC_URL must be a public https:// origin when TELEGRAM_MODE=webhook',
+    });
+  }
+  if (isPlaceholder(value.TELEGRAM_WEBHOOK_SECRET)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['TELEGRAM_WEBHOOK_SECRET'],
+      message: 'TELEGRAM_WEBHOOK_SECRET must be set when TELEGRAM_MODE=webhook',
+    });
+  }
+});
+
+const parsed = checkedSchema.safeParse(process.env);
 
 if (!parsed.success) {
   const details = parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n');

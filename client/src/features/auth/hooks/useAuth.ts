@@ -56,10 +56,10 @@ export const useVerifyEmail = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: authApi.verifyEmail,
-    onSuccess: () => {
-      // A logged-in pending user's emailVerified flag just changed
+    onSuccess: ({ type }) => {
+      // A logged-in pending user's emailVerified flag or Telegram link just changed
       void queryClient.invalidateQueries({ queryKey: authKeys.me });
-      toast.success('Email verified');
+      toast.success(type === 'link-telegram' ? 'Telegram linked' : 'Email verified');
     },
     onError,
   });

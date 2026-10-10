@@ -9,15 +9,20 @@ const HOUR_MS = 3_600_000;
 export const EMAIL_TOKEN_TTL_MS = {
   'verify-email': 24 * HOUR_MS,
   'reset-password': HOUR_MS,
+  'link-telegram': 24 * HOUR_MS,
 } as const;
 
 export const invalidTokenError = () =>
   new AppError(400, 'INVALID_TOKEN', 'This link is invalid or has expired.');
 
-/** Creates a single-use token and returns the raw value (only its hash is stored). */
+/**
+ * Creates a single-use token and returns the raw value (only its hash is stored).
+ * `telegramChatId` is the payload of a 'link-telegram' token.
+ */
 export const createEmailToken = async (
   userId: Types.ObjectId | string,
-  type: keyof typeof EMAIL_TOKEN_TTL_MS
+  type: keyof typeof EMAIL_TOKEN_TTL_MS,
+  telegramChatId?: string
 ): Promise<string> => {
   const raw = randomToken();
   await EmailToken.create({
@@ -25,6 +30,7 @@ export const createEmailToken = async (
     type,
     tokenHash: sha256(raw),
     expiresAt: new Date(Date.now() + EMAIL_TOKEN_TTL_MS[type]),
+    ...(telegramChatId ? { telegramChatId } : {}),
   });
   return raw;
 };

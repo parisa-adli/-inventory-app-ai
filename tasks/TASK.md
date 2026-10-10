@@ -18,17 +18,17 @@ Work phases in order. Each phase ends with its acceptance checklist, and should 
 
 ## Current state
 
-History: `c127d2c` scaffold → `b173a2a` Phase 1 Part A + server dependency upgrades → `eabaff0` full dependency modernization → `72fd3c2` client `app/` + `features/` structure → `4af5afb` Phase 1 Part B server → Part B client (latest commit).
+History: `c127d2c` scaffold → `b173a2a` Phase 1 Part A + server dependency upgrades → `eabaff0` full dependency modernization → `72fd3c2` client `app/` + `features/` structure → `4af5afb` Phase 1 Part B server → Part B client → Part C Telegram (latest commit).
 
 | Area | State |
 | --- | --- |
 | Monorepo | npm workspaces `client/`, `server/`, `shared/`; `tests/` (Playwright smoke tests in `tests/smoke.spec.ts`); `.nvmrc` = Node 24; server tests that touch Mongo use the separate `inventory_app_claude_test` database; `package-lock.json` is tracked; CI (`.github/workflows/playwright.yml`) runs Playwright. All code is **TypeScript** (`.ts`/`.tsx`), not `.js` as the older docs show. |
-| Server (`server/src`) | `index.ts` (Express 5: json, cookie-parser, CORS with credentials, error handler), `config/{database,env,load-env}.ts`, `models/{User,EmailToken,OtpCode,RefreshToken}.ts`, `services/{jwt,password}.ts`, `middleware/{auth,roleGuard,validate,errorHandler}.ts`, `utils/{errors,crypto}.ts`, `types/express.d.ts` (`req.user`), `app.ts` (`createApp()`, importable by tests; `index.ts` only connects and listens), `routes/{health,auth}.ts` (**auth routes under `/api/auth` exist; no users routes yet**), `services/{email,emailToken}.ts`, `middleware/rateLimit.ts`, `utils/authUser.ts`, `test/db.ts`, `seed.ts` (`seedUsers()` only). |
-| Client (`client/src`) | React 19 + Vite 8 + Tailwind 4. shadcn components in `components/ui` (badge, button, card, dialog, dropdown-menu, form, input, label, select, sonner, table, tabs); `lib/{axios,utils}.ts`; `app/{App,providers,router,queryClient}` and `app/layouts/{AppLayout,AuthLayout}`; `features/auth/{api,hooks,components,pages}` (login, register, verify-email, forgot/reset password, awaiting-approval, rejected, route guards) and `features/dashboard/pages/Dashboard` (stub); router groups: public-only, open email-link pages, pending/rejected screens, active app shell, admin-only (empty until Part D). Logout button in the app shell. |
+| Server (`server/src`) | `index.ts` (Express 5: json, cookie-parser, CORS with credentials, error handler), `config/{database,env,load-env}.ts`, `models/{User,EmailToken,OtpCode,RefreshToken}.ts`, `services/{jwt,password}.ts`, `middleware/{auth,roleGuard,validate,errorHandler}.ts`, `utils/{errors,crypto}.ts`, `types/express.d.ts` (`req.user`), `app.ts` (`createApp()`, importable by tests; `index.ts` only connects and listens), `routes/{health,auth}.ts` (**auth routes under `/api/auth` exist; no users routes yet**), `services/{email,emailToken}.ts`, `middleware/rateLimit.ts`, `utils/authUser.ts`, `test/db.ts`, `seed.ts` (`seedUsers()` only). Part C added `services/{otp,telegram,telegramConversation,telegramSignup}.ts`, `POST /api/auth/otp/{request,verify}`, the `link-telegram` branch of verify-email, and the webhook route (webhook mode only). |
+| Client (`client/src`) | React 19 + Vite 8 + Tailwind 4. shadcn components in `components/ui` (badge, button, card, dialog, dropdown-menu, form, input, label, select, sonner, table, tabs); `lib/{axios,utils}.ts`; `app/{App,providers,router,queryClient}` and `app/layouts/{AppLayout,AuthLayout}`; `features/auth/{api,hooks,components,pages}` (login with Password/Telegram tabs, register, signup/telegram, verify-email, forgot/reset password, awaiting-approval, rejected, route guards) and `features/dashboard/pages/Dashboard` (stub); router groups: public-only, open email-link pages, pending/rejected screens, active app shell, admin-only (empty until Part D). Logout button in the app shell. |
 | Shared (`shared/`) | `constants` (roles, account-status, stock-movement-types), `schemas/auth.ts`, `types/auth.ts` (`AuthUser`), `seed-data/` for every entity (only users are consumed so far). |
-| Tooling | TypeScript 6.0.3 (TS 7 is blocked by typescript-eslint), ESLint 10 flat config, Vitest 5 (22 server unit tests passing), `tsdown` server bundle (`server/dist/index.mjs`), `npm audit`: 0 vulnerabilities. Commands are in `CLAUDE.md`. |
+| Tooling | TypeScript 6.0.3 (TS 7 is blocked by typescript-eslint), ESLint 10 flat config, Vitest 5 (101 server tests passing), `tsdown` server bundle (`server/dist/index.mjs`), `npm audit`: 0 vulnerabilities. Commands are in `CLAUDE.md`. |
 
-**Progress:** Phase 0 is done except the unchecked items below (P0.2 and P0.8 are partial, P0.9 is deferred). **Phase 1: Parts A and B done; Parts C and D not started.** Phases 2–6 not started.
+**Progress:** Phase 0 is done except the unchecked items below (P0.2 and P0.8 are partial, P0.9 is deferred). **Phase 1: Parts A, B and C done (C: the manual check with the real bot is still to be run by the user); Part D not started.** Phases 2–6 not started.
 
 ---
 
@@ -72,7 +72,7 @@ Source: `docs/PRDs/00-project-setup.md`. Deps: none.
 ### Server
 - [x] **P0.1 [S] Audit existing scaffold against spec.** Confirm Express app boots; JSON parser, cookie parser, CORS (`credentials: true`, origin = client URL), centralized error handler returning `{ error: { code, message } }`.
 - [ ] **P0.2 [S] Env vars.** Ensure `server/.env.example` documents: `MONGODB_URI`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `COOKIE_DOMAIN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_MODE` (`webhook|polling`), `BREVO_SMTP_HOST`, `BREVO_SMTP_PORT`, `BREVO_SMTP_USER`, `BREVO_SMTP_PASS`, `APP_URL`, `PORT`. Add a typed, validated (Zod) env loader that fails fast on missing values. Add the global `LOW_STOCK_THRESHOLD` constant (used by P3 and P5, single definition in `shared/`).
-  - *Status: partial.* `.env.example` is complete, and `server/src/config/env.ts` validates (Zod, fail-fast) only `NODE_ENV`, the two JWT secrets, `COOKIE_DOMAIN` and the token TTLs. Part B added `PORT`, `MONGODB_URI`, `CLIENT_URL`, `EMAIL_FROM` and `BREVO_SMTP_*` (the mail settings stay optional in the schema on purpose, see Part B decisions), `APP_URL` was dropped (Open Question #13), and `database.ts`/`index.ts` now read from `env`. Still to add: `TELEGRAM_*` (Part C) and `LOW_STOCK_THRESHOLD`.
+  - *Status: partial.* `.env.example` is complete, and `server/src/config/env.ts` validates (Zod, fail-fast) only `NODE_ENV`, the two JWT secrets, `COOKIE_DOMAIN` and the token TTLs. Part B added `PORT`, `MONGODB_URI`, `CLIENT_URL`, `EMAIL_FROM` and `BREVO_SMTP_*` (the mail settings stay optional in the schema on purpose, see Part B decisions), `APP_URL` was dropped (Open Question #13), and `database.ts`/`index.ts` now read from `env`. `TELEGRAM_*` and `PUBLIC_URL` were added in Part C. Still to add: `LOW_STOCK_THRESHOLD`.
 - [x] **P0.3 [S] Mongoose connection** via `MONGODB_URI` (`config/database.ts`).
 - [x] **P0.4 [S] `GET /api/health`** returns 200.
 - [x] **P0.5 [S] Seed skeleton.** `seed.ts` connects, exposes `runSeed()`, clears + inserts per entity, disconnects, exits non-zero on failure. Script `npm run seed` in `server/package.json`. *(Seed strategy Phase 00.)*
@@ -105,7 +105,7 @@ Phase 1 is built and committed in four parts, one session and one commit per par
 | --- | --- | --- | --- |
 | **A — Foundation** | constants/schemas, models, JWT + password services, auth middleware, `seedUsers()` | P1.1, P1.2, P1.3, P1.7, P1.16, P1.22 | ✅ done (`b173a2a`) |
 | **B — Email/password flow** | email service, register, verify-email, login, refresh/logout/me, forgot/reset, rate limiting for those routes; client auth context + email/password pages | P1.4, P1.8, P1.10 (verify-email only), P1.11, P1.13, P1.14, P1.17 (B's routes), P1.18, P1.19 (B's pages), P1.21 | ✅ done |
-| **C — Telegram** | OTP service, Telegram bot, signup webhook + link-telegram merge, OTP routes; client OTP tab + Telegram signup page | P1.5, P1.6, P1.9, P1.12, plus the Telegram extensions of P1.10, P1.17, P1.19 | not started |
+| **C — Telegram** | Telegram bot, signup + link-telegram merge, QR login (replaced the OTP flow, see Part C notes); client Email/Telegram tabs on Sign in and Sign up | P1.5, P1.6, P1.9, P1.12, plus the Telegram extensions of P1.10, P1.17, P1.19 | ✅ done (live-bot manual check pending) |
 | **D — Admin user management** | users API + Admin Users page; run the full Phase 1 acceptance checklist | P1.15, P1.20, acceptance | not started |
 
 ---
@@ -179,14 +179,14 @@ Register → pending, unverified, link arrives in the console/inbox and sets `em
 
 ---
 
-### Part C — Telegram
+### Part C — Telegram ✅
 
 Deps: Part B (the email service and the verify-email route are extended here). A real bot exists (`@inventory_app_claude_bot`, token in the gitignored `server/.env`). Telegram allows **one polling consumer per token**; see P6.9.
 
 #### Decisions made for Part C (grilling session; the PRD is otherwise unchanged)
-- **Scope:** all of Part C ships in one part: signup (new email and existing-email merge), the `link-telegram` branch, and OTP login.
+- **Scope:** all of Part C ships in one part: signup (new email and existing-email merge), the `link-telegram` branch, and QR login.
 - **No public `signup-webhook` HTTP route (PRD deviation, resolves Open Question #9).** The bot runs in the server process and calls a `signupWithTelegram()` service function directly, so there is no unauthenticated "create a user and email any address" endpoint. `TELEGRAM_WEBHOOK_SECRET` is used only as Telegram's `secret_token` for webhook mode.
-- **Bot unconfigured** (token missing or a `your-…` placeholder), non-production: the bot does not start and OTP codes are printed to the console (`[telegram:dev]`), so OTP login works with the seeded users. Production without a token: OTP request/verify answer 503 `TELEGRAM_UNAVAILABLE`, checked before any DB access.
+- **Bot unconfigured** (token missing or a `your-…` placeholder), non-production: the bot does not start (nothing can approve a QR login from Telegram; tests call `approveTelegramLogin` directly). Production without a token: the QR login routes answer 503 `TELEGRAM_UNAVAILABLE`, checked before any DB access. *(Originally: OTP codes printed to the console.)*
 - **Modes:** `TELEGRAM_MODE=polling` (default, prod) or `webhook`. Webhook mode serves Telegram updates at `POST /api/telegram/webhook` (grammY `webhookCallback`, `secret_token` checked) and calls `setWebhook(PUBLIC_URL + path)` on boot. `PUBLIC_URL` and a non-placeholder `TELEGRAM_WEBHOOK_SECRET` are required only in webhook mode. Only polling is tested locally.
 - **Bot commands:** `/start` (also with the `signup` deep-link payload) and `/cancel` only. `/start` asks for the name, then the email, both validated with the shared `registerSchema` field rules (invalid → re-ask). Other text gets "Send /start to sign up." Private chats only. Conversation state is in memory with a ~10 min timeout. The conversation is a pure `handleMessage(chatId, text)` state machine so it is testable without grammY.
 - **Signup outcomes (reply wording is generic about the account):**
@@ -194,33 +194,43 @@ Deps: Part B (the email service and the verify-email route are extended here). A
   2. Email already registered → reveal it (PRD), discard older pending `link-telegram` tokens for that user, create a new one carrying the chatId, email the confirm link.
   3. This chat is already linked to an account → create nothing; reply "this Telegram is already linked, log in with a code".
 - **Link click** (`GET /api/auth/verify-email/:token`, `link-telegram` branch): attaches the chatId **only** (no `emailVerified` change, per PRD). If the account already has a different chatId it is **replaced**. If the chatId has meanwhile been linked to another account → `INVALID_TOKEN`, nothing linked. `link-telegram` token TTL 24 h. The response carries the token type so the landing page can say "Telegram linked".
-- **OTP request** always returns the same generic 200 for unknown email, no linked Telegram, cooldown, rejected account or a failed send (sent fire-and-forget, errors logged). Cooldown is enforced silently; the client starts its own 60 s countdown after any request.
-- **OTP verify:** wrong / expired / used / exhausted / never-requested all give 401 `INVALID_CODE` with no attempts-left count. The 3rd wrong attempt invalidates the code. Success consumes it. One live code per user; a resend replaces it. Pending and unverified users can log in (session, routed by `/me`); a `rejected` user gets 403 `ACCOUNT_REJECTED` only after a correct code.
-- **Rate limits** (per IP, 15 min, 429 `RATE_LIMITED`): `otp/request` 5, `otp/verify` 10. No per-email limit (the cooldown and attempt cap are the controls).
+- **QR login start/poll** (replaced the original OTP request/verify, see implementation notes): start returns a deep link and a poll token; poll answers `pending | unlinked | expired`, or `approved` with the session. An approved attempt is handed out once. Pending and unverified users can log in (session, routed by `/me`); a `rejected` user gets 403 `ACCOUNT_REJECTED` at poll time.
+- **Bot side:** `/start login_<token>` approves the attempt for the account linked to the chat; an unlinked chat is told to sign up and the browser sees `unlinked`; an expired or replayed code is told to press Start over.
+- **Rate limits** (per IP, 15 min, 429 `RATE_LIMITED`): `telegram/login` 10, `telegram/login/poll` 600 (polled every 2 s). The single-use, 5-minute token is the main control.
 - **Client bot handle** comes from `VITE_TELEGRAM_BOT_USERNAME` (also in `client/.env.example`); the deep link is `https://t.me/<handle>?start=signup`.
 - **Out of Part C (follow-ups):** Telegram notifications when an admin activates/rejects a user (not in the PRD; add after Part D); connecting Telegram from a profile page (no profile page exists).
-- **Accepted risk:** anyone can Telegram-signup with another person's email, leaving a pending, unverified account whose chat can OTP-log in. Identical to the password signup path (PRD §3), so no extra mitigation.
+- **Accepted risk:** anyone can Telegram-signup with another person's email, leaving a pending, unverified account whose chat can QR-log in. Identical to the password signup path (PRD §3), so no extra mitigation.
 
 #### Server
-- [ ] **P0.2 (finish) [S · C] Env**: add to `config/env.ts`: `TELEGRAM_BOT_TOKEN` (optional; placeholder detection like email), `TELEGRAM_BOT_USERNAME` (`^[A-Za-z0-9_]{5,32}$`), `TELEGRAM_MODE` (`polling|webhook`, default `polling`), `TELEGRAM_WEBHOOK_SECRET`, `PUBLIC_URL`; the last two required only when mode is `webhook`. Fix `.env.example` (`PUBLIC_URL` was the wrong port; document that it is the public HTTPS origin, webhook mode only).
-- [ ] **P1.5 [S · C] `services/otp`**: 6-digit code via `crypto.randomInt`, stored as sha256; 2-min expiry, atomic attempt counter (max 3, then invalid), 60-s resend cooldown, one live `OtpCode` per user, consumed on success. Deps: P1.2.
-- [ ] **P1.6 [S · C] `services/telegram`**: grammY bot, polling/webhook per `TELEGRAM_MODE`, the `/start`/`/cancel` conversation, `sendOtp(chatId, code)` with the dev console fallback, `assertTelegramAvailable()`. Started from `index.ts` (not from `createApp()`, so tests never start a bot). Deps: P1.4, P1.5.
-- [ ] **P1.9 [S · C] `services/telegramSignup` — `signupWithTelegram({ chatId, name, email })`**: the three outcomes above; extends `createEmailToken` with an optional `telegramChatId` and the `link-telegram` TTL; adds a link-telegram email template to `services/email`. (Replaces the HTTP route; see decisions.) Deps: P1.6, P1.8.
-- [ ] **P1.12 [S · C] `POST /api/auth/otp/request` and `/otp/verify`**: as decided above; verify issues the session with `issueSession` and returns `{ user }`. Deps: P1.5, P1.6, P1.3.
-- [ ] **P1.10 (extension) [S · C]** `link-telegram` branch in verify-email (`consumeEmailToken(raw, ['verify-email', 'link-telegram'])`, switch on type).
-- [ ] **P1.17 (extension) [S · C]** `otpRequestLimiter` (5) and `otpVerifyLimiter` (10) in `middleware/rateLimit.ts`.
+- [x] **P0.2 (finish) [S · C] Env**: add to `config/env.ts`: `TELEGRAM_BOT_TOKEN` (optional; placeholder detection like email), `TELEGRAM_BOT_USERNAME` (`^[A-Za-z0-9_]{5,32}$`), `TELEGRAM_MODE` (`polling|webhook`, default `polling`), `TELEGRAM_WEBHOOK_SECRET`, `PUBLIC_URL`; the last two required only when mode is `webhook`. Fix `.env.example` (`PUBLIC_URL` was the wrong port; document that it is the public HTTPS origin, webhook mode only).
+- [x] **P1.5 [S · C] ~~`services/otp`~~ → `services/telegramLogin`** (QR login): `createTelegramLogin`, `approveTelegramLogin` (called by the bot), `pollTelegramLogin`; two independent secrets stored as hashes, 5-min expiry, single use. The OTP service was built first and then removed. Deps: P1.2.
+- [x] **P1.6 [S · C] `services/telegram`**: grammY bot, polling/webhook per `TELEGRAM_MODE`, the `/start`/`/cancel` signup conversation and the `/start login_<token>` QR approval, `telegramDeepLink()`, `assertTelegramAvailable()`. Started from `index.ts` (not from `createApp()`, so tests never start a bot). Deps: P1.4, P1.5.
+- [x] **P1.9 [S · C] `services/telegramSignup` — `signupWithTelegram({ chatId, name, email })`**: the three outcomes above; extends `createEmailToken` with an optional `telegramChatId` and the `link-telegram` TTL; adds a link-telegram email template to `services/email`. (Replaces the HTTP route; see decisions.) Deps: P1.6, P1.8.
+- [x] **P1.12 [S · C] `POST /api/auth/telegram/login` and `/telegram/login/poll`**: start returns `{ deepLink, pollToken, expiresAt }`; poll answers `{ status }` and, once approved, issues the session with `issueSession` and returns `{ status: 'approved', user }`. Deps: P1.5, P1.6, P1.3.
+- [x] **P1.10 (extension) [S · C]** `link-telegram` branch in verify-email (`consumeEmailToken(raw, ['verify-email', 'link-telegram'])`, switch on type).
+- [x] **P1.17 (extension) [S · C]** `telegramLoginStartLimiter` (10) and `telegramLoginPollLimiter` (600; the browser polls every 2 s) in `middleware/rateLimit.ts`.
 
 #### Client
-- [ ] **P1.19 (extension) [C · C]** Login page **Password | Telegram** tabs. The Telegram tab: email → code (two steps, shared `otpRequestSchema`/`otpVerifySchema`, 60 s resend countdown, "use a different email", help text for users with no Telegram linked). On success refresh `/me` and navigate like password login. Toasts on every mutation.
-- [ ] **P1.19 (extension) [C · C]** Public "Sign up with Telegram" page (`/signup/telegram`): steps plus the deep-link button, linked from Register and Login. Verify-email landing page handles the `link-telegram` response.
+- [x] **P1.19 (extension) [C · C]** Sign in page rebuilt to `docs/design/signin-email.png` / `signin-telegram.png`: `Email | Telegram` tabs, password eye toggle, "Forgot password?" next to the label, "Don't have an account? Sign up". The Telegram tab shows a QR code, an "Open Telegram" button, "Expires in m:ss" and "Start over" and polls every 2 s (`useTelegramQrLogin`). On approval the user goes into the `/me` cache and the route guards redirect, like a password login.
+- [x] **P1.19 (extension) [C · C]** Sign up page rebuilt to `docs/design/signup-email.png`: `Email | Telegram` tabs, Name / Email / Password / Confirm password (`registerFormSchema` in `@inventory/shared`), "Already have an account? Sign in". The Telegram tab shows a static QR code to `t.me/<bot>?start=signup`. The separate `/signup/telegram` page was removed. The verify-email landing page handles the `link-telegram` response.
+
+#### Part C: implementation notes
+- **Tests added:** `services/{telegramLogin,telegramSignup,telegramConversation}.test.ts`, `routes/telegram.test.ts` (QR login routes + link-telegram), plus the Sign in / Sign up / QR smoke tests in `tests/smoke.spec.ts`. `vitest.config.ts` pins `TELEGRAM_BOT_TOKEN` to a placeholder so a real token in `server/.env` never reaches tests.
+- **Smoke tests repaired:** three existing assertions were stale since the login redesign / Tailwind 4 (`Log in` h2, `Inventory Manager` h1 30px, `rgb(255,255,255)`); they now match the current UI.
+- **Verify-email responses carry `type`** (`verify-email` | `link-telegram`); the client landing page branches on it.
+- **QR login replaces OTP (decided 2026-10-10 after the user supplied `docs/design/signin-telegram.png`).** The email -> 6-digit code flow, `services/otp`, the `OtpCode` model, `/auth/otp/*` and the earlier `/signup/telegram` page were removed; the PRD (§3, §4, §6.6, §7) was updated. `TelegramLogin` documents carry two hashed secrets (`startHash` in the QR code, `pollHash` in the browser) and expire after 5 minutes via a TTL index.
+- **Password rule stays min 8 characters** (decided with the same change); the design's "10 characters, a letter and a digit" hint was not adopted. The Sign up form only adds the Confirm password field and the show/hide toggle.
+- **QR login risk to keep in mind:** like every QR login, it can be phished (an attacker shows their QR code and tricks the owner into pressing Start). Pressing Start is the only approval step, as the design specifies; an explicit Approve/Deny button in the bot would be the mitigation if wanted.
+- **Dependency added:** `qrcode.react` (client).
+- **Webhook mode is untested locally** (only polling is). Boot with a placeholder token prints the dev fallback and keeps the server up.
+- **Manual check still to run** with the real bot (polling): new-email signup, existing-email merge, repeat `/start`, QR login of a linked account (scan, Start, browser signs in), QR login from an unlinked chat, expired QR code and Start over. Only one polling consumer per token: stop other dev servers first.
 
 #### Tests
-- Vitest (Mongo test DB): OTP service (expiry, 3 attempts, cooldown, replace-on-resend, single use); `signupWithTelegram` outcomes 1–3; link-telegram consume incl. replace and chat-already-linked-elsewhere; the conversation state machine; OTP route rules (generic responses, rejected-after-correct-code).
-- Manual with the real bot (polling): new-email signup, existing-email merge, repeat `/start`, OTP login of the linked account, wrong code ×3, resend cooldown.
-- Playwright smoke: Login page shows the Telegram tab and the OTP email step; signup page renders the deep link.
+- Vitest (Mongo test DB): QR login service (single use, expiry, start token cannot be polled, replayed Start); `signupWithTelegram` outcomes 1–3; link-telegram consume incl. replace and chat-already-linked-elsewhere; the conversation state machine incl. the `login_` payload; QR login route rules (pending/approved/unlinked/expired, rejected, 503 in production without a token).
+- Playwright smoke: Sign in page (tabs, eye toggle), Telegram QR flow with a stubbed API (QR, countdown, polling, unlinked, Start over), Sign up page (confirm password, Telegram tab).
 
 #### Part C acceptance
-Telegram signup with a new email → pending user + verification email · with an existing email → no duplicate, confirm email, click links the chatId · repeat `/start` from a linked chat creates nothing · OTP login works once linked; 2-min expiry, 3 attempts, 60-s cooldown · OTP request is identical for known and unknown emails · pending user logs in by OTP and sees only Awaiting Approval · rejected user is blocked · `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` pass.
+Telegram signup with a new email → pending user + verification email · with an existing email → no duplicate, confirm email, click links the chatId · repeat `/start` from a linked chat creates nothing · QR login works once linked; single use, 5-min expiry, Start over gives a fresh code · an unlinked chat never gets a session · pending user logs in by QR and sees only Awaiting Approval · rejected user is blocked · `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` pass.
 
 ---
 
@@ -237,10 +247,10 @@ Deps: Parts B (login and the auth context) and A (`requireRole`).
 ### Acceptance (from `01-identity-auth.md`, tagged by the part that makes it testable)
 - [x] **B** Register new email → pending, unverified; verification link arrives (or is logged in dev) and sets `emailVerified`.
 - [x] **B** Register same email again → explicit duplicate error.
-- [ ] **C** Telegram signup, new email → pending user + verification email.
-- [ ] **C** Telegram signup, existing email → no duplicate; confirm email; click links the chatId to the existing account.
-- [ ] **B / C** Login works by password (B) and by Telegram OTP (C) once active.
-- [ ] **C** OTP: 2-min expiry, 3 attempts, 60-s resend cooldown.
+- [x] **C** Telegram signup, new email → pending user + verification email. *(automated; live bot pending)*
+- [x] **C** Telegram signup, existing email → no duplicate; confirm email; click links the chatId to the existing account. *(automated; live bot pending)*
+- [x] **B / C** Login works by password (B) and by Telegram QR code (C) once active.
+- [x] **C** QR login: single use, 5-min expiry, Start over creates a fresh code.
 - [x] **B** Pending user can log in but sees only Awaiting Approval.
 - [ ] **D** Admin cannot activate an unverified user.
 - [ ] **B / D** Rejected user is blocked (B); admin can reactivate (D).
@@ -364,7 +374,7 @@ Source: `docs/PRDs/06-polish-qa.md`, `docs/seed-data-strategy/`. Deps: **P0–P5
 - [ ] **P6.1 Responsive pass**: desktop-first; check tablet widths for tables and dashboard cards; confirm LTR throughout.
 - [ ] **P6.2 Toast audit**: every mutation (products, categories, suppliers, stock, auth, admin user actions) has success and error toasts.
 - [ ] **P6.3 Loading/empty/error states** for every Query-backed list (products, categories, suppliers, movements, users, dashboard widgets).
-- [ ] **P6.4 Rate-limit verification**: actually trigger limits on login, register, OTP request/verify, forgot-password (e.g. a script or Playwright test) — not just configured.
+- [ ] **P6.4 Rate-limit verification**: actually trigger limits on login, register, Telegram QR login start/poll, forgot-password (e.g. a script or Playwright test) — not just configured.
 - [ ] **P6.5 Authorization audit**: for each mutating route, assert staff → 403, unauthenticated → 401, pending/rejected → 403 on data routes. Prefer automated API tests.
 - [ ] **P6.6 Seed final audit**: runs clean (no warnings, <30 s, idempotent); data covers in/low/out of stock, ≥1 zero-quantity product, ≥1 archived product, ≥1 product without supplier, ≥1 manual adjustment with a detailed reason, verified-pending, **unverified**-pending, and rejected users; movements span ~90 days.
 - [ ] **P6.7 Stock-integrity check**: script/test confirming `product.quantity` equals the movement-history result for every product after a mixed sequence of actions.

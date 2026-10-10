@@ -3,7 +3,7 @@ import { z } from 'zod';
 import {
   forgotPasswordSchema,
   loginSchema,
-  otpVerifySchema,
+  registerFormSchema,
   registerSchema,
   resetPasswordSchema,
 } from '@inventory/shared';
@@ -33,10 +33,13 @@ describe('shared auth schemas (Zod 4)', () => {
     expect(loginSchema.safeParse({ email: 'a@b.co', password: '' }).success).toBe(false);
   });
 
-  it('requires a 6-digit OTP code', () => {
-    expect(otpVerifySchema.safeParse({ email: 'a@b.co', code: '123456' }).success).toBe(true);
-    expect(otpVerifySchema.safeParse({ email: 'a@b.co', code: '12345' }).success).toBe(false);
-    expect(otpVerifySchema.safeParse({ email: 'a@b.co', code: 'abcdef' }).success).toBe(false);
+  it('requires the sign-up confirm password to match', () => {
+    const base = { name: 'Jane', email: 'jane@example.com', password: 'longenough1' };
+    expect(registerFormSchema.safeParse({ ...base, confirmPassword: 'longenough1' }).success).toBe(true);
+
+    const mismatch = registerFormSchema.safeParse({ ...base, confirmPassword: 'different11' });
+    expect(mismatch.success).toBe(false);
+    expect(mismatch.error?.issues[0]).toMatchObject({ path: ['confirmPassword'], message: 'Passwords do not match' });
   });
 
   it('errors are instances of the same ZodError the server error handler checks', () => {

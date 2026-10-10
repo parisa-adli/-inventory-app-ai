@@ -21,14 +21,18 @@ export const loginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 });
 
-export const otpRequestSchema = z.object({
-  email: emailField,
+/** The browser polls a QR login with the secret it received when the QR code was created. */
+export const telegramLoginPollSchema = z.object({
+  pollToken: z.string().min(1).max(128),
 });
 
-export const otpVerifySchema = z.object({
-  email: emailField,
-  code: z.string().regex(/^\d{6}$/, 'Code must be 6 digits'),
-});
+/** Sign-up form: the server schema plus the confirm field (only name, email, password are sent). */
+export const registerFormSchema = registerSchema
+  .extend({ confirmPassword: z.string().min(1, 'Confirm your password') })
+  .refine((value) => value.password === value.confirmPassword, {
+    error: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
 
 export const forgotPasswordSchema = z.object({
   email: emailField,
@@ -40,7 +44,7 @@ export const resetPasswordSchema = z.object({
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
-export type OtpRequestInput = z.infer<typeof otpRequestSchema>;
-export type OtpVerifyInput = z.infer<typeof otpVerifySchema>;
+export type TelegramLoginPollInput = z.infer<typeof telegramLoginPollSchema>;
+export type RegisterFormInput = z.infer<typeof registerFormSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

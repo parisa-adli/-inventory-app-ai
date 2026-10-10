@@ -28,7 +28,35 @@ export const register = (input: RegisterInput) => api.post('/auth/register', inp
 
 export const logout = () => api.post('/auth/logout');
 
-export const verifyEmail = (token: string) => api.get(`/auth/verify-email/${encodeURIComponent(token)}`);
+/** A QR login attempt: `deepLink` goes into the QR code, `pollToken` stays in this browser. */
+export interface TelegramLoginSession {
+  deepLink: string;
+  pollToken: string;
+  /** ISO timestamp. */
+  expiresAt: string;
+}
+
+export type TelegramLoginPoll =
+  | { status: 'pending' | 'unlinked' | 'expired' }
+  | { status: 'approved'; user: AuthUser };
+
+export const startTelegramLogin = async (): Promise<TelegramLoginSession> => {
+  const { data } = await api.post<TelegramLoginSession>('/auth/telegram/login');
+  return data;
+};
+
+export const pollTelegramLogin = async (pollToken: string): Promise<TelegramLoginPoll> => {
+  const { data } = await api.post<TelegramLoginPoll>('/auth/telegram/login/poll', { pollToken });
+  return data;
+};
+
+/** What a consumed emailed link did: confirmed the email, or linked a Telegram chat. */
+export type EmailLinkType = 'verify-email' | 'link-telegram';
+
+export const verifyEmail = async (token: string): Promise<{ type: EmailLinkType }> => {
+  const { data } = await api.get<{ type: EmailLinkType }>(`/auth/verify-email/${encodeURIComponent(token)}`);
+  return data;
+};
 
 export const resendVerification = () => api.post('/auth/resend-verification');
 

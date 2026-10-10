@@ -6,7 +6,7 @@ import { useAuthUser, useVerifyEmail } from '../hooks/useAuth';
 export default function VerifyEmail() {
   const { token = '' } = useParams();
   const { data: user } = useAuthUser();
-  const { mutate, isPending, isSuccess, isError } = useVerifyEmail();
+  const { mutate, isPending, isSuccess, isError, data } = useVerifyEmail();
 
   // The link is single-use and StrictMode runs effects twice in dev: fire exactly once
   const fired = useRef(false);
@@ -16,13 +16,20 @@ export default function VerifyEmail() {
     mutate(token);
   }, [mutate, token]);
 
+  // One landing page for both emailed links; the server says which one was consumed
+  const linkedTelegram = data?.type === 'link-telegram';
+
   return (
     <div className="space-y-4 text-center">
-      <h2 className="text-2xl font-bold">Email verification</h2>
-      {(isPending || (!isSuccess && !isError)) && <p className="text-gray-600">Verifying your email…</p>}
+      <h2 className="text-2xl font-bold">{linkedTelegram ? 'Telegram link' : 'Email verification'}</h2>
+      {(isPending || (!isSuccess && !isError)) && <p className="text-gray-600">Checking your link…</p>}
       {isSuccess && (
         <>
-          <p className="text-gray-600">Your email address is verified.</p>
+          <p className="text-gray-600">
+            {linkedTelegram
+              ? 'Your Telegram account is linked. You can now log in with a code sent to Telegram.'
+              : 'Your email address is verified.'}
+          </p>
           <Button asChild className="w-full">
             <Link to={user ? '/' : '/login'}>{user ? 'Continue' : 'Go to log in'}</Link>
           </Button>
@@ -30,7 +37,7 @@ export default function VerifyEmail() {
       )}
       {isError && (
         <>
-          <p className="text-gray-600">This verification link is invalid or has expired.</p>
+          <p className="text-gray-600">This link is invalid or has expired.</p>
           <Button asChild variant="outline" className="w-full">
             <Link to={user ? '/' : '/login'}>{user ? 'Back to the app' : 'Go to log in'}</Link>
           </Button>

@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-A web-based inventory management tool tracking products, categories, suppliers, and stock movements, with a dashboard, role-based access (Admin/Staff), and dual authentication (email+password, Telegram OTP), unified under a single account per email address.
+A web-based inventory management tool tracking products, categories, suppliers, and stock movements, with a dashboard, role-based access (Admin/Staff), and dual authentication (email+password, Telegram QR login), unified under a single account per email address.
 
 **Stack**
 
@@ -57,8 +57,9 @@ Both paths create the account with `status: "pending"`, `emailVerified: false`, 
 ### Login — two methods, either works once `active`
 
 1. **Email + password.**
-2. **Telegram OTP** — user enters email → server sends a 6-digit OTP to the linked `telegramChatId` → user submits the code.
-   - OTP policy: 6 digits, 2-minute expiry, max 3 verification attempts (code invalidated after), 60-second resend cooldown.
+2. **Telegram QR code** — the Sign in page shows a QR code (a `t.me/<bot>?start=login_<token>` deep link). The user scans it on their phone and presses Start in the bot; the bot approves the attempt for the account linked to that chat and the browser that showed the QR code is signed in.
+   - Policy: single-use, 5-minute expiry, "Start over" creates a fresh code. The token in the QR code and the secret the browser polls with are different, so a photographed QR code cannot be collected by someone else. A chat with no linked account is told to sign up first.
+   - *(Decision on 2026-10-10, following `docs/design/signin-telegram.png`: this replaces the earlier email → 6-digit OTP flow.)*
 
 A `pending` user can still log in (either method) but is routed to an **"awaiting approval"** screen — no access to data. A `rejected` user sees a rejected/revoked message and cannot proceed until reactivated.
 
@@ -101,16 +102,17 @@ A `pending` user can still log in (either method) but is routed to an **"awaitin
 }
 ```
 
-### OtpCode
+### TelegramLogin (one QR login attempt, single-use)
 
 ```
 {
-  _id, user: ref User,
-  code: String (hashed, 6 digits),
-  expiresAt: Date,        // now + 2 min
-  attempts: Number,        // max 3
-  lastSentAt: Date,        // 60s resend cooldown
-  consumed: Boolean
+  _id,
+  startHash: String,       // sha256 of the secret in the QR code / bot deep link
+  pollHash: String,        // sha256 of the secret that stays in the browser
+  status: "pending" | "approved" | "unlinked" | "consumed",
+  user: ref User (optional), // set when a linked chat pressed Start
+  expiresAt: Date,          // now + 5 min
+  createdAt
 }
 ```
 
@@ -207,7 +209,7 @@ Global read-only table: Date, Product, Type (receive/ship/adjustment), Quantity,
 
 ### 6.6 Auth Pages
 
-- Login (email+password, or "Login with Telegram OTP" two-step: email → code).
+- Sign in: `Email | Telegram` tabs; the Telegram tab shows the QR code, an "Open Telegram" button, an expiry countdown and "Start over".
 - Signup (email+password form) + instructions/deep-link to start the Telegram bot for the Telegram path.
 - Email verification landing page (consumes the link token).
 - Forgot/reset password pages.
@@ -222,8 +224,8 @@ Auth
 POST /api/auth/register                 (email+password; explicit DUPLICATE_EMAIL on conflict)
 POST /api/auth/telegram/signup-webhook  (bot-triggered; explicit duplicate handling -> sends merge-verification email)
 POST /api/auth/login                    (email+password)
-POST /api/auth/otp/request              (email -> OTP via Telegram)
-POST /api/auth/otp/verify               (email+code -> tokens)
+POST /api/auth/telegram/login           (creates a QR login attempt -> deepLink, pollToken, expiresAt)
+POST /api/auth/telegram/login/poll      (pollToken -> pending | unlinked | expired | approved + tokens)
 POST /api/auth/refresh
 POST /api/auth/logout
 GET  /api/auth/me
@@ -268,11 +270,11 @@ GET /api/dashboard/alerts                (low/out-of-stock table)
 - Pagination on Products, Stock Movements.
 - Toast on every mutation.
 - Responsive, desktop-first, LTR layout.
-- Rate-limit auth endpoints (login, OTP request/verify, register) against brute force.
+- Rate-limit auth endpoints (login, Telegram QR login start/poll, register) against brute force.
 
 ## 9. Out of Scope (v1)
 
 - Multi-warehouse / location tracking
 - Barcode scanning
 - Purchase orders beyond the supplier link on a product
-- SMS-based OTP fallback
+- SMS-based or code-based OTP fallback

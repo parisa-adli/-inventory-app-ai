@@ -7,7 +7,7 @@ import { hashPassword } from './services/password.js';
 
 type UserDoc = InstanceType<typeof User>;
 
-// EmailToken, OtpCode and RefreshToken are runtime-generated and never seeded.
+// EmailToken, TelegramLogin and RefreshToken are runtime-generated and never seeded.
 const seedUsers = async (): Promise<Map<string, UserDoc>> => {
   const userMap = new Map<string, UserDoc>();
 

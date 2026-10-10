@@ -95,7 +95,17 @@ export const sendVerificationEmail = (to: string, name: string, token: string): 
     outro: 'This link expires in 24 hours. If you did not create an account, you can ignore this email.',
   });
 
-export const sendPasswordResetEmail = (to: string, name: string, token: string): Promise<void> =>
+export const sendTelegramLinkEmail = (to: string, name: string, token: string): Promise<void> =>
+  deliver({
+    to,
+    subject: 'Confirm linking your Telegram account',
+    intro: `Hi ${name}, someone asked to link a Telegram account to your Inventory Manager account. Confirm to be able to log in with a Telegram code.`,
+    linkLabel: 'Link Telegram',
+    link: verificationLink(token),
+    outro: 'This link expires in 24 hours. If this was not you, ignore this email and nothing will change.',
+  });
+
+export const sendPasswordResetEmail =(to: string, name: string, token: string): Promise<void> =>
   deliver({
     to,
     subject: 'Reset your password',

@@ -17,6 +17,8 @@ export default defineConfig({
       // A placeholder, so a real token in server/.env can never make tests talk to Telegram
       TELEGRAM_BOT_TOKEN: 'your-telegram-bot-token-for-tests',
       TELEGRAM_MODE: 'polling',
+      // A made-up handle (matches the TELEGRAM_BOT_USERNAME format): the deep link of /telegram/start needs one
+      TELEGRAM_BOT_USERNAME: 'inventory_test_bot',
     },
   },
 });

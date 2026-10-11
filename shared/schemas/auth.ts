@@ -1,14 +1,22 @@
 import { z } from 'zod';
 
-export const PASSWORD_MIN_LENGTH = 8;
+export const PASSWORD_MIN_LENGTH = 10;
+/** bcrypt ignores every byte after the 72nd, so longer passwords would be silently truncated. */
+export const PASSWORD_MAX_BYTES = 72;
+export const PASSWORD_HINT = `At least ${PASSWORD_MIN_LENGTH} characters, with a letter and a digit.`;
 
 // Normalize first, then validate (Zod 4: z.email() replaces the deprecated z.string().email())
 const emailField = z.string().trim().toLowerCase().pipe(z.email('Enter a valid email address'));
 
+/** New passwords only (register, reset). Login deliberately accepts any non-empty password. */
 export const passwordField = z
   .string()
   .min(PASSWORD_MIN_LENGTH, `Password must be at least ${PASSWORD_MIN_LENGTH} characters`)
-  .max(128, 'Password is too long');
+  .regex(/[A-Za-z]/, 'Password must contain a letter')
+  .regex(/\d/, 'Password must contain a digit')
+  .refine((value) => new TextEncoder().encode(value).length <= PASSWORD_MAX_BYTES, {
+    error: `Password must be at most ${PASSWORD_MAX_BYTES} bytes`,
+  });
 
 export const registerSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(100),

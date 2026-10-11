@@ -1,7 +1,7 @@
 import { Link } from 'react-router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { registerFormSchema, PASSWORD_MIN_LENGTH, type RegisterFormInput } from '@inventory/shared';
+import { registerFormSchema, PASSWORD_HINT, type RegisterFormInput } from '@inventory/shared';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { AuthMethodTabs } from '../components/AuthMethodTabs';
@@ -47,7 +47,7 @@ function EmailSignupForm() {
           label="Password"
           type="password"
           autoComplete="new-password"
-          hint={`At least ${PASSWORD_MIN_LENGTH} characters.`}
+          hint={PASSWORD_HINT}
         />
         <TextField
           control={form.control}

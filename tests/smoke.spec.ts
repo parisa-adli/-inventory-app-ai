@@ -115,7 +115,7 @@ test.describe('client smoke', () => {
     for (const name of ['name', 'email', 'password', 'confirmPassword']) {
       await expect(page.locator(`input[name="${name}"]`)).toBeVisible();
     }
-    await expect(page.getByText('At least 8 characters.')).toBeVisible();
+    await expect(page.getByText('At least 10 characters, with a letter and a digit.')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/login');
 
     await page.locator('input[name="name"]').fill('Ada');

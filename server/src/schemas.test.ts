@@ -29,6 +29,21 @@ describe('shared auth schemas (Zod 4)', () => {
     expect(resetPasswordSchema.safeParse({ password: 'short' }).success).toBe(false);
   });
 
+  it('requires a letter, a digit and at most 72 bytes in new passwords', () => {
+    const base = { name: 'a', email: 'a@b.co' };
+    expect(registerSchema.safeParse({ ...base, password: 'abcdefghijkl' }).success).toBe(false);
+    expect(registerSchema.safeParse({ ...base, password: '1234567890123' }).success).toBe(false);
+    expect(registerSchema.safeParse({ ...base, password: 'abcdefghi1' }).success).toBe(true);
+    expect(registerSchema.safeParse({ ...base, password: `${'a'.repeat(71)}1` }).success).toBe(true);
+    expect(registerSchema.safeParse({ ...base, password: `${'a'.repeat(72)}1` }).success).toBe(false);
+    // multi-byte characters count as bytes: 1 + 37 x 2 + 1 = 76 bytes (but only 39 characters)
+    expect(registerSchema.safeParse({ ...base, password: `a${'é'.repeat(37)}1` }).success).toBe(false);
+  });
+
+  it('does not apply the new-password rule to login', () => {
+    expect(loginSchema.safeParse({ email: 'a@b.co', password: 'Admin@123' }).success).toBe(true);
+  });
+
   it('requires a non-empty login password', () => {
     expect(loginSchema.safeParse({ email: 'a@b.co', password: '' }).success).toBe(false);
   });

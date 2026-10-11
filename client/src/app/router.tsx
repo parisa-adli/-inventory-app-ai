@@ -18,6 +18,7 @@ import ResetPassword from '@/features/auth/pages/ResetPassword';
 import VerifyEmail from '@/features/auth/pages/VerifyEmail';
 import VerifyEmailPending from '@/features/auth/pages/VerifyEmailPending';
 import Dashboard from '@/features/dashboard/pages/Dashboard';
+import Users from '@/features/users/pages/Users';
 
 const AuthShell = () => (
   <AuthLayout>
@@ -66,8 +67,9 @@ export default function AppRoutes() {
       <Route element={<RequireActive />}>
         <Route element={<AppShell />}>
           <Route path="/" element={<Dashboard />} />
-          {/* Admin-only group; the Users page arrives with Part D */}
-          <Route element={<RequireAdmin />} />
+          <Route element={<RequireAdmin />}>
+            <Route path="/users" element={<Users />} />
+          </Route>
         </Route>
       </Route>
 

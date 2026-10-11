@@ -28,7 +28,7 @@ History: `c127d2c` scaffold → `b173a2a` Phase 1 Part A + server dependency upg
 | Shared (`shared/`) | `constants` (roles, account-status, stock-movement-types), `schemas/auth.ts`, `types/auth.ts` (`AuthUser`), `seed-data/` for every entity (only users are consumed so far). |
 | Tooling | TypeScript 6.0.3 (TS 7 is blocked by typescript-eslint), ESLint 10 flat config, Vitest 5 (124 server tests passing), `tsdown` server bundle (`server/dist/index.mjs`), `npm audit`: 0 vulnerabilities. Commands are in `CLAUDE.md`. |
 
-**Progress:** Phase 0 is done except the unchecked items below (P0.2 and P0.8 are partial, P0.9 is deferred). **Phase 1: Parts A, B and C done (C: the manual check with the real bot is still to be run by the user); Part D not started.** Phases 2–6 not started.
+**Progress:** Phase 0 is done except the unchecked items below (P0.2 and P0.8 are partial, P0.9 is deferred). **Phase 1: Parts A, B and C done (C: the manual check with the real bot is still to be run by the user); Part D in progress: admin approve/reject of pending users is done, revoke/reactivate remain.** Phases 2–6 not started.
 
 ---
 
@@ -270,8 +270,8 @@ Telegram signup with a new email → pending user + verification email · with a
 
 Deps: Parts B (login and the auth context) and A (`requireRole`).
 
-- [ ] **P1.15 [S · D] Admin users API**: `GET /api/users?status=` (paginated), `PATCH /:id/activate` (**400 if `!emailVerified`**), `PATCH /:id/reject` (also revokes active users; call `revokeAllUserTokens`), `PATCH /:id/reactivate`. Guard: `requireAuth` → `requireRole('admin')`. Deps: P1.16 ✅.
-- [ ] **P1.20 [C · D] Admin Users page** (admin-only route): Pending Users table with Activate (disabled + tooltip when `!emailVerified`) / Reject; a second view/filter for active users (revoke) and rejected users (reactivate). Hide the admin nav for staff. Deps: P1.15, P1.18.
+- [ ] **P1.15 [S · D] Admin users API** *(partial: `GET /api/users?status=&page=&limit=`, `PATCH /:id/activate` (400 `EMAIL_NOT_VERIFIED`) and `PATCH /:id/reject` are done and tested in `routes/users.test.ts`; both transitions are pending-only and answer 409 `NOT_PENDING` otherwise. Revoking active users and `reactivate` remain: ticket 4)*: `GET /api/users?status=` (paginated), `PATCH /:id/activate` (**400 if `!emailVerified`**), `PATCH /:id/reject` (also revokes active users; call `revokeAllUserTokens`), `PATCH /:id/reactivate`. Guard: `requireAuth` → `requireRole('admin')`. Deps: P1.16 ✅.
+- [ ] **P1.20 [C · D] Admin Users page** *(partial: pending users table with Activate (disabled + tooltip while unverified) / Reject with confirm, pagination, admin-only `/users` route and nav link are done, Playwright in `tests/users.spec.ts`; the active/rejected views remain: ticket 4)* (admin-only route): Pending Users table with Activate (disabled + tooltip when `!emailVerified`) / Reject; a second view/filter for active users (revoke) and rejected users (reactivate). Hide the admin nav for staff. Deps: P1.15, P1.18.
 - [ ] Run the full acceptance checklist below, then mark Phase 1 done.
 
 ---
@@ -284,7 +284,7 @@ Deps: Parts B (login and the auth context) and A (`requireRole`).
 - [x] **B / C** Login works by password (B) and by Telegram one-time code (C) once active.
 - [x] **C** Telegram code flow: nonce single use, 5-min expiry, 5 wrong codes lock, resend 60 s / max 3, Start over gives a fresh QR code. *(implemented; not yet verified by tests or against the live bot)*
 - [x] **B** Pending user can log in but sees only Awaiting Approval.
-- [ ] **D** Admin cannot activate an unverified user.
+- [x] **D** Admin cannot activate an unverified user. *(server 400 + disabled button with tooltip)*
 - [ ] **B / D** Rejected user is blocked (B); admin can reactivate (D).
 - [x] **B** Access token expires and silently refreshes; logout clears both cookies.
 - [x] **B** Forgot-password response identical whether or not the email exists.

@@ -3,11 +3,13 @@ import { env } from '../config/env.js';
 import { TELEGRAM_WEBHOOK_PATH, isTelegramConfigured, telegramWebhookHandler } from '../services/telegram.js';
 import authRouter from './auth.js';
 import healthRouter from './health.js';
+import usersRouter from './users.js';
 
 const router = Router();
 
 router.use('/api', healthRouter);
 router.use('/api/auth', authRouter);
+router.use('/api/users', usersRouter);
 
 // Telegram pushes updates here in webhook mode only; polling needs no inbound route.
 // grammY rejects requests whose secret_token header does not match TELEGRAM_WEBHOOK_SECRET.

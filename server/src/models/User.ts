@@ -24,6 +24,8 @@ const userSchema = new Schema(
 );
 
 userSchema.index({ telegramChatId: 1 }, { unique: true, sparse: true });
+// Admin Users list: filter by status, newest first
+userSchema.index({ status: 1, createdAt: -1, _id: -1 });
 
 export type UserDoc = InferSchemaType<typeof userSchema>;
 export const User = model('User', userSchema);

@@ -1,7 +1,7 @@
 import { Link, useNavigate, useParams } from 'react-router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { resetPasswordSchema, type ResetPasswordInput } from '@inventory/shared';
+import { PASSWORD_HINT, resetPasswordSchema, type ResetPasswordInput } from '@inventory/shared';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { getApiError } from '@/lib/apiError';
@@ -19,15 +19,26 @@ export default function ResetPassword() {
   });
 
   const submit = ({ password }: ResetPasswordInput) =>
-    reset.mutate({ token, password }, { onSuccess: () => navigate('/login', { replace: true }) });
+    reset.mutate(
+      { token, password },
+      {
+        // No session is issued: the user signs in with the new password
+        onSuccess: () =>
+          navigate('/login', { replace: true, state: { notice: 'Password updated. Sign in with your new password.' } }),
+      }
+    );
 
-  const linkInvalid = reset.isError && getApiError(reset.error).code === 'INVALID_TOKEN';
+  const errorCode = reset.isError ? getApiError(reset.error).code : null;
 
-  if (linkInvalid) {
+  if (errorCode === 'INVALID_TOKEN' || errorCode === 'TOKEN_EXPIRED') {
     return (
-      <div className="space-y-4 text-center">
-        <h2 className="text-2xl font-bold">Link expired</h2>
-        <p className="text-gray-600">This reset link is invalid or has expired.</p>
+      <div className="space-y-4">
+        <h1 className="text-lg font-semibold">{errorCode === 'TOKEN_EXPIRED' ? 'Link expired' : 'Link not valid'}</h1>
+        <p className="text-sm text-muted-foreground">
+          {errorCode === 'TOKEN_EXPIRED'
+            ? 'This reset link has expired.'
+            : 'This reset link is invalid or has already been used.'}
+        </p>
         <Button asChild className="w-full">
           <Link to="/forgot-password">Request a new link</Link>
         </Button>
@@ -36,8 +47,8 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-center">Choose a new password</h2>
+    <div className="space-y-4">
+      <h1 className="text-lg font-semibold">Choose a new password</h1>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(submit)} className="space-y-4" noValidate>
           <TextField
@@ -46,6 +57,7 @@ export default function ResetPassword() {
             label="New password"
             type="password"
             autoComplete="new-password"
+            hint={PASSWORD_HINT}
           />
           <Button type="submit" className="w-full" disabled={reset.isPending}>
             {reset.isPending ? 'Saving…' : 'Set new password'}

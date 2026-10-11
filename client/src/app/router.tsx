@@ -7,6 +7,7 @@ import {
   RequireActive,
   RequireAdmin,
   RequireStatus,
+  RequireUnverified,
 } from '@/features/auth/components/guards';
 import AwaitingApproval from '@/features/auth/pages/AwaitingApproval';
 import ForgotPassword from '@/features/auth/pages/ForgotPassword';
@@ -15,6 +16,7 @@ import Register from '@/features/auth/pages/Register';
 import Rejected from '@/features/auth/pages/Rejected';
 import ResetPassword from '@/features/auth/pages/ResetPassword';
 import VerifyEmail from '@/features/auth/pages/VerifyEmail';
+import VerifyEmailPending from '@/features/auth/pages/VerifyEmailPending';
 import Dashboard from '@/features/dashboard/pages/Dashboard';
 
 const AuthShell = () => (
@@ -36,7 +38,8 @@ export default function AppRoutes() {
       <Route element={<PublicOnly />}>
         <Route element={<AuthShell />}>
           <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
         </Route>
       </Route>
 
@@ -46,8 +49,11 @@ export default function AppRoutes() {
         <Route path="/reset-password/:token" element={<ResetPassword />} />
       </Route>
 
-      {/* Pending / rejected screens */}
+      {/* Pending / rejected screens; an unverified email is handled first, on /verify-email */}
       <Route element={<AuthShell />}>
+        <Route element={<RequireUnverified />}>
+          <Route path="/verify-email" element={<VerifyEmailPending />} />
+        </Route>
         <Route element={<RequireStatus status={ACCOUNT_STATUS.PENDING} />}>
           <Route path="/awaiting-approval" element={<AwaitingApproval />} />
         </Route>

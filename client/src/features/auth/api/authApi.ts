@@ -1,10 +1,15 @@
 import { isAxiosError } from 'axios';
 import type {
   AuthUser,
+  ChangeEmailInput,
+  ChangeEmailResponse,
+  DevMailResponse,
   ForgotPasswordInput,
   LoginInput,
   RegisterInput,
+  RegisterResponse,
   ResetPasswordInput,
+  VerifyEmailResponse,
 } from '@inventory/shared';
 import api from '@/lib/axios';
 
@@ -24,7 +29,10 @@ export const login = async (input: LoginInput): Promise<AuthUser> => {
   return data.user;
 };
 
-export const register = (input: RegisterInput) => api.post('/auth/register', input);
+export const register = async (input: RegisterInput): Promise<RegisterResponse> => {
+  const { data } = await api.post<RegisterResponse>('/auth/register', input);
+  return data;
+};
 
 export const logout = () => api.post('/auth/logout');
 
@@ -50,15 +58,22 @@ export const pollTelegramLogin = async (pollToken: string): Promise<TelegramLogi
   return data;
 };
 
-/** What a consumed emailed link did: confirmed the email, or linked a Telegram chat. */
-export type EmailLinkType = 'verify-email' | 'link-telegram';
-
-export const verifyEmail = async (token: string): Promise<{ type: EmailLinkType }> => {
-  const { data } = await api.get<{ type: EmailLinkType }>(`/auth/verify-email/${encodeURIComponent(token)}`);
+/** Consumes an emailed link (email verification or Telegram link). The token is the only proof. */
+export const verifyEmail = async (token: string): Promise<VerifyEmailResponse> => {
+  const { data } = await api.get<VerifyEmailResponse>(`/auth/verify-email/${encodeURIComponent(token)}`);
   return data;
 };
 
-export const resendVerification = () => api.post('/auth/resend-verification');
+export const resendVerification = async (): Promise<DevMailResponse> => {
+  const { data } = await api.post<DevMailResponse>('/auth/resend-verification');
+  return data;
+};
+
+/** An unverified user fixes the address their verification link goes to. */
+export const changeEmail = async (input: ChangeEmailInput): Promise<ChangeEmailResponse> => {
+  const { data } = await api.patch<ChangeEmailResponse>('/auth/email', input);
+  return data;
+};
 
 export const forgotPassword = (input: ForgotPasswordInput) => api.post('/auth/forgot-password', input);
 

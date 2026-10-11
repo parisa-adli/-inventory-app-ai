@@ -140,12 +140,107 @@ test.describe('client smoke', () => {
     }
   });
 
-  test('the link-telegram confirmation shows the Telegram message', async ({ page }) => {
-    await page.route('**/api/auth/verify-email/*', (route) =>
-      route.fulfill({ json: { type: 'link-telegram', message: 'Telegram linked.' } })
-    );
+  test('an emailed link is confirmed with { verified: true } and offers sign in', async ({ page }) => {
+    await page.route('**/api/auth/verify-email/*', (route) => route.fulfill({ json: { verified: true } }));
     await page.goto('/verify-email/some-token');
-    await expect(page.getByText('Your Telegram account is linked.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Link confirmed' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/login');
+  });
+
+  test('an expired emailed link says so, an unknown one does not', async ({ page }) => {
+    await page.route('**/api/auth/verify-email/expired', (route) =>
+      route.fulfill({ status: 400, json: { error: { code: 'TOKEN_EXPIRED', message: 'expired' } } })
+    );
+    await page.route('**/api/auth/verify-email/unknown', (route) =>
+      route.fulfill({ status: 400, json: { error: { code: 'INVALID_TOKEN', message: 'invalid' } } })
+    );
+
+    await page.goto('/verify-email/expired');
+    await expect(page.getByRole('heading', { name: 'Link expired' })).toBeVisible();
+
+    await page.goto('/verify-email/unknown');
+    await expect(page.getByText('This link is invalid or has already been used.')).toBeVisible();
+  });
+
+  test('an unverified user is sent to /verify-email, can change the email and is rate limited on resend', async ({
+    page,
+  }) => {
+    let user = { id: '1', name: 'Eve', email: 'typo@x.com', role: 'staff', status: 'pending', emailVerified: false };
+    await page.route('**/api/auth/me', (route) => route.fulfill({ json: user }));
+    await page.route('**/api/auth/email', async (route) => {
+      const { email } = route.request().postDataJSON();
+      if (email === 'taken@x.com') {
+        return route.fulfill({
+          status: 409,
+          json: { error: { code: 'DUPLICATE_EMAIL', message: 'This email is already registered.' } },
+        });
+      }
+      user = { ...user, email };
+      return route.fulfill({ json: { user } });
+    });
+    let resends = 0;
+    await page.route('**/api/auth/resend-verification', (route) => {
+      resends += 1;
+      return route.fulfill({
+        status: 429,
+        headers: { 'Retry-After': '120' },
+        json: { error: { code: 'RATE_LIMITED', message: 'Too many requests.', details: { retryAfter: 120 } } },
+      });
+    });
+
+    // Pending + unverified: the verify gate wins over the awaiting-approval screen
+    await page.goto('/awaiting-approval');
+    await expect(page).toHaveURL(/\/verify-email$/);
+    await expect(page.locator('strong', { hasText: 'typo@x.com' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Change my email' }).click();
+    await page.locator('input[name="email"]').fill('taken@x.com');
+    await page.getByRole('button', { name: 'Save and resend' }).click();
+    await expect(page.getByText('This email is already registered.')).toBeVisible();
+
+    await page.locator('input[name="email"]').fill('fixed@x.com');
+    await page.getByRole('button', { name: 'Save and resend' }).click();
+    await expect(page.locator('strong', { hasText: 'fixed@x.com' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Resend verification email' }).click();
+    await expect(page.getByRole('button', { name: /Try again in 2 minutes/ })).toBeDisabled();
+    expect(resends).toBe(1);
+  });
+
+  test('a verified pending user lands on awaiting approval; a rejected, unverified one on verify', async ({ page }) => {
+    const pending = { id: '1', name: 'P', email: 'p@x.com', role: 'staff', status: 'pending', emailVerified: true };
+    await page.route('**/api/auth/me', (route) => route.fulfill({ json: pending }));
+    await page.goto('/verify-email');
+    await expect(page).toHaveURL(/\/awaiting-approval$/);
+
+    await page.unroute('**/api/auth/me');
+    await page.route('**/api/auth/me', (route) =>
+      route.fulfill({ json: { ...pending, status: 'rejected', emailVerified: false } })
+    );
+    await page.goto('/rejected');
+    await expect(page).toHaveURL(/\/verify-email$/);
+  });
+
+  test('a completed reset ends on sign in with a notice and no session', async ({ page }) => {
+    let reset = false;
+    await page.route('**/api/auth/me', (route) =>
+      reset
+        ? route.fulfill(unauthorized)
+        : route.fulfill({
+            json: { id: '1', name: 'A', email: 'a@x.com', role: 'staff', status: 'active', emailVerified: true },
+          })
+    );
+    await page.route('**/api/auth/reset-password/*', (route) => {
+      reset = true;
+      return route.fulfill({ status: 204 });
+    });
+
+    await page.goto('/reset-password/some-token');
+    await page.locator('input[name="password"]').fill('N3w!Passw0rd!!');
+    await page.getByRole('button', { name: 'Set new password' }).click();
+
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(page.getByText('Password updated. Sign in with your new password.').first()).toBeVisible();
   });
 
   test('app shell routes and navigates client-side', async ({ page }) => {

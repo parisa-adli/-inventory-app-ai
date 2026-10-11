@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { ACCOUNT_STATUS, type DevMailResponse } from '@inventory/shared';
 import { getApiError } from '@/lib/apiError';
 import * as authApi from '../api/authApi';
 
@@ -17,6 +18,15 @@ const onError = (err: unknown) => {
   toast.error(getApiError(err).message);
 };
 
+/** Success toast; outside production the mail is only logged, so offer the link it would have contained. */
+const toastMailSent = (message: string, { devMailUrl }: DevMailResponse = {}) => {
+  toast.success(message, {
+    ...(devMailUrl
+      ? { description: 'Dev mode: mail not sent.', action: { label: 'Open link', onClick: () => window.location.assign(devMailUrl) } }
+      : {}),
+  });
+};
+
 export const useLogin = () => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -24,7 +34,7 @@ export const useLogin = () => {
     onSuccess: (user) => {
       // The route guards react to this and redirect
       queryClient.setQueryData(authKeys.me, user);
-      toast.success(`Welcome back, ${user.name}`);
+      toast.success(user.status === ACCOUNT_STATUS.ACTIVE ? `Welcome back, ${user.name}` : 'Signed in');
     },
     onError,
   });
@@ -33,7 +43,7 @@ export const useLogin = () => {
 export const useRegister = () =>
   useMutation({
     mutationFn: authApi.register,
-    onSuccess: () => toast.success('Account created. Check your email to verify your address.'),
+    onSuccess: (data) => toastMailSent('Account created. Check your email to verify your address.', data),
     onError,
   });
 
@@ -56,21 +66,42 @@ export const useVerifyEmail = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: authApi.verifyEmail,
-    onSuccess: ({ type }) => {
+    onSuccess: () => {
       // A logged-in pending user's emailVerified flag or Telegram link just changed
       void queryClient.invalidateQueries({ queryKey: authKeys.me });
-      toast.success(type === 'link-telegram' ? 'Telegram linked' : 'Email verified');
+      toast.success('Link confirmed');
     },
-    onError,
+    // The page explains an expired or used link itself
+    onError: () => {},
   });
 };
 
-export const useResendVerification = () =>
+export const useResendVerification = (onRateLimited?: (retryAfter: number) => void) =>
   useMutation({
     mutationFn: authApi.resendVerification,
-    onSuccess: () => toast.success('Verification email sent'),
-    onError,
+    onSuccess: (data) => toastMailSent('Verification email sent', data),
+    onError: (err) => {
+      const { retryAfter } = getApiError(err);
+      if (retryAfter) onRateLimited?.(retryAfter);
+      onError(err);
+    },
   });
+
+export const useChangeEmail = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: authApi.changeEmail,
+    onSuccess: ({ user, devMailUrl }) => {
+      queryClient.setQueryData(authKeys.me, user);
+      toastMailSent(`Verification email sent to ${user.email}`, { devMailUrl });
+    },
+    // Field-level errors (duplicate email) are shown by the form
+    onError: (err) => {
+      const { code } = getApiError(err);
+      if (code !== 'DUPLICATE_EMAIL') onError(err);
+    },
+  });
+};
 
 export const useForgotPassword = () =>
   useMutation({
@@ -79,10 +110,20 @@ export const useForgotPassword = () =>
     onError,
   });
 
-export const useResetPassword = () =>
-  useMutation({
+export const useResetPassword = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
     mutationFn: ({ token, password }: { token: string; password: string }) =>
       authApi.resetPassword(token, { password }),
-    onSuccess: () => toast.success('Password updated. Please log in.'),
-    onError,
+    onSuccess: () => {
+      // The server revoked every session; drop the cached user so /login does not bounce back into the app
+      queryClient.setQueryData(authKeys.me, null);
+      toast.success('Password updated. Sign in with your new password.');
+    },
+    onError: (err) => {
+      // The page explains an expired or used link itself
+      const { code } = getApiError(err);
+      if (code !== 'INVALID_TOKEN' && code !== 'TOKEN_EXPIRED') onError(err);
+    },
   });
+};

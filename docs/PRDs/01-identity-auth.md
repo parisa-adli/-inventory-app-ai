@@ -1,5 +1,7 @@
 # 01 — Identity & Auth
 
+> **Email flow (branch `email-auth`):** the Email acceptance items below are ticked and covered by `server/src/routes/auth.test.ts` and `tests/smoke.spec.ts`; response shapes changed as listed in `CONTRACT-CHANGES.md`. Telegram and admin items are tracked in `tasks/TASK.md`.
+>
 > **Superseded in part (2026-10-10):** Telegram login is a QR code, not an email -> 6-digit OTP, and there is no `OtpCode` model or `/auth/otp/*` route. See `docs/PRD.md` §3, `tasks/TASK.md` (Part C) and `docs/design/signin-telegram.png`. The OTP lines below are kept for history only.
 
 Depends on: 00. Nothing else in the app should be built until this works end to end.
@@ -53,14 +55,14 @@ Depends on: 00. Nothing else in the app should be built until this works end to 
 - All forms via React Hook Form + Zod.
 
 ## Acceptance checklist
-- [ ] Register with a new email → pending, unverified; verification email arrives (or is logged in dev) and clicking it sets emailVerified.
-- [ ] Register again with the same email → explicit duplicate error, not generic.
+- [x] Register with a new email → pending, unverified; verification email arrives (or is logged in dev) and clicking it sets emailVerified.
+- [x] Register again with the same email → explicit duplicate error, not generic.
 - [ ] Telegram signup with a brand-new email → pending user created, verification email sent.
 - [ ] Telegram signup with an email that already has a password account → no duplicate created; confirmation email sent; clicking it links the chatId to the existing account.
 - [ ] Login works via password and via Telegram OTP once active.
 - [ ] OTP enforces 2 min expiry, 3 attempts, 60s resend cooldown.
-- [ ] Pending user can log in but only sees the awaiting-approval screen.
+- [x] Pending user can log in but only sees the awaiting-approval screen.
 - [ ] Admin cannot activate a user whose email isn't verified.
 - [ ] Rejected user is blocked; admin can reactivate them.
-- [ ] Access token expires and silently refreshes via the refresh cookie; logout clears both cookies.
-- [ ] Forgot-password always returns the same generic response whether or not the email exists.
+- [x] Access token expires and silently refreshes via the refresh cookie; logout clears both cookies.
+- [x] Forgot-password always returns the same generic response whether or not the email exists.

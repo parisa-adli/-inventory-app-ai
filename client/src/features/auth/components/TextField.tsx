@@ -1,7 +1,14 @@
 import { useState, type ReactNode } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import type { Control, FieldPath, FieldValues } from 'react-hook-form';
-import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import {
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 
 interface TextFieldProps<T extends FieldValues> {
@@ -38,29 +45,32 @@ export function TextField<T extends FieldValues>({
             <FormLabel>{label}</FormLabel>
             {labelAction}
           </div>
-          <FormControl>
-            {isPassword ? (
-              <div className="relative">
+          {isPassword ? (
+            <div className="relative">
+              <FormControl>
                 <Input
                   type={revealed ? 'text' : 'password'}
                   autoComplete={autoComplete}
                   className="pr-10"
                   {...field}
                 />
-                <button
-                  type="button"
-                  className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground hover:text-foreground"
-                  aria-label={revealed ? 'Hide password' : 'Show password'}
-                  onClick={() => setRevealed((value) => !value)}
-                >
-                  {revealed ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                </button>
-              </div>
-            ) : (
+              </FormControl>
+              <button
+                type="button"
+                className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground hover:text-foreground"
+                aria-label={revealed ? 'Hide password' : 'Show password'}
+                aria-pressed={revealed}
+                onClick={() => setRevealed((value) => !value)}
+              >
+                {revealed ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
+          ) : (
+            <FormControl>
               <Input type={type} autoComplete={autoComplete} {...field} />
-            )}
-          </FormControl>
-          {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+            </FormControl>
+          )}
+          {hint && <FormDescription>{hint}</FormDescription>}
           <FormMessage />
         </FormItem>
       )}

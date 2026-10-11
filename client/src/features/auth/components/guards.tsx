@@ -1,22 +1,16 @@
 import { Navigate, Outlet, useLocation } from 'react-router';
-import { ACCOUNT_STATUS, USER_ROLES, type AccountStatus, type AuthUser } from '@inventory/shared';
+import { ACCOUNT_STATUS, USER_ROLES, type AccountStatus } from '@inventory/shared';
+import { resolveLandingRoute } from '../landing';
 import { useAuthUser } from '../hooks/useAuth';
 
 interface LocationState {
   from?: string;
 }
 
-/** Where a logged-in user belongs, by account status. */
-const homeFor = (user: AuthUser, from?: string): string => {
-  if (user.status === ACCOUNT_STATUS.PENDING) return '/awaiting-approval';
-  if (user.status === ACCOUNT_STATUS.REJECTED) return '/rejected';
-  return from ?? '/';
-};
-
 function FullScreenSpinner() {
   return (
     <div className="min-h-screen flex items-center justify-center" role="status" aria-label="Loading">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-gray-900" />
+      <div className="size-8 animate-spin rounded-full border-4 border-border border-t-primary" />
     </div>
   );
 }
@@ -27,7 +21,7 @@ export function PublicOnly() {
   const location = useLocation();
 
   if (isPending) return <FullScreenSpinner />;
-  if (user) return <Navigate to={homeFor(user, (location.state as LocationState | null)?.from)} replace />;
+  if (user) return <Navigate to={resolveLandingRoute(user, (location.state as LocationState | null)?.from)} replace />;
   return <Outlet />;
 }
 
@@ -41,7 +35,9 @@ export function RequireActive() {
     const from = location.pathname + location.search;
     return <Navigate to="/login" state={{ from } satisfies LocationState} replace />;
   }
-  if (user.status !== ACCOUNT_STATUS.ACTIVE) return <Navigate to={homeFor(user)} replace />;
+  if (!user.emailVerified || user.status !== ACCOUNT_STATUS.ACTIVE) {
+    return <Navigate to={resolveLandingRoute(user)} replace />;
+  }
   return <Outlet />;
 }
 
@@ -58,6 +54,16 @@ export function RequireStatus({ status }: { status: AccountStatus }) {
 
   if (isPending) return <FullScreenSpinner />;
   if (!user) return <Navigate to="/login" replace />;
-  if (user.status !== status) return <Navigate to={homeFor(user)} replace />;
+  if (!user.emailVerified || user.status !== status) return <Navigate to={resolveLandingRoute(user)} replace />;
+  return <Outlet />;
+}
+
+/** The "verify your email" screen: only for a signed-in user whose address is not verified yet. */
+export function RequireUnverified() {
+  const { data: user, isPending } = useAuthUser();
+
+  if (isPending) return <FullScreenSpinner />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.emailVerified) return <Navigate to={resolveLandingRoute(user)} replace />;
   return <Outlet />;
 }

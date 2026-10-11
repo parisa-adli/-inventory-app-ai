@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { registerFormSchema, PASSWORD_HINT, type RegisterFormInput } from '@inventory/shared';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
+import { getApiError } from '@/lib/apiError';
 import { AuthMethodTabs } from '../components/AuthMethodTabs';
 import { TelegramSignupPanel } from '../components/TelegramQrPanel';
 import { TextField } from '../components/TextField';
@@ -21,10 +22,18 @@ function EmailSignupForm() {
     return (
       <div className="space-y-4 text-center">
         <h2 className="text-lg font-semibold">Check your email</h2>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground" role="status">
           We sent a verification link to <strong>{form.getValues('email')}</strong>. Verify your address, then
           sign in. An administrator will review your account after that.
         </p>
+        {register.data?.devMailUrl && (
+          <p className="text-xs text-muted-foreground">
+            Dev mode:{' '}
+            <a className="underline" href={register.data.devMailUrl}>
+              open the verification link
+            </a>
+          </p>
+        )}
         <Button asChild className="w-full">
           <Link to="/login">Go to sign in</Link>
         </Button>
@@ -35,7 +44,18 @@ function EmailSignupForm() {
   return (
     <Form {...form}>
       <form
-        onSubmit={form.handleSubmit(({ name, email, password }) => register.mutate({ name, email, password }))}
+        onSubmit={form.handleSubmit(({ name, email, password }) =>
+          register.mutate(
+            { name, email, password },
+            {
+              // Registration reveals duplicates on purpose (PRD section 3): show it on the field
+              onError: (err) => {
+                const { code, message } = getApiError(err);
+                if (code === 'DUPLICATE_EMAIL') form.setError('email', { message });
+              },
+            }
+          )
+        )}
         className="space-y-4"
         noValidate
       >

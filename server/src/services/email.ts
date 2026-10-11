@@ -1,5 +1,7 @@
 import nodemailer, { type Transporter } from 'nodemailer';
+import type { Types } from 'mongoose';
 import { env } from '../config/env.js';
+import { User } from '../models/User.js';
 import { AppError } from '../utils/errors.js';
 
 const PLACEHOLDER_PREFIX = 'your-';
@@ -52,13 +54,18 @@ interface Message {
   outro: string;
 }
 
-const deliver = async (message: Message): Promise<void> => {
+/** `devMailUrl` is set only when the mail was logged to the console instead of sent (never in production). */
+export interface DeliveryResult {
+  devMailUrl?: string;
+}
+
+const deliver = async (message: Message): Promise<DeliveryResult> => {
   const mode = emailMode();
   if (mode === 'unavailable') throw unavailableError();
 
   if (mode === 'log') {
     console.log(`[email:dev] SMTP not configured. "${message.subject}" for ${message.to}: ${message.link}`);
-    return;
+    return { devMailUrl: message.link };
   }
 
   const text = `${message.intro}\n\n${message.linkLabel}: ${message.link}\n\n${message.outro}`;
@@ -80,12 +87,13 @@ const deliver = async (message: Message): Promise<void> => {
     console.error('Email delivery failed:', err instanceof Error ? err.message : 'unknown error');
     throw unavailableError();
   }
+  return {};
 };
 
 export const verificationLink = (token: string): string => `${env.CLIENT_URL}/verify-email/${token}`;
 export const resetLink = (token: string): string => `${env.CLIENT_URL}/reset-password/${token}`;
 
-export const sendVerificationEmail = (to: string, name: string, token: string): Promise<void> =>
+export const sendVerificationEmail = (to: string, name: string, token: string): Promise<DeliveryResult> =>
   deliver({
     to,
     subject: 'Verify your email address',
@@ -95,7 +103,7 @@ export const sendVerificationEmail = (to: string, name: string, token: string): 
     outro: 'This link expires in 24 hours. If you did not create an account, you can ignore this email.',
   });
 
-export const sendTelegramLinkEmail = (to: string, name: string, token: string): Promise<void> =>
+export const sendTelegramLinkEmail = (to: string, name: string, token: string): Promise<DeliveryResult> =>
   deliver({
     to,
     subject: 'Confirm linking your Telegram account',
@@ -105,7 +113,7 @@ export const sendTelegramLinkEmail = (to: string, name: string, token: string): 
     outro: 'This link expires in 24 hours. If this was not you, ignore this email and nothing will change.',
   });
 
-export const sendPasswordResetEmail =(to: string, name: string, token: string): Promise<void> =>
+export const sendPasswordResetEmail = (to: string, name: string, token: string): Promise<DeliveryResult> =>
   deliver({
     to,
     subject: 'Reset your password',
@@ -114,3 +122,48 @@ export const sendPasswordResetEmail =(to: string, name: string, token: string): 
     link: resetLink(token),
     outro: 'This link expires in 1 hour. If you did not request this, you can ignore this email.',
   });
+
+/** Tells an admin that a user verified their email and can now be approved. */
+export const sendUserAwaitingApprovalEmail = (
+  to: string,
+  adminName: string,
+  userName: string,
+  userEmail: string,
+  url: string
+): Promise<DeliveryResult> =>
+  deliver({
+    to,
+    subject: `${userName} is waiting for approval`,
+    intro: `Hi ${adminName}, ${userName} (${userEmail}) verified their email address and can now be approved.`,
+    linkLabel: 'Review pending users',
+    link: url,
+    outro: 'You are receiving this because you are an administrator of Inventory Manager.',
+  });
+
+export const pendingUsersUrl = (): string => `${env.CLIENT_URL}/users`;
+
+type MailType = 'verify-email' | 'reset-password' | 'link-telegram';
+
+/**
+ * Runs a send and records the outcome on the user: a failure sets lastEmailFailedAt/Type,
+ * the next successful send clears them. The original error is rethrown.
+ */
+export const sendTracked = async <T>(
+  userId: Types.ObjectId | string,
+  type: MailType,
+  send: () => Promise<T>
+): Promise<T> => {
+  try {
+    const result = await send();
+    await User.updateOne(
+      { _id: userId, lastEmailFailedAt: { $exists: true } },
+      { $unset: { lastEmailFailedAt: 1, lastEmailFailedType: 1 } }
+    );
+    return result;
+  } catch (err) {
+    await User.updateOne({ _id: userId }, { lastEmailFailedAt: new Date(), lastEmailFailedType: type }).catch(
+      () => {}
+    );
+    throw err;
+  }
+};

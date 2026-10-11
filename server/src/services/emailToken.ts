@@ -13,7 +13,10 @@ export const EMAIL_TOKEN_TTL_MS = {
 } as const;
 
 export const invalidTokenError = () =>
-  new AppError(400, 'INVALID_TOKEN', 'This link is invalid or has expired.');
+  new AppError(400, 'INVALID_TOKEN', 'This link is invalid or has already been used.');
+
+export const expiredTokenError = () =>
+  new AppError(400, 'TOKEN_EXPIRED', 'This link has expired. Request a new one.');
 
 /**
  * Creates a single-use token and returns the raw value (only its hash is stored).
@@ -44,8 +47,16 @@ export const consumeEmailToken = async (raw: string, types: EmailTokenType[]) =>
     { tokenHash: sha256(raw), type: { $in: types }, consumed: false, expiresAt: { $gt: new Date() } },
     { consumed: true }
   );
-  if (!token) throw invalidTokenError();
-  return token;
+  if (token) return token;
+
+  // Tell an expired link apart from an unknown or already used one (expired rows are kept for a while)
+  const stale = await EmailToken.exists({
+    tokenHash: sha256(raw),
+    type: { $in: types },
+    consumed: false,
+    expiresAt: { $lte: new Date() },
+  });
+  throw stale ? expiredTokenError() : invalidTokenError();
 };
 
 /** Drops a user's still-unused tokens of a type, so only the newest emailed link works. */

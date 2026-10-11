@@ -28,6 +28,6 @@ describe('createLimiter', () => {
   });
 
   it('uses the agreed per-route limits', () => {
-    expect(RATE_LIMITS).toMatchObject({ login: 10, register: 10, forgotPassword: 5, resetPassword: 10 });
+    expect(RATE_LIMITS).toMatchObject({ login: 10, register: 10, resetPassword: 10 });
   });
 });

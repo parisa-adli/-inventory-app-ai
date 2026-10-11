@@ -9,7 +9,8 @@ export const errorHandler = (
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Express needs the 4-arg signature
   next: NextFunction
 ) => {
-  console.error('Error:', err);
+  // Expected client errors (401, 409, 429 ...) are not worth a stack trace
+  if (!(err instanceof AppError) || err.statusCode >= 500) console.error('Error:', err);
 
   if (err instanceof AppError) {
     return res.status(err.statusCode).json({

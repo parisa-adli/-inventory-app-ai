@@ -16,6 +16,9 @@ const userSchema = new Schema(
     },
     emailVerified: { type: Boolean, default: false, required: true },
     telegramChatId: { type: String },
+    // Set when the last mail to this user failed to send, cleared by the next successful send
+    lastEmailFailedAt: { type: Date },
+    lastEmailFailedType: { type: String, enum: ['verify-email', 'reset-password', 'link-telegram'] },
   },
   { timestamps: { createdAt: true, updatedAt: false } }
 );

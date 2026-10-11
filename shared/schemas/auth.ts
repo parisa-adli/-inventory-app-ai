@@ -50,9 +50,15 @@ export const resetPasswordSchema = z.object({
   password: passwordField,
 });
 
+/** PATCH /api/auth/email: an unverified user fixes the address their verification link goes to. */
+export const changeEmailSchema = z.object({
+  email: emailField,
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type TelegramLoginPollInput = z.infer<typeof telegramLoginPollSchema>;
 export type RegisterFormInput = z.infer<typeof registerFormSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+export type ChangeEmailInput = z.infer<typeof changeEmailSchema>;

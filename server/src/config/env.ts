@@ -9,6 +9,9 @@ const envSchema = z.object({
   JWT_ACCESS_SECRET: z.string().min(32, 'JWT_ACCESS_SECRET must be at least 32 characters'),
   JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET must be at least 32 characters'),
   COOKIE_DOMAIN: z.string().optional(),
+  // Number of reverse proxies in front of the server (0 = none). Without it every client behind a
+  // proxy shares the proxy's IP, and with it a spoofed X-Forwarded-For would be trusted, so set it exactly.
+  TRUST_PROXY: z.coerce.number().int().min(0).default(0),
   ACCESS_TOKEN_TTL: z.string().default('15m'),
   REFRESH_TOKEN_TTL: z.string().default('7d'),
   // Email (Brevo SMTP). Optional on purpose: see services/email.ts for how "not configured" behaves.

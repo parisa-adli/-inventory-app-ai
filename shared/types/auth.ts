@@ -10,3 +10,32 @@ export interface AuthUser {
   status: AccountStatus;
   emailVerified: boolean;
 }
+
+/**
+ * Present on mail-sending responses only outside production while mail is logged to the server
+ * console (no SMTP configured): the link that was "sent", so a developer or test can open it.
+ */
+export interface DevMailResponse {
+  devMailUrl?: string;
+}
+
+/** GET /api/auth/verify-email/:token. Never returns the user: the token is the only proof. */
+export interface VerifyEmailResponse {
+  verified: true;
+}
+
+/** POST /api/auth/register */
+export interface RegisterResponse extends DevMailResponse {
+  message: string;
+}
+
+/** PATCH /api/auth/email */
+export interface ChangeEmailResponse extends DevMailResponse {
+  user: AuthUser;
+}
+
+/** `error.details` of a 429 RATE_LIMITED response. */
+export interface RateLimitedDetails {
+  /** Seconds until the caller may try again; also sent as the Retry-After header. */
+  retryAfter: number;
+}

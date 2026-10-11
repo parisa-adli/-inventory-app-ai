@@ -15,8 +15,12 @@ const emailTokenSchema = new Schema(
   { timestamps: { createdAt: true, updatedAt: false } }
 );
 
-// Mongo removes expired tokens automatically
-emailTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+/**
+ * `expiresAt` is the logical expiry. Mongo only purges a token this long after it, so an expired
+ * link still resolves to TOKEN_EXPIRED for a week before it becomes an unknown (INVALID_TOKEN) one.
+ */
+export const EMAIL_TOKEN_PURGE_AFTER_SECONDS = 7 * 24 * 60 * 60;
+emailTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: EMAIL_TOKEN_PURGE_AFTER_SECONDS });
 
 export type EmailTokenDoc = InferSchemaType<typeof emailTokenSchema>;
 export const EmailToken = model('EmailToken', emailTokenSchema);

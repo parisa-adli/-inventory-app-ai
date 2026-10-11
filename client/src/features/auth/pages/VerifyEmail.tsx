@@ -8,7 +8,7 @@ import { useAuthUser, useVerifyEmail } from '../hooks/useAuth';
 export default function VerifyEmail() {
   const { token = '' } = useParams();
   const { data: user } = useAuthUser();
-  const { mutate, isPending, isSuccess, isError, error } = useVerifyEmail();
+  const { mutate, isPending, isSuccess, isError, error, data } = useVerifyEmail();
 
   // The link is single-use and StrictMode runs effects twice in dev: fire exactly once
   const fired = useRef(false);
@@ -21,10 +21,19 @@ export default function VerifyEmail() {
   const code = isError ? getApiError(error).code : null;
   const home = user ? '/' : '/login';
 
+  // One landing page for both emailed links; the server says which one was consumed
+  const linkedTelegram = data?.type === 'link-telegram';
+
   return (
     <div className="space-y-4" aria-live="polite">
       <h1 className="text-lg font-semibold">
-        {isSuccess ? 'Link confirmed' : code === 'TOKEN_EXPIRED' ? 'Link expired' : 'Email link'}
+        {isSuccess
+          ? linkedTelegram
+            ? 'Telegram link'
+            : 'Email verification'
+          : code === 'TOKEN_EXPIRED'
+            ? 'Link expired'
+            : 'Email link'}
       </h1>
 
       {!isSuccess && !isError && <p className="text-sm text-muted-foreground">Checking your link…</p>}
@@ -33,7 +42,10 @@ export default function VerifyEmail() {
       {isSuccess && (
         <>
           <p className="text-sm text-muted-foreground">
-            Thanks, your link was confirmed. {user ? 'You can continue.' : 'Sign in to continue.'}
+            {linkedTelegram
+              ? 'Your Telegram account is linked. You can now sign in with Telegram.'
+              : 'Your email address is verified.'}{' '}
+            {user ? 'You can continue.' : 'Sign in to continue.'}
           </p>
           <Button asChild className="w-full">
             <Link to={home}>{user ? 'Continue' : 'Sign in'}</Link>

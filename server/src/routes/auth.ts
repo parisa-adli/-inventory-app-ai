@@ -133,7 +133,7 @@ router.get('/verify-email/:token', async (req, res) => {
       if (!before.emailVerified && before.status === ACCOUNT_STATUS.PENDING) {
         void notifyAdminsAwaitingApproval(before).catch(() => {});
       }
-      res.json({ verified: true });
+      res.json({ verified: true, type: 'verify-email' });
       return;
     }
     case 'link-telegram': {
@@ -151,7 +151,7 @@ router.get('/verify-email/:token', async (req, res) => {
         if ((err as { code?: number }).code === 11000) throw invalidTokenError();
         throw err;
       }
-      res.json({ verified: true });
+      res.json({ verified: true, type: 'link-telegram' });
       return;
     }
     default:

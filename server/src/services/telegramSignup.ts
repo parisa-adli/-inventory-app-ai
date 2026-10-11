@@ -1,6 +1,6 @@
 import { EmailToken } from '../models/EmailToken.js';
 import { User } from '../models/User.js';
-import { sendTelegramLinkEmail, sendVerificationEmail } from './email.js';
+import { sendTelegramLinkEmail, sendTracked, sendVerificationEmail } from './email.js';
 import { createEmailToken, discardPendingTokens } from './emailToken.js';
 
 export type TelegramSignupOutcome =
@@ -35,7 +35,10 @@ export const signupWithTelegram = async ({
     await discardPendingTokens(existing._id, 'link-telegram');
     const token = await createEmailToken(existing._id, 'link-telegram', chatId);
     try {
-      await sendTelegramLinkEmail(existing.email, existing.name, token);
+      // A failed send is recorded on the owner (lastEmailFailedAt/Type) and cleared by the next successful one
+      await sendTracked(existing._id, 'link-telegram', () =>
+        sendTelegramLinkEmail(existing.email, existing.name, token)
+      );
     } catch (err) {
       await discardPendingTokens(existing._id, 'link-telegram');
       throw err;
@@ -47,7 +50,7 @@ export const signupWithTelegram = async ({
   const user = await User.create({ name, email, telegramChatId: chatId });
   try {
     const token = await createEmailToken(user._id, 'verify-email');
-    await sendVerificationEmail(user.email, user.name, token);
+    await sendTracked(user._id, 'verify-email', () => sendVerificationEmail(user.email, user.name, token));
   } catch (err) {
     // Same rule as /register: no unverifiable account may be left behind
     await EmailToken.deleteMany({ user: user._id });

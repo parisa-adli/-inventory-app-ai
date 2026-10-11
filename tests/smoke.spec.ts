@@ -140,10 +140,21 @@ test.describe('client smoke', () => {
     }
   });
 
-  test('an emailed link is confirmed with { verified: true } and offers sign in', async ({ page }) => {
-    await page.route('**/api/auth/verify-email/*', (route) => route.fulfill({ json: { verified: true } }));
+  test('the link-telegram confirmation shows the Telegram message', async ({ page }) => {
+    await page.route('**/api/auth/verify-email/*', (route) =>
+      route.fulfill({ json: { type: 'link-telegram', message: 'Telegram linked.' } })
+    );
     await page.goto('/verify-email/some-token');
-    await expect(page.getByRole('heading', { name: 'Link confirmed' })).toBeVisible();
+    await expect(page.getByText('Your Telegram account is linked.')).toBeVisible();
+  });
+
+  test('an email verification link is confirmed with { verified, type } and offers sign in', async ({ page }) => {
+    await page.route('**/api/auth/verify-email/*', (route) =>
+      route.fulfill({ json: { verified: true, type: 'verify-email' } })
+    );
+    await page.goto('/verify-email/some-token');
+    await expect(page.getByRole('heading', { name: 'Email verification' })).toBeVisible();
+    await expect(page.getByText('Your email address is verified.')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/login');
   });
 
@@ -219,6 +230,31 @@ test.describe('client smoke', () => {
     );
     await page.goto('/rejected');
     await expect(page).toHaveURL(/\/verify-email$/);
+  });
+
+  test('a new Telegram account verifies its email first, then waits on awaiting approval until an admin approves', async ({
+    page,
+  }) => {
+    // What a Telegram sign up stores: pending, unverified (and passwordless, which the client never sees)
+    let user = { id: '1', name: 'Tele User', email: 'tele@x.com', role: 'staff', status: 'pending', emailVerified: false };
+    await page.route('**/api/auth/me', (route) => route.fulfill({ json: user }));
+    await page.route('**/api/auth/verify-email/*', (route) => {
+      user = { ...user, emailVerified: true };
+      return route.fulfill({ json: { verified: true, type: 'verify-email' } });
+    });
+
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/verify-email$/);
+
+    // The emailed link is opened; the account is verified but still pending
+    await page.goto('/verify-email/the-token');
+    await page.getByRole('link', { name: 'Continue' }).click();
+    await expect(page).toHaveURL(/\/awaiting-approval$/);
+
+    // An admin approves: the same user now gets the app
+    user = { ...user, status: 'active' };
+    await page.goto('/');
+    await expect(page.getByRole('heading', { level: 2, name: 'Dashboard' })).toBeVisible();
   });
 
   test('a completed reset ends on sign in with a notice and no session', async ({ page }) => {

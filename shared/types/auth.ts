@@ -19,9 +19,13 @@ export interface DevMailResponse {
   devMailUrl?: string;
 }
 
+/** What a consumed emailed link did: confirmed the email, or linked a Telegram chat. */
+export type EmailLinkType = 'verify-email' | 'link-telegram';
+
 /** GET /api/auth/verify-email/:token. Never returns the user: the token is the only proof. */
 export interface VerifyEmailResponse {
   verified: true;
+  type: EmailLinkType;
 }
 
 /** POST /api/auth/register */

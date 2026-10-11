@@ -16,13 +16,12 @@ Names below use this repo's actual names; the right-hand column of the first tab
 | `MAIL_DRIVER=console` | `emailMode() === 'log'` (non-production, SMTP not configured) |
 | `loginAttempt`, `mustChangePassword`, `routes.ts` comment, `server/.mail/` | do not exist in this repo (see "Not applicable") |
 
-## C1. Verify email returns `{ verified: true }`
+## C1. Verify email returns `{ verified: true, type }`
 
 - Route: `GET /api/auth/verify-email/:token`, public, token is the proof (unchanged).
-- Today: `200 { type, message }`. Proposed for `verify-email` tokens: `200 { verified: true }`; never the user.
-- Open: the same route also confirms `link-telegram` tokens and the client uses `type`/`message` to tell them apart. Proposal: `{ verified: true, type: 'verify-email' | 'link-telegram' }` (adds `type`, still no user data). Needs your OK.
+- Today (main): `200 { type, message }`. Applied: `200 { verified: true, type }` with `type: 'verify-email' | 'link-telegram'`; never the user. `message` is dropped; the client writes its own copy. `type` is kept so the landing page and the Telegram link flow can tell the two links apart.
 - Side effect: after a successful `verify-email`, email every ACTIVE admin that the user is awaiting approval (fire-and-forget; see C7).
-- Shared: add `verifyEmailResponseSchema` to `shared/schemas/auth.ts`.
+- Shared: `VerifyEmailResponse` and `EmailLinkType` in `shared/types/auth.ts`.
 
 ## C2. Forgot / reset responses become empty 204
 
@@ -60,7 +59,7 @@ Names below use this repo's actual names; the right-hand column of the first tab
 ## C7. Admin notification and email-failure tracking
 
 - `sendUserAwaitingApproval(to, adminName, userName, userEmail, url)` added to `services/email.ts`; `url` = `${CLIENT_URL}/users` (page arrives with Part D). Sent to every `active` admin on successful verify of a still-`pending` user; failures are swallowed.
-- `User` gets `lastEmailFailedAt: Date` and `lastEmailFailedType: 'verify-email' | 'reset-password' | 'link-telegram'`, set when a send fails and cleared on the next successful send. Not exposed in `AuthUser` / shared types for now.
+- `User` gets `lastEmailFailedAt: Date` and `lastEmailFailedType: 'verify-email' | 'reset-password' | 'link-telegram'`, set when a send fails and cleared on the next successful send. Not exposed in `AuthUser` / shared types for now. `signupWithTelegram` uses the same `sendTracked`, so Telegram signup and confirm-link mails are tracked too.
 
 ## C8. Client landing logic (no wire change)
 
@@ -76,7 +75,7 @@ Names below use this repo's actual names; the right-hand column of the first tab
 
 ## Decisions on the open questions
 
-1. C1: the response is exactly `{ verified: true }` for `verify-email` **and** `link-telegram` tokens (no `type`). The client shows neutral copy.
+1. C1: the response is `{ verified: true, type }` for both token kinds (revised: the first decision dropped `type`, which broke the Telegram link confirmation, so it was restored). Never the user.
 2. C5: login, register, reset and the Telegram limiters keep their current numbers and stay on `express-rate-limit`. Only forgot-password (5/IP/h, 3/email/h) and resend + change-email (3/user/h) use the Mongo limiter.
 3. C4: no `server/.mail/` driver. Two modes only: console log (dev, no SMTP) and real SMTP.
 4. C8: an unverified account always lands on `/verify-email`, even when it is also rejected.

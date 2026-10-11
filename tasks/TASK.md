@@ -167,13 +167,14 @@ Mount the new routers under `/api/auth` from `server/src/routes/index.ts`. Part 
 #### Email flow revision (branch `email-auth`, see `CONTRACT-CHANGES.md`)
 Applied on top of Part B without reworking it:
 - **Password rule:** 10+ characters with a letter and a digit, at most 72 bytes (register and reset only; login accepts any non-empty password). Supersedes the earlier "min 8".
-- **`GET /auth/verify-email/:token`** returns `{ verified: true }` for both email and Telegram-link tokens (never the user). Verifying a still-pending user emails every active admin (`sendUserAwaitingApprovalEmail`, fire-and-forget; link `CLIENT_URL/users`, a page that arrives with Part D).
+- **`GET /auth/verify-email/:token`** returns `{ verified: true, type }` (`type` is `verify-email` or `link-telegram`; never the user). The landing page uses `type` to show the Telegram or the email copy. Verifying a still-pending user emails every active admin (`sendUserAwaitingApprovalEmail`, fire-and-forget; link `CLIENT_URL/users`, a page that arrives with Part D).
 - **`POST /auth/forgot-password`** and **`POST /auth/reset-password/:token`** return an empty 204. Forgot answers before any lookup; reset hashes the password before spending the token and issues no session (the client clears its cached user and shows a notice on `/login`).
 - **`PATCH /auth/email`** (unverified users only; 409 `DUPLICATE_EMAIL`, 403 `FORBIDDEN` when verified) re-sends verification and invalidates the old link; shares the resend budget.
 - **`POST /auth/resend-verification`** now answers 200 `{ devMailUrl? }` (was 204). `devMailUrl` also appears on register and `PATCH /auth/email`, only while mail is logged to the console (no SMTP, not production).
 - **Expired links:** `EmailToken` rows are kept 7 days past `expiresAt`; an expired link answers 400 `TOKEN_EXPIRED`, an unknown or used one 400 `INVALID_TOKEN`. `connectDatabase` runs `EmailToken.syncIndexes()` so existing databases pick up the new TTL.
 - **`User.lastEmailFailedAt` / `lastEmailFailedType`** are set when a mail fails and cleared by the next successful send (not exposed to the client).
 - **Client:** `resolveLandingRoute` (`features/auth/landing.ts`): unverified -> `/verify-email`, then rejected, then pending. `/verify-email` (no token) offers resend (with a Retry-After countdown), change email and "I've verified". Duplicate email on sign up is shown on the field. Secondary auth pages use the DESIGN.md tokens.
+- **Telegram signup mail failures are tracked:** `signupWithTelegram` sends through `sendTracked`, so a failed verify or confirm-link mail sets `lastEmailFailedAt/Type` on the account (cleared by the next successful send). `server/src/routes/signupPersistence.test.ts` asserts the stored state of email and Telegram sign ups and that neither flow overwrites the other's data.
 - Not built (not in this repo): lockout / `loginAttempt`, `mustChangePassword`, a `server/.mail/` driver.
 
 #### Decisions made in Part B (deviations from the original task text)

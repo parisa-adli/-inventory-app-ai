@@ -58,6 +58,9 @@ export const pollTelegramLogin = async (pollToken: string): Promise<TelegramLogi
   return data;
 };
 
+/** What a consumed emailed link did: confirmed the email, or linked a Telegram chat. */
+export type { EmailLinkType } from '@inventory/shared';
+
 /** Consumes an emailed link (email verification or Telegram link). The token is the only proof. */
 export const verifyEmail = async (token: string): Promise<VerifyEmailResponse> => {
   const { data } = await api.get<VerifyEmailResponse>(`/auth/verify-email/${encodeURIComponent(token)}`);

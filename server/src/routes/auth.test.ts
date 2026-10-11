@@ -152,7 +152,7 @@ describe('GET /api/auth/verify-email/:token', () => {
 
     const first = await request(app).get(`/api/auth/verify-email/${token}`);
     expect(first.status).toBe(200);
-    expect(first.body).toEqual({ verified: true }); // never the user
+    expect(first.body).toEqual({ verified: true, type: 'verify-email' }); // never the user
     expect((await User.findOne({ email: 'new@inventory.local' }))!.emailVerified).toBe(true);
 
     const second = await request(app).get(`/api/auth/verify-email/${token}`);

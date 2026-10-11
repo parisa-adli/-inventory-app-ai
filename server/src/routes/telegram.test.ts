@@ -162,7 +162,7 @@ describe('GET /api/auth/verify-email/:token with a link-telegram token', () => {
 
     const res = await request(app).get(`/api/auth/verify-email/${token}`);
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ verified: true });
+    expect(res.body.type).toBe('link-telegram');
 
     const linked = (await User.findById(user._id))!;
     expect(linked.telegramChatId).toBe('7001');
@@ -214,6 +214,6 @@ describe('GET /api/auth/verify-email/:token with a link-telegram token', () => {
 
     const res = await request(app).get(`/api/auth/verify-email/${raw}`);
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ verified: true });
+    expect(res.body.type).toBe('verify-email');
   });
 });

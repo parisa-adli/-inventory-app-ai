@@ -38,7 +38,7 @@ A web-based inventory management tool tracking products, categories, suppliers, 
 
 ### Signup — two independent paths, no linking required at signup time
 
-1. **Email + password** — standard form (name, email, password). Sends an email-verification link.
+1. **Email + password** — standard form (name, email, password). Sends an email-verification link. Password rule (new passwords only, i.e. register and reset): at least 10 characters, with a letter and a digit, at most 72 bytes (bcrypt ignores the rest). Login accepts any non-empty password so existing accounts keep working.
 2. **Telegram** — user starts the bot, provides name + email (bot conversation), account is created and `telegramChatId` linked. Also sends an email-verification link (email is required on this path too).
 
 Both paths create the account with `status: "pending"`, `emailVerified: false`, defaulting to `role: "staff"`.
@@ -46,13 +46,15 @@ Both paths create the account with `status: "pending"`, `emailVerified: false`, 
 ### Duplicate-email handling (confirmed decision)
 
 - **Registration** (either path) explicitly reveals a duplicate: `"This email is already registered."` — required so the Telegram-merge flow below can work. Accepted account-enumeration trade-off for an internal tool.
-- **Password-reset** endpoint stays generic (`"If that email exists, we've sent a link"`) regardless of outcome — no enumeration there.
+- **Password-reset** request stays non-enumerating: it answers an empty `204` whether or not the email exists, and the rate-limit check runs before any lookup so real and unknown emails are indistinguishable.
 - If a **Telegram signup** is attempted with an email that already belongs to an existing (password) account: don't create a second account. Send a verification link to that email; only on clicking it does the system link the new `telegramChatId` to the existing account. Until clicked, nothing changes.
 
 ### Email verification
 
 - Required on every signup path. A `pending` user **cannot be activated by an Admin until `emailVerified: true`.**
-- Verification links are single-use, expiring tokens, sent via Brevo SMTP.
+- Verification links are single-use, expiring tokens, sent via Brevo SMTP. A used or unknown link answers `INVALID_TOKEN`; an expired one answers `TOKEN_EXPIRED` so the client can offer a resend.
+- A successful verify returns `{ verified: true, type }` (`type` is `verify-email` or `link-telegram`; never the user) and emails every active admin that a still-pending user awaits approval.
+- An unverified user can fix a mistyped address (`PATCH /api/auth/email`, only while unverified) and ask for a new link (`POST /api/auth/resend-verification`); both share a limit of 3 per user per hour.
 
 ### Login — two methods, either works once `active`
 
@@ -65,7 +67,7 @@ A `pending` user can still log in (either method) but is routed to an **"awaitin
 
 ### Password reset
 
-- Email-link based only (Nodemailer + Brevo SMTP): request → generic response → single-use expiring reset link → set new password.
+- Email-link based only (Nodemailer + Brevo SMTP): request → empty `204` (same for known and unknown emails) → single-use expiring reset link → set new password (`204`, no session issued; all refresh tokens stay revoked, the user signs in again).
 - (Telegram-based reset was considered but superseded — email is the reset channel now that it's the identity anchor.)
 
 ### Sessions
@@ -85,6 +87,8 @@ A `pending` user can still log in (either method) but is routed to an **"awaitin
   status: "pending" | "active" | "rejected",
   emailVerified: Boolean,
   telegramChatId: String (optional),
+  lastEmailFailedAt: Date (optional),   // set when a mail send fails, cleared by the next success
+  lastEmailFailedType: "verify-email" | "reset-password" | "link-telegram" (optional),
   createdAt
 }
 ```
@@ -96,7 +100,7 @@ A `pending` user can still log in (either method) but is routed to an **"awaitin
   _id, user: ref User,
   type: "verify-email" | "reset-password" | "link-telegram",
   tokenHash: String,
-  expiresAt: Date,
+  expiresAt: Date,          // rows are purged by a TTL index 7 days after this, so an expired link can be told apart from an unknown one
   consumed: Boolean,
   createdAt
 }
@@ -229,9 +233,11 @@ POST /api/auth/telegram/login/poll      (pollToken -> pending | unlinked | expir
 POST /api/auth/refresh
 POST /api/auth/logout
 GET  /api/auth/me
-GET  /api/auth/verify-email/:token
-POST /api/auth/forgot-password          (always generic response)
-POST /api/auth/reset-password/:token
+GET  /api/auth/verify-email/:token      (public; 200 { verified: true, type }; 400 INVALID_TOKEN | TOKEN_EXPIRED)
+POST /api/auth/resend-verification      (session; 200 { devMailUrl? }; 429 RATE_LIMITED)
+PATCH /api/auth/email                   (session, unverified only; 200 { user, devMailUrl? }; 403 FORBIDDEN, 409 DUPLICATE_EMAIL)
+POST /api/auth/forgot-password          (always an empty 204, same for unknown emails; 429 RATE_LIMITED)
+POST /api/auth/reset-password/:token    (204; 400 INVALID_TOKEN | TOKEN_EXPIRED)
 
 Users (admin)
 GET   /api/users?status=pending
@@ -270,7 +276,7 @@ GET /api/dashboard/alerts                (low/out-of-stock table)
 - Pagination on Products, Stock Movements.
 - Toast on every mutation.
 - Responsive, desktop-first, LTR layout.
-- Rate-limit auth endpoints (login, Telegram QR login start/poll, register) against brute force.
+- Rate-limit auth endpoints (login, Telegram QR login start/poll, register, forgot-password, resend-verification, change-email) against brute force. Over the limit: `429 { error: { code: 'RATE_LIMITED', details: { retryAfter } } }` plus a `Retry-After` header.
 
 ## 9. Out of Scope (v1)
 

@@ -20,7 +20,7 @@ A logged-in browser: a short-lived access cookie plus a longer-lived refresh coo
 _Avoid_: "token" for the whole thing (a token is one cookie's value).
 
 **Emailed link**
-A single-use, expiring link sent to a user's email address, used to verify the email, to reset the password, or to confirm a **Telegram link**. Using it twice, or after it expires, fails the same way as a link that never existed.
+A single-use, expiring link sent to a user's email address, used to verify the email, to reset the password, or to confirm a **Telegram link**. Using it twice, or a link that never existed, fails as invalid; a link that has expired is told apart so the person can ask for a new one.
 
 ## Telegram
 

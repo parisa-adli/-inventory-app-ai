@@ -1,7 +1,7 @@
 # CONTRACT-CHANGES.md
 
 Proposed changes to the shared/API contract for the **email auth** work (branch `email-auth`).
-Status: **CONFIRMED by the user and being applied** on `email-auth` (server + shared first, then client).
+Status: **CONFIRMED by the user and applied** on `email-auth` (server + shared, then client; PRD and TASK.md brought in line).
 Names below use this repo's actual names; the right-hand column of the first table maps the decision wording to them.
 
 ## Name mapping (decision wording -> this repo)
@@ -66,12 +66,19 @@ Names below use this repo's actual names; the right-hand column of the first tab
 - One `resolveLandingRoute(user)` replaces `homeFor` in `features/auth/components/guards.tsx`: unverified -> `/verify-email`; rejected -> `/rejected`; pending -> `/awaiting-approval`; else home. (Needs a token-less `/verify-email` screen with resend and change-email.)
 - After verify or reset the client refetches `/me`; no change to `POST /auth/refresh`.
 
+## C9. Password rule (applied in commit a4a75e9, confirmed by the user)
+
+- New passwords (register and reset): at least 10 characters, with a letter and a digit, at most 72 bytes. Supersedes min 8 / max 128.
+- Why: matches `docs/design/signup-email.png`; bcrypt ignores bytes past 72, so a longer password would be silently truncated.
+- Login deliberately accepts any non-empty password so existing and seeded accounts keep working.
+- Shared: `passwordField`, `PASSWORD_MIN_LENGTH`, `PASSWORD_MAX_BYTES`, `PASSWORD_HINT` in `shared/schemas/auth.ts`.
+
 ## Not applicable (nothing to change)
 
 - Stale JWT: the access token carries only `sub`; `/me` and `requireAuth` read the DB.
 - `mustChangePassword`: does not exist, so no `/change-password` gate.
 - Lockout clearing on reset: no `loginAttempt` model or lockout exists (rate limiting is per IP). Adding lockout would be a new feature; not proposed.
-- Link base: already `CLIENT_URL`. The PRD wording about `APP_URL` is stale; doc fix only.
+- Link base: already `CLIENT_URL`. `APP_URL` was dropped (see `tasks/TASK.md`, Open Question 13); the PRD does not mention it.
 
 ## Decisions on the open questions
 
@@ -79,3 +86,4 @@ Names below use this repo's actual names; the right-hand column of the first tab
 2. C5: login, register, reset and the Telegram limiters keep their current numbers and stay on `express-rate-limit`. Only forgot-password (5/IP/h, 3/email/h) and resend + change-email (3/user/h) use the Mongo limiter.
 3. C4: no `server/.mail/` driver. Two modes only: console log (dev, no SMTP) and real SMTP.
 4. C8: an unverified account always lands on `/verify-email`, even when it is also rejected.
+5. C9: the password rule above is final (confirmed by the user).

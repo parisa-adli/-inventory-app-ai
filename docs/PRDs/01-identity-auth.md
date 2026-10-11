@@ -11,7 +11,7 @@ Depends on: 00. Nothing else in the app should be built until this works end to 
 **Models:** `User`, `EmailToken`, `OtpCode`, `RefreshToken` — exactly as in `docs/PRD.md` §4.
 
 **Register (email+password)** — `POST /api/auth/register`
-- Body: name, email, password (Zod-validated).
+- Body: name, email, password (Zod-validated). Password: at least 10 characters, with a letter and a digit, at most 72 bytes (`passwordField` in `shared/schemas/auth.ts`); login accepts any non-empty password.
 - If email already exists → 409 with an explicit `DUPLICATE_EMAIL` error (confirmed trade-off, not generic).
 - Else: create User (`status: pending`, `role: staff`, `emailVerified: false`), hash password, create an `EmailToken` (`type: verify-email`), email the verification link via Brevo SMTP.
 
@@ -34,8 +34,8 @@ Depends on: 00. Nothing else in the app should be built until this works end to 
 - `POST /api/auth/logout` clears both cookies and revokes the refresh token.
 
 **Password reset**
-- `POST /api/auth/forgot-password` — ALWAYS returns a generic 200 regardless of whether the email exists (no enumeration here, unlike registration). If it exists, create an `EmailToken` (`type: reset-password`) and email the link.
-- `POST /api/auth/reset-password/:token` — consumes token, sets new password hash.
+- `POST /api/auth/forgot-password` — ALWAYS returns an empty 204 regardless of whether the email exists (no enumeration here, unlike registration); the rate limit is checked before any lookup. If it exists, create an `EmailToken` (`type: reset-password`) and email the link.
+- `POST /api/auth/reset-password/:token` — consumes token, sets new password hash, returns 204 and issues no session. An expired link answers `TOKEN_EXPIRED`, an unknown or used one `INVALID_TOKEN`.
 
 **Admin user management**
 - `GET /api/users?status=pending` (admin only).
@@ -65,4 +65,4 @@ Depends on: 00. Nothing else in the app should be built until this works end to 
 - [ ] Admin cannot activate a user whose email isn't verified.
 - [ ] Rejected user is blocked; admin can reactivate them.
 - [x] Access token expires and silently refreshes via the refresh cookie; logout clears both cookies.
-- [x] Forgot-password always returns the same generic response whether or not the email exists.
+- [x] Forgot-password always returns the same empty 204 whether or not the email exists.

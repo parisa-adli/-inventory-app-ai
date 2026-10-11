@@ -48,24 +48,29 @@ test.describe('client smoke', () => {
     await expect(password).toHaveAttribute('type', 'text');
   });
 
-  test('telegram sign in shows a QR code, counts down and polls until the bot approves', async ({ page }) => {
-    const user = { id: '1', name: 'Tele User', email: 'tele@x.com', role: 'staff', status: 'active', emailVerified: true };
-    const deepLink = 'https://t.me/inventory_test_bot?start=login_abc';
+  const tgUser = { id: '1', name: 'Tele User', email: 'tele@x.com', role: 'staff', status: 'active', emailVerified: true };
+  const deepLink = 'https://t.me/inventory_test_bot?start=abc';
 
-    await page.route('**/api/auth/telegram/login', (route) =>
-      route.fulfill({
-        status: 201,
-        json: { deepLink, pollToken: 'poll-secret', expiresAt: new Date(Date.now() + 5 * 60_000).toISOString() },
-      })
+  test('telegram sign in: QR code, then the code from the bot signs a linked account in', async ({ page }) => {
+    await page.route('**/api/auth/telegram/start', (route) =>
+      route.fulfill({ status: 201, json: { deepLink, expiresAt: new Date(Date.now() + 5 * 60_000).toISOString() } })
     );
     let polls = 0;
-    await page.route('**/api/auth/telegram/login/poll', async (route) => {
-      expect(route.request().postDataJSON()).toEqual({ pollToken: 'poll-secret' });
+    await page.route('**/api/auth/telegram/status', (route) => {
       polls += 1;
-      if (polls < 2) return route.fulfill({ json: { status: 'pending' } });
-      // From here on the session probe sees the logged-in user
-      await page.route('**/api/auth/me', (r) => r.fulfill({ json: user }));
-      return route.fulfill({ json: { status: 'approved', user } });
+      if (polls < 2) return route.fulfill({ json: { status: 'PENDING' } });
+      return route.fulfill({
+        json: {
+          status: 'AWAITING_OTP',
+          otpExpiresAt: new Date(Date.now() + 2 * 60_000).toISOString(),
+          resendAvailableAt: new Date(Date.now() + 60_000).toISOString(),
+        },
+      });
+    });
+    await page.route('**/api/auth/telegram/verify', async (route) => {
+      expect(route.request().postDataJSON()).toEqual({ code: '123456' });
+      await page.route('**/api/auth/me', (r) => r.fulfill({ json: tgUser }));
+      return route.fulfill({ json: { status: 'COMPLETED', user: tgUser } });
     });
 
     await page.goto('/login');
@@ -73,34 +78,57 @@ test.describe('client smoke', () => {
 
     await expect(page.getByRole('img', { name: 'Telegram QR code' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Open Telegram' })).toHaveAttribute('href', deepLink);
-    await expect(page.getByText(/Scan the QR code or open the link on your phone/)).toBeVisible();
     await expect(page.getByRole('timer')).toHaveText(/Expires in [0-4]:\d{2}/);
-    await expect(page.getByRole('button', { name: 'Start over' })).toBeVisible();
+
+    await expect(page.getByText('Enter the 6-digit code sent to you on Telegram.')).toBeVisible();
+    await expect(page.getByText(/Resend code \(\d:\d{2}\)/)).toBeVisible();
+    await page.getByLabel('6-digit verification code').fill('123456');
 
     await expect(page).toHaveURL(/\/$/);
-    expect(polls).toBeGreaterThanOrEqual(2);
   });
 
-  test('telegram sign in offers a fresh code when the QR code expired or is unlinked', async ({ page }) => {
+  test('telegram sign up: a new Telegram account is asked for a username and an email', async ({ page }) => {
+    await page.route('**/api/auth/telegram/start', (route) =>
+      route.fulfill({ status: 201, json: { deepLink, expiresAt: new Date(Date.now() + 5 * 60_000).toISOString() } })
+    );
+    await page.route('**/api/auth/telegram/status', (route) =>
+      route.fulfill({
+        json: { status: 'AWAITING_OTP', otpExpiresAt: new Date(Date.now() + 2 * 60_000).toISOString(), resendAvailableAt: null },
+      })
+    );
+    await page.route('**/api/auth/telegram/verify', (route) =>
+      route.fulfill({ json: { status: 'AWAITING_PROFILE', prefillDisplayName: 'Tele User' } })
+    );
+    await page.route('**/api/auth/telegram/complete', (route) => {
+      expect(route.request().postDataJSON()).toEqual({ name: 'Tele User', email: 'tele@x.com' });
+      return route.fulfill({ status: 201, json: { status: 'COMPLETED', outcome: 'created', user: { ...tgUser, status: 'pending' } } });
+    });
+
+    await page.goto('/register');
+    await page.getByRole('tab', { name: 'Telegram' }).click();
+    await page.getByLabel('6-digit verification code').fill('654321');
+
+    await expect(page.locator('input[name="name"]')).toHaveValue('Tele User');
+    await page.locator('input[name="email"]').fill('tele@x.com');
+    await page.route('**/api/auth/me', (r) => r.fulfill({ json: { ...tgUser, status: 'pending' } }));
+    await page.getByRole('button', { name: 'Create account' }).click();
+    await expect(page).toHaveURL(/awaiting-approval/);
+  });
+
+  test('telegram sign in offers a fresh QR code when the session expired', async ({ page }) => {
     let starts = 0;
-    await page.route('**/api/auth/telegram/login', (route) => {
+    await page.route('**/api/auth/telegram/start', (route) => {
       starts += 1;
       return route.fulfill({
         status: 201,
-        json: {
-          deepLink: `https://t.me/inventory_test_bot?start=login_${starts}`,
-          pollToken: `poll-${starts}`,
-          expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
-        },
+        json: { deepLink: `${deepLink}${starts}`, expiresAt: new Date(Date.now() + 5 * 60_000).toISOString() },
       });
     });
-    await page.route('**/api/auth/telegram/login/poll', (route) =>
-      route.fulfill({ json: { status: 'unlinked' } })
-    );
+    await page.route('**/api/auth/telegram/status', (route) => route.fulfill({ json: { status: 'EXPIRED' } }));
 
     await page.goto('/login');
     await page.getByRole('tab', { name: 'Telegram' }).click();
-    await expect(page.getByText('This Telegram account is not linked to an account yet.')).toBeVisible();
+    await expect(page.getByText('This session has expired. Please start over.')).toBeVisible();
 
     await page.getByRole('button', { name: 'Start over' }).click();
     await expect.poll(() => starts).toBe(2);
@@ -126,18 +154,17 @@ test.describe('client smoke', () => {
     await expect(page.getByText('Passwords do not match')).toBeVisible();
   });
 
-  test('sign up Telegram tab shows the bot link as a QR code when the bot handle is configured', async ({ page }) => {
+  test('sign up Telegram tab shows the QR code and the Open Telegram button', async ({ page }) => {
+    await page.route('**/api/auth/telegram/start', (route) =>
+      route.fulfill({ status: 201, json: { deepLink, expiresAt: new Date(Date.now() + 5 * 60_000).toISOString() } })
+    );
+    await page.route('**/api/auth/telegram/status', (route) => route.fulfill({ json: { status: 'PENDING' } }));
+
     await page.goto('/register');
     await page.getByRole('tab', { name: 'Telegram' }).click();
 
-    // Without VITE_TELEGRAM_BOT_USERNAME the panel falls back to plain instructions
-    const open = page.getByRole('link', { name: 'Open Telegram' });
-    if (await open.count()) {
-      await expect(open).toHaveAttribute('href', /^https:\/\/t\.me\/\w+\?start=signup$/);
-      await expect(page.getByRole('img', { name: 'Telegram QR code' })).toBeVisible();
-    } else {
-      await expect(page.getByText('send /start to sign up')).toBeVisible();
-    }
+    await expect(page.getByRole('link', { name: 'Open Telegram' })).toHaveAttribute('href', deepLink);
+    await expect(page.getByRole('img', { name: 'Telegram QR code' })).toBeVisible();
   });
 
   test('the link-telegram confirmation shows the Telegram message', async ({ page }) => {

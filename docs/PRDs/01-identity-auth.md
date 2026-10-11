@@ -2,7 +2,7 @@
 
 > **Email flow (branch `email-auth`):** the Email acceptance items below are ticked and covered by `server/src/routes/auth.test.ts` and `tests/smoke.spec.ts`; response shapes changed as listed in `CONTRACT-CHANGES.md`. Telegram and admin items are tracked in `tasks/TASK.md`.
 >
-> **Superseded in part (2026-10-10):** Telegram login is a QR code, not an email -> 6-digit OTP, and there is no `OtpCode` model or `/auth/otp/*` route. See `docs/PRD.md` §3, `tasks/TASK.md` (Part C) and `docs/design/signin-telegram.png`. The OTP lines below are kept for history only.
+> **Superseded in part (2026-10-10):** Telegram sign in and sign up are one flow: QR / deep link -> Start in the bot -> 6-digit code entered on the website -> (new Telegram accounts only) username + email. The models are `AuthSession` (not `OtpCode`/`TelegramLogin`) and the routes are `/api/auth/telegram/{start,status,verify,resend,complete}`; there is no `/auth/otp/*` route. See `docs/PRD.md` §3-§4, `tasks/TASK.md` (Part C) and `docs/design/{signin-telegram,enter-otp}.png`. The OTP lines below are kept for history only.
 
 Depends on: 00. Nothing else in the app should be built until this works end to end.
 

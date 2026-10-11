@@ -10,9 +10,13 @@ export const RATE_LIMITS = {
   login: 10,
   register: 10,
   resetPassword: 10,
-  telegramLoginStart: 10,
-  // The browser polls every 2 s while the QR code is shown (5 min = ~150 requests)
-  telegramLoginPoll: 600,
+  telegramStart: 10,
+  // The browser polls status every 2 s while the QR code is shown (5 min = ~150 requests)
+  telegramStatus: 600,
+  // Per IP, on top of the per-session attempt caps
+  telegramVerify: 30,
+  telegramResend: 10,
+  telegramComplete: 10,
 } as const;
 
 export const createLimiter = (max: number, windowMs = WINDOW_MS) =>
@@ -33,8 +37,11 @@ export const createLimiter = (max: number, windowMs = WINDOW_MS) =>
 export const loginLimiter = createLimiter(RATE_LIMITS.login);
 export const registerLimiter = createLimiter(RATE_LIMITS.register);
 export const resetPasswordLimiter = createLimiter(RATE_LIMITS.resetPassword);
-export const telegramLoginStartLimiter = createLimiter(RATE_LIMITS.telegramLoginStart);
-export const telegramLoginPollLimiter = createLimiter(RATE_LIMITS.telegramLoginPoll);
+export const telegramStartLimiter = createLimiter(RATE_LIMITS.telegramStart);
+export const telegramStatusLimiter = createLimiter(RATE_LIMITS.telegramStatus);
+export const telegramVerifyLimiter = createLimiter(RATE_LIMITS.telegramVerify);
+export const telegramResendLimiter = createLimiter(RATE_LIMITS.telegramResend);
+export const telegramCompleteLimiter = createLimiter(RATE_LIMITS.telegramComplete);
 
 interface MongoRateLimitOptions {
   /** Identifies who is being limited, e.g. `forgot:ip:1.2.3.4`. Hash anything personal. */

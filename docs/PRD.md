@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-A web-based inventory management tool tracking products, categories, suppliers, and stock movements, with a dashboard, role-based access (Admin/Staff), and dual authentication (email+password, Telegram QR login), unified under a single account per email address.
+A web-based inventory management tool tracking products, categories, suppliers, and stock movements, with a dashboard, role-based access (Admin/Staff), and dual authentication (email+password, Telegram one-time code), unified under a single account per email address.
 
 **Stack**
 
@@ -39,7 +39,7 @@ A web-based inventory management tool tracking products, categories, suppliers, 
 ### Signup — two independent paths, no linking required at signup time
 
 1. **Email + password** — standard form (name, email, password). Sends an email-verification link. Password rule (new passwords only, i.e. register and reset): at least 10 characters, with a letter and a digit, at most 72 bytes (bcrypt ignores the rest). Login accepts any non-empty password so existing accounts keep working.
-2. **Telegram** — user starts the bot, provides name + email (bot conversation), account is created and `telegramChatId` linked. Also sends an email-verification link (email is required on this path too).
+2. **Telegram** — the Sign up page shows a QR code / "Open Telegram" button (a `t.me/<bot>?start=<nonce>` deep link). The user presses Start in the bot, which sends a 6-digit one-time code. The user enters the code on the website. Once the code is verified the website asks for a **username and an email** to complete registration; the account is then created with `telegramChatId` linked, and an email-verification link is sent (email is required on this path too).
 
 Both paths create the account with `status: "pending"`, `emailVerified: false`, defaulting to `role: "staff"`.
 
@@ -47,7 +47,7 @@ Both paths create the account with `status: "pending"`, `emailVerified: false`, 
 
 - **Registration** (either path) explicitly reveals a duplicate: `"This email is already registered."` — required so the Telegram-merge flow below can work. Accepted account-enumeration trade-off for an internal tool.
 - **Password-reset** request stays non-enumerating: it answers an empty `204` whether or not the email exists, and the rate-limit check runs before any lookup so real and unknown emails are indistinguishable.
-- If a **Telegram signup** is attempted with an email that already belongs to an existing (password) account: don't create a second account. Send a verification link to that email; only on clicking it does the system link the new `telegramChatId` to the existing account. Until clicked, nothing changes.
+- If the email entered in the **Telegram signup** form already belongs to an existing (password) account: don't create a second account. Send a verification link to that email; only on clicking it does the system link the new `telegramChatId` to the existing account. Until clicked, nothing changes and nobody is signed in.
 
 ### Email verification
 
@@ -59,9 +59,10 @@ Both paths create the account with `status: "pending"`, `emailVerified: false`, 
 ### Login — two methods, either works once `active`
 
 1. **Email + password.**
-2. **Telegram QR code** — the Sign in page shows a QR code (a `t.me/<bot>?start=login_<token>` deep link). The user scans it on their phone and presses Start in the bot; the bot approves the attempt for the account linked to that chat and the browser that showed the QR code is signed in.
-   - Policy: single-use, 5-minute expiry, "Start over" creates a fresh code. The token in the QR code and the secret the browser polls with are different, so a photographed QR code cannot be collected by someone else. A chat with no linked account is told to sign up first.
-   - *(Decision on 2026-10-10, following `docs/design/signin-telegram.png`: this replaces the earlier email → 6-digit OTP flow.)*
+2. **Telegram one-time code** — the Sign in page's Telegram tab runs the same flow as Telegram signup (QR / deep link -> Start in the bot -> 6-digit code -> enter it on the website). If the Telegram account is linked to a user, that user is signed in. If it is not linked, the website continues with the signup form (username + email), so one flow serves both pages.
+   - Policy: the attempt lasts 5 minutes (10 once the code is verified and the signup form is shown). The browser is identified by an httpOnly cookie holding a random session id; the nonce in the deep link is a different secret, so someone who only sees the QR code cannot read or finish the attempt. A nonce works once: a second Start with the same nonce is refused and never overwrites the linked Telegram id.
+   - Code: 6 digits, generated with `crypto.randomInt`, stored only as an HMAC bound to the session, valid 2 minutes. Max **5 wrong entries** per code, then the attempt is `LOCKED` and the user must "Start over". Resend: **60 s cooldown**, max **3 resends**; each resend gives a new code and resets the wrong-entry counter. Codes are compared in constant time.
+   - *(Decision on 2026-10-10: replaces the earlier "scan a QR code and press Start to log in" flow; the code step proves the person holding the browser is the one holding the Telegram account.)*
 
 A `pending` user can still log in (either method) but is routed to an **"awaiting approval"** screen — no access to data. A `rejected` user sees a rejected/revoked message and cannot proceed until reactivated.
 
@@ -106,17 +107,27 @@ A `pending` user can still log in (either method) but is routed to an **"awaitin
 }
 ```
 
-### TelegramLogin (one QR login attempt, single-use)
+### AuthSession (one Telegram sign in / sign up attempt)
 
 ```
 {
   _id,
-  startHash: String,       // sha256 of the secret in the QR code / bot deep link
-  pollHash: String,        // sha256 of the secret that stays in the browser
-  status: "pending" | "approved" | "unlinked" | "consumed",
-  user: ref User (optional), // set when a linked chat pressed Start
-  expiresAt: Date,          // now + 5 min
-  createdAt
+  sessionIdHash: String,        // sha256 of the session id held in the browser cookie (unique)
+  nonceHash: String,            // sha256 of the nonce in the t.me deep link (unique, single use)
+  purpose: "LOGIN" | "SIGNUP",  // set when the code is verified: linked account vs new account
+  status: "PENDING" | "AWAITING_OTP" | "AWAITING_PROFILE" | "COMPLETED" | "EXPIRED" | "LOCKED",
+  user: ref User (optional),    // set when the attempt signed someone in or created the account
+  attempts: Number,             // wrong entries for the current code (max 5)
+  resends: Number,              // codes re-sent (max 3)
+  completeAttempts: Number,     // submissions of the username + email form (max 5)
+  expiresAt: Date,              // createdAt + 5 min (TTL index); +10 min from the moment the code is verified
+  lastSentAt: Date,             // resend cooldown (60 s)
+  otpExpiresAt: Date,           // lastSentAt + 2 min
+  otpHash: String,              // HMAC of the code; the plain code is never stored
+  prefillDisplayName: String,   // Telegram first + last name, prefilled in the signup form
+  telegramId: Number,           // indexed; stored on User as String `telegramChatId` (private chat id == user id)
+  telegramUsername: String,     // may be absent
+  createdAt, updatedAt
 }
 ```
 
@@ -213,8 +224,9 @@ Global read-only table: Date, Product, Type (receive/ship/adjustment), Quantity,
 
 ### 6.6 Auth Pages
 
-- Sign in: `Email | Telegram` tabs; the Telegram tab shows the QR code, an "Open Telegram" button, an expiry countdown and "Start over".
-- Signup (email+password form) + instructions/deep-link to start the Telegram bot for the Telegram path.
+- Sign in: `Email | Telegram` tabs. The Telegram tab runs the Telegram flow below.
+- Signup: `Email | Telegram` tabs. The Email tab is the email+password form; the Telegram tab runs the same Telegram flow.
+- Telegram flow (both pages, `docs/design/signin-telegram.png` -> `docs/design/enter-otp.png`): **QR step** (QR code, "Open Telegram", `Expires in m:ss`, "Start over"; on expiry the code is replaced by a message and "Start over") -> **code step** (6 boxes, `Expires in m:ss`, `Resend code (0:49)`, "Start over"; inline errors for wrong, expired and locked) -> **details step**, only for a Telegram account that is not linked yet (Username prefilled from the Telegram name, Email) -> signed in, or "check your email" when the email already had an account.
 - Email verification landing page (consumes the link token).
 - Forgot/reset password pages.
 - "Awaiting approval" screen (pending, post-login).
@@ -226,10 +238,12 @@ Global read-only table: Date, Product, Type (receive/ship/adjustment), Quantity,
 ```
 Auth
 POST /api/auth/register                 (email+password; explicit DUPLICATE_EMAIL on conflict)
-POST /api/auth/telegram/signup-webhook  (bot-triggered; explicit duplicate handling -> sends merge-verification email)
 POST /api/auth/login                    (email+password)
-POST /api/auth/telegram/login           (creates a QR login attempt -> deepLink, pollToken, expiresAt)
-POST /api/auth/telegram/login/poll      (pollToken -> pending | unlinked | expired | approved + tokens)
+POST /api/auth/telegram/start           (creates an AuthSession, sets the session cookie -> deepLink, expiresAt)
+GET  /api/auth/telegram/status          (cookie -> status, otpExpiresAt, resendAvailableAt, prefillDisplayName)
+POST /api/auth/telegram/verify          ({ code } -> signed in, or AWAITING_PROFILE for a new Telegram account)
+POST /api/auth/telegram/resend          (new code to the linked Telegram account; 60 s cooldown, max 3)
+POST /api/auth/telegram/complete        ({ name, email } -> account created + signed in, or confirm link emailed)
 POST /api/auth/refresh
 POST /api/auth/logout
 GET  /api/auth/me
@@ -276,11 +290,11 @@ GET /api/dashboard/alerts                (low/out-of-stock table)
 - Pagination on Products, Stock Movements.
 - Toast on every mutation.
 - Responsive, desktop-first, LTR layout.
-- Rate-limit auth endpoints (login, Telegram QR login start/poll, register, forgot-password, resend-verification, change-email) against brute force. Over the limit: `429 { error: { code: 'RATE_LIMITED', details: { retryAfter } } }` plus a `Retry-After` header.
+- Rate-limit auth endpoints (login, register, every Telegram auth route, forgot-password, resend-verification, change-email) against brute force; the per-session attempt, resend and form-submission caps are the main control on the Telegram code. Over the limit the email routes answer `429 { error: { code: 'RATE_LIMITED', details: { retryAfter } } }` plus a `Retry-After` header.
 
 ## 9. Out of Scope (v1)
 
 - Multi-warehouse / location tracking
 - Barcode scanning
 - Purchase orders beyond the supplier link on a product
-- SMS-based or code-based OTP fallback
+- SMS-based OTP (the Telegram one-time code is in scope)

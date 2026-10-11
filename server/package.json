@@ -9,6 +9,7 @@
     "build": "tsc --noEmit && tsdown",
     "start": "node dist/index.mjs",
     "seed": "tsx src/seed.ts",
+    "generate-secrets": "tsx src/generate-secrets.ts",
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit"

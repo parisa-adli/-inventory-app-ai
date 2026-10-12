@@ -96,7 +96,13 @@ describe('journey: email sign up -> verify -> approve -> in', () => {
     expect(await stored(email)).toEqual({ status: 'pending', emailVerified: true, role: 'staff' });
     expect((await me(cookies)).body).toMatchObject({ status: 'pending', emailVerified: true });
     await vi.waitFor(() =>
-      expect(sendUserAwaitingApprovalEmail).toHaveBeenCalledWith('admin@inventory.local', 'Admin', 'Jo Urney', email, expect.stringContaining('/users'))
+      expect(sendUserAwaitingApprovalEmail).toHaveBeenCalledWith({
+        to: 'admin@inventory.local',
+        adminName: 'Admin',
+        userName: 'Jo Urney',
+        userEmail: email,
+        url: expect.stringContaining('/users'),
+      })
     );
 
     // 5. The admin sees the user in the pending list and approves

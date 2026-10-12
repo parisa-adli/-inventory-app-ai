@@ -1,9 +1,8 @@
 import type { Types } from 'mongoose';
+import type { EmailTokenType } from '@inventory/shared';
 import { EmailToken } from '../models/EmailToken.js';
 import { randomToken, sha256 } from '../utils/crypto.js';
 import { AppError } from '../utils/errors.js';
-
-type EmailTokenType = 'verify-email' | 'reset-password' | 'link-telegram';
 
 const HOUR_MS = 3_600_000;
 export const EMAIL_TOKEN_TTL_MS = {

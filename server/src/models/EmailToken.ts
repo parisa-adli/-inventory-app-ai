@@ -1,6 +1,5 @@
 import { Schema, model, type InferSchemaType } from 'mongoose';
-
-export const EMAIL_TOKEN_TYPES = ['verify-email', 'reset-password', 'link-telegram'] as const;
+import { EMAIL_TOKEN_TYPES } from '@inventory/shared';
 
 const emailTokenSchema = new Schema(
   {

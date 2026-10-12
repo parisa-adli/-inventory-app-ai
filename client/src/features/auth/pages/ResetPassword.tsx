@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { PASSWORD_HINT, resetPasswordSchema, type ResetPasswordInput } from '@inventory/shared';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
-import { getApiError } from '@/lib/apiError';
+import { getLinkErrorKind } from '@/lib/apiError';
 import { TextField } from '../components/TextField';
 import { useResetPassword } from '../hooks/useAuth';
 
@@ -28,14 +28,14 @@ export default function ResetPassword() {
       }
     );
 
-  const errorCode = reset.isError ? getApiError(reset.error).code : null;
+  const linkError = reset.isError ? getLinkErrorKind(reset.error) : null;
 
-  if (errorCode === 'INVALID_TOKEN' || errorCode === 'TOKEN_EXPIRED') {
+  if (linkError) {
     return (
       <div className="space-y-4">
-        <h1 className="text-lg font-semibold">{errorCode === 'TOKEN_EXPIRED' ? 'Link expired' : 'Link not valid'}</h1>
+        <h1 className="text-lg font-semibold">{linkError === 'expired' ? 'Link expired' : 'Link not valid'}</h1>
         <p className="text-sm text-muted-foreground">
-          {errorCode === 'TOKEN_EXPIRED'
+          {linkError === 'expired'
             ? 'This reset link has expired.'
             : 'This reset link is invalid or has already been used.'}
         </p>

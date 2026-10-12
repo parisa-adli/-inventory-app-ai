@@ -14,6 +14,14 @@ export const formatWait = (seconds: number): string => {
   return minutes === 1 ? '1 minute' : `${minutes} minutes`;
 };
 
+/** How an emailed link failed: `expired` (TOKEN_EXPIRED), `invalid` (INVALID_TOKEN, unknown or used), or null for anything else. */
+export const getLinkErrorKind = (err: unknown): 'expired' | 'invalid' | null => {
+  const { code } = getApiError(err);
+  if (code === 'TOKEN_EXPIRED') return 'expired';
+  if (code === 'INVALID_TOKEN') return 'invalid';
+  return null;
+};
+
 /** Reads the server's `{ error: { code, message, details? } }` shape, with a safe fallback for network errors. */
 export const getApiError = (err: unknown): ApiError => {
   if (isAxiosError(err)) {

@@ -1,5 +1,5 @@
 import { Schema, model, type InferSchemaType } from 'mongoose';
-import { USER_ROLES, ACCOUNT_STATUS } from '@inventory/shared';
+import { USER_ROLES, ACCOUNT_STATUS, EMAIL_TOKEN_TYPES } from '@inventory/shared';
 
 const userSchema = new Schema(
   {
@@ -18,7 +18,7 @@ const userSchema = new Schema(
     telegramChatId: { type: String },
     // Set when the last mail to this user failed to send, cleared by the next successful send
     lastEmailFailedAt: { type: Date },
-    lastEmailFailedType: { type: String, enum: ['verify-email', 'reset-password', 'link-telegram'] },
+    lastEmailFailedType: { type: String, enum: EMAIL_TOKEN_TYPES },
   },
   { timestamps: { createdAt: true, updatedAt: false } }
 );

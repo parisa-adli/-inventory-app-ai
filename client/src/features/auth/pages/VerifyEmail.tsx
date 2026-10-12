@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Link, useParams } from 'react-router';
 import { Button } from '@/components/ui/button';
-import { getApiError } from '@/lib/apiError';
+import { getApiError, getLinkErrorKind } from '@/lib/apiError';
 import { useAuthUser, useVerifyEmail } from '../hooks/useAuth';
 
 /** Landing page of an emailed link (email verification or Telegram link). Works signed in or out. */
@@ -18,7 +18,7 @@ export default function VerifyEmail() {
     mutate(token);
   }, [mutate, token]);
 
-  const code = isError ? getApiError(error).code : null;
+  const linkError = isError ? getLinkErrorKind(error) : null;
   const home = user ? '/' : '/login';
 
   // One landing page for both emailed links; the server says which one was consumed
@@ -31,7 +31,7 @@ export default function VerifyEmail() {
           ? linkedTelegram
             ? 'Telegram link'
             : 'Email verification'
-          : code === 'TOKEN_EXPIRED'
+          : linkError === 'expired'
             ? 'Link expired'
             : 'Email link'}
       </h1>
@@ -53,7 +53,7 @@ export default function VerifyEmail() {
         </>
       )}
 
-      {code === 'TOKEN_EXPIRED' && (
+      {linkError === 'expired' && (
         <>
           <p className="text-sm text-muted-foreground">
             This link has expired.{' '}
@@ -67,10 +67,10 @@ export default function VerifyEmail() {
         </>
       )}
 
-      {isError && code !== 'TOKEN_EXPIRED' && (
+      {isError && linkError !== 'expired' && (
         <>
           <p className="text-sm text-muted-foreground">
-            {code === 'INVALID_TOKEN'
+            {linkError === 'invalid'
               ? 'This link is invalid or has already been used.'
               : getApiError(error).message}
           </p>

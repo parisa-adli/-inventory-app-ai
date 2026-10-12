@@ -1,5 +1,6 @@
 import nodemailer, { type Transporter } from 'nodemailer';
 import type { Types } from 'mongoose';
+import type { EmailTokenType } from '@inventory/shared';
 import { env } from '../config/env.js';
 import { User } from '../models/User.js';
 import { AppError } from '../utils/errors.js';
@@ -124,13 +125,19 @@ export const sendPasswordResetEmail = (to: string, name: string, token: string):
   });
 
 /** Tells an admin that a user verified their email and can now be approved. */
-export const sendUserAwaitingApprovalEmail = (
-  to: string,
-  adminName: string,
-  userName: string,
-  userEmail: string,
-  url: string
-): Promise<DeliveryResult> =>
+export const sendUserAwaitingApprovalEmail = ({
+  to,
+  adminName,
+  userName,
+  userEmail,
+  url,
+}: {
+  to: string;
+  adminName: string;
+  userName: string;
+  userEmail: string;
+  url: string;
+}): Promise<DeliveryResult> =>
   deliver({
     to,
     subject: `${userName} is waiting for approval`,
@@ -142,15 +149,13 @@ export const sendUserAwaitingApprovalEmail = (
 
 export const pendingUsersUrl = (): string => `${env.CLIENT_URL}/users`;
 
-type MailType = 'verify-email' | 'reset-password' | 'link-telegram';
-
 /**
  * Runs a send and records the outcome on the user: a failure sets lastEmailFailedAt/Type,
  * the next successful send clears them. The original error is rethrown.
  */
 export const sendTracked = async <T>(
   userId: Types.ObjectId | string,
-  type: MailType,
+  type: EmailTokenType,
   send: () => Promise<T>
 ): Promise<T> => {
   try {

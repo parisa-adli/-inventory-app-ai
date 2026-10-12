@@ -1,5 +1,6 @@
 import type { UserRole } from '../constants/roles';
 import type { AccountStatus } from '../constants/account-status';
+import type { EmailTokenType } from '../constants/email-token-types';
 
 /** Shape returned by GET /api/auth/me */
 export interface AuthUser {
@@ -20,7 +21,7 @@ export interface DevMailResponse {
 }
 
 /** What a consumed emailed link did: confirmed the email, or linked a Telegram chat. */
-export type EmailLinkType = 'verify-email' | 'link-telegram';
+export type EmailLinkType = Exclude<EmailTokenType, 'reset-password'>;
 
 /** GET /api/auth/verify-email/:token. Never returns the user: the token is the only proof. */
 export interface VerifyEmailResponse {

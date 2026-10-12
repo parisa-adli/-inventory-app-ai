@@ -48,22 +48,24 @@ export function RequireAdmin() {
   return <Outlet />;
 }
 
-/** The pending / rejected screens: only reachable while the account really is in that status. */
-export function RequireStatus({ status }: { status: AccountStatus }) {
+type SignedInUser = NonNullable<ReturnType<typeof useAuthUser>['data']>;
+
+/** Signed-in users only; anyone for whom `allow` is false is sent to their own landing route. */
+function RequireUserWhere({ allow }: { allow: (user: SignedInUser) => boolean }) {
   const { data: user, isPending } = useAuthUser();
 
   if (isPending) return <FullScreenSpinner />;
   if (!user) return <Navigate to="/login" replace />;
-  if (!user.emailVerified || user.status !== status) return <Navigate to={resolveLandingRoute(user)} replace />;
+  if (!allow(user)) return <Navigate to={resolveLandingRoute(user)} replace />;
   return <Outlet />;
+}
+
+/** The pending / rejected screens: only reachable while the account really is in that status. */
+export function RequireStatus({ status }: { status: AccountStatus }) {
+  return <RequireUserWhere allow={(user) => user.emailVerified && user.status === status} />;
 }
 
 /** The "verify your email" screen: only for a signed-in user whose address is not verified yet. */
 export function RequireUnverified() {
-  const { data: user, isPending } = useAuthUser();
-
-  if (isPending) return <FullScreenSpinner />;
-  if (!user) return <Navigate to="/login" replace />;
-  if (user.emailVerified) return <Navigate to={resolveLandingRoute(user)} replace />;
-  return <Outlet />;
+  return <RequireUserWhere allow={(user) => !user.emailVerified} />;
 }

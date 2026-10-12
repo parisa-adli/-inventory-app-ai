@@ -80,7 +80,13 @@ const notifyAdminsAwaitingApproval = async (user: { name: string; email: string 
   const admins = await User.find({ role: USER_ROLES.ADMIN, status: ACCOUNT_STATUS.ACTIVE });
   await Promise.allSettled(
     admins.map((admin) =>
-      sendUserAwaitingApprovalEmail(admin.email, admin.name, user.name, user.email, pendingUsersUrl())
+      sendUserAwaitingApprovalEmail({
+        to: admin.email,
+        adminName: admin.name,
+        userName: user.name,
+        userEmail: user.email,
+        url: pendingUsersUrl(),
+      })
     )
   );
 };

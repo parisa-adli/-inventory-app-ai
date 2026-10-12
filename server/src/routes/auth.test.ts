@@ -194,13 +194,13 @@ describe('GET /api/auth/verify-email/:token', () => {
 
     await request(app).get(`/api/auth/verify-email/${token}`);
     await vi.waitFor(() => expect(sendUserAwaitingApprovalEmail).toHaveBeenCalledTimes(1));
-    expect(sendUserAwaitingApprovalEmail).toHaveBeenCalledWith(
-      'admin@inventory.local',
-      'Boss',
-      'New',
-      'new@inventory.local',
-      `${env.CLIENT_URL}/users`
-    );
+    expect(sendUserAwaitingApprovalEmail).toHaveBeenCalledWith({
+      to: 'admin@inventory.local',
+      adminName: 'Boss',
+      userName: 'New',
+      userEmail: 'new@inventory.local',
+      url: `${env.CLIENT_URL}/users`,
+    });
   });
 
   describe('admin mail negatives (C7)', () => {
@@ -238,7 +238,7 @@ describe('GET /api/auth/verify-email/:token', () => {
       await makeUser({ email: 'rejected-admin@inventory.local', role: 'admin', status: 'rejected', emailVerified: true });
       await verifyWith({ status: 'pending', emailVerified: false });
 
-      const recipients = vi.mocked(sendUserAwaitingApprovalEmail).mock.calls.map((call) => call[0]);
+      const recipients = vi.mocked(sendUserAwaitingApprovalEmail).mock.calls.map(([params]) => params.to);
       expect(recipients).toEqual(['admin@inventory.local']);
     });
   });

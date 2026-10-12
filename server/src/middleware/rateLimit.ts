@@ -19,14 +19,17 @@ export const RATE_LIMITS = {
   telegramComplete: 10,
 } as const;
 
+// Route tests fire many requests from one IP; the limiters have their own tests (FORCE_RATE_LIMIT).
+// Read per request so a test can flip env.FORCE_RATE_LIMIT.
+const bypassed = () => env.NODE_ENV === 'test' && !env.FORCE_RATE_LIMIT;
+
 export const createLimiter = (max: number, windowMs = WINDOW_MS) =>
   expressRateLimit({
     windowMs,
     limit: max,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    // Route tests fire many requests from one IP; the limiter itself has its own test.
-    skip: () => env.NODE_ENV === 'test' && !process.env.FORCE_RATE_LIMIT,
+    skip: bypassed,
     handler: (_req, res) => {
       res.status(429).json({
         error: { code: 'RATE_LIMITED', message: 'Too many requests. Please try again later.' },
@@ -70,7 +73,7 @@ export const rateLimit = ({ key, limit, windowMs }: MongoRateLimitOptions): Requ
   };
 
   return async (req, res, next) => {
-    if (env.NODE_ENV === 'test' && !process.env.FORCE_RATE_LIMIT) return next();
+    if (bypassed()) return next();
 
     try {
       const now = Date.now();

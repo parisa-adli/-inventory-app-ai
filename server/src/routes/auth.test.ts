@@ -565,10 +565,10 @@ describe('devMailUrl', () => {
 
 describe('Mongo rate limits (forced on)', () => {
   beforeAll(() => {
-    process.env.FORCE_RATE_LIMIT = '1';
+    env.FORCE_RATE_LIMIT = true;
   });
   afterAll(() => {
-    delete process.env.FORCE_RATE_LIMIT;
+    env.FORCE_RATE_LIMIT = false;
   });
 
   it.each(['test@inventory.local', 'nobody@inventory.local'])(

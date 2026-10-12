@@ -29,6 +29,8 @@ const envSchema = z.object({
   TELEGRAM_MODE: z.enum(['polling', 'webhook']).default('polling'),
   TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
   PUBLIC_URL: z.url().optional(),
+  // Rate limiters are bypassed under NODE_ENV=test; set this to exercise them there.
+  FORCE_RATE_LIMIT: z.stringbool().default(false),
 });
 
 const PLACEHOLDER_PREFIX = 'your-';

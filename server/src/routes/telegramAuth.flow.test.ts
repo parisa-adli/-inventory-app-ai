@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
+import { env } from '../config/env.js';
 import { createApp } from '../app.js';
 import { AuthSession } from '../models/AuthSession.js';
 import { EmailToken } from '../models/EmailToken.js';
@@ -313,10 +314,10 @@ describe('Telegram sign up (new Telegram account)', () => {
 
 describe('Telegram per-IP rate limits (forced on)', () => {
   beforeAll(() => {
-    process.env.FORCE_RATE_LIMIT = '1';
+    env.FORCE_RATE_LIMIT = true;
   });
   afterAll(() => {
-    delete process.env.FORCE_RATE_LIMIT;
+    env.FORCE_RATE_LIMIT = false;
   });
 
   it('limits start to 10 per 15 minutes, answering 429 RATE_LIMITED', async () => {

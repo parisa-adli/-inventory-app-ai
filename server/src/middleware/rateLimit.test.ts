@@ -1,14 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import express from 'express';
 import request from 'supertest';
+import { env } from '../config/env.js';
 import { RATE_LIMITS, createLimiter } from './rateLimit.js';
 
 describe('createLimiter', () => {
   beforeAll(() => {
-    process.env.FORCE_RATE_LIMIT = '1'; // limiters are skipped under NODE_ENV=test otherwise
+    env.FORCE_RATE_LIMIT = true; // limiters are skipped under NODE_ENV=test otherwise
   });
   afterAll(() => {
-    delete process.env.FORCE_RATE_LIMIT;
+    env.FORCE_RATE_LIMIT = false;
   });
 
   it('answers 429 RATE_LIMITED once the limit is exceeded', async () => {

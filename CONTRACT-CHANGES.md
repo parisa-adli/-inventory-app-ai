@@ -35,7 +35,7 @@ Names below use this repo's actual names; the right-hand column of the first tab
 - `403 FORBIDDEN` if `emailVerified` is already true. `409 DUPLICATE_EMAIL` if taken. Otherwise: set the new email (stays unverified), discard pending `verify-email` and `link-telegram` tokens (a Telegram link mailed to the old address must not work), create a new `verify-email` one, send it. Shares the resend limit (3 / user / hour).
 - Response `200 { user, devMailUrl? }`.
 - Shared: `changeEmailSchema`, response schema.
-- UI: "Change my email" action on the verify screen and Awaiting Approval.
+- UI: "Change my email" action on the verify screen (`VerifyEmailPending`) only. Awaiting Approval has no such action: a user who reaches it is already verified and would get the 403 above (revised, #18).
 - Guard: `requireAuth` only; no `requireActive`, no `requireRole`. Decision: the route is for unverified users, who are `pending` (awaiting approval) by definition, so `requireActive` would lock out the exact users it exists for, and it is self-service on the caller's own account (`req.user.id`), so a role check has no meaning. It matches `/me` and `/resend-verification`. Abuse is bounded by the shared resend limit, the verified-user 403 and the duplicate check. Covered by the `PATCH /api/auth/email` tests (401 without a session, success for pending and active users).
 
 ## C4. `devMailUrl` (dev only)
@@ -73,6 +73,13 @@ Names below use this repo's actual names; the right-hand column of the first tab
 - Why: matches `docs/design/signup-email.png`; bcrypt ignores bytes past 72, so a longer password would be silently truncated.
 - Login deliberately accepts any non-empty password so existing and seeded accounts keep working.
 - Shared: `passwordField`, `PASSWORD_MIN_LENGTH`, `PASSWORD_MAX_BYTES`, `PASSWORD_HINT` in `shared/schemas/auth.ts`.
+
+## C10. Additions outside the original proposal (recorded in #18)
+
+- `TRUST_PROXY` (`server/src/config/env.ts`, `app.ts`, `.env.example`): number of reverse proxies in front of the server, default `0`. When `> 0`, `app.set('trust proxy', n)` so the per-IP limiters (C5) see the real client IP. Not set in dev.
+- `errorHandler` logs only unexpected errors: an `AppError` with a status below 500 (401, 409, 429 ...) is no longer written to the console; non-`AppError`s and `AppError`s >= 500 still log the stack.
+- Client restyle with no wire change: `TextField` (`features/auth/components`) renders hints through `FormDescription` and gets `aria-pressed` on the password reveal button; the full-screen auth spinner in `guards.tsx` uses theme tokens (`border-border`, `border-primary`) instead of fixed grays.
+- `useCooldown` (`features/auth/hooks/useCooldown.ts`): a seconds countdown started from the server's `retryAfter`, used by `VerifyEmailPending` to keep the resend button disabled (C5 "disabled resend button").
 
 ## Not applicable (nothing to change)
 

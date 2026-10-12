@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
+import { changeEmailResponseSchema } from '@inventory/shared';
 import { env } from '../config/env.js';
 import { createApp } from '../app.js';
 import { EmailToken } from '../models/EmailToken.js';
@@ -536,6 +537,10 @@ describe('PATCH /api/auth/email', () => {
 
     const res = await request(app).patch('/api/auth/email').set('Cookie', cookies).send({ email: ' Fixed@Inventory.local ' });
     expect(res.status).toBe(200);
+    expect(changeEmailResponseSchema.parse(res.body).user).toMatchObject({
+      email: 'fixed@inventory.local',
+      emailVerified: false,
+    });
     expect(res.body.user).toMatchObject({ email: 'fixed@inventory.local', emailVerified: false });
     expect(vi.mocked(sendVerificationEmail).mock.calls.at(-1)![0]).toBe('fixed@inventory.local');
 
@@ -597,6 +602,7 @@ describe('devMailUrl', () => {
     expect(resend.body).toEqual({ devMailUrl: link });
     const change = await request(app).patch('/api/auth/email').set('Cookie', cookies).send({ email: 'n2@inventory.local' });
     expect(change.body.devMailUrl).toBe(link);
+    expect(changeEmailResponseSchema.parse(change.body).devMailUrl).toBe(link);
 
     vi.mocked(sendVerificationEmail).mockResolvedValue({});
   });

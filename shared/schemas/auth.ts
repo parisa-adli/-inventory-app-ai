@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import { ACCOUNT_STATUS } from '../constants/account-status';
+import { USER_ROLES } from '../constants/roles';
+import type { AuthUser, ChangeEmailResponse } from '../types/auth';
 
 export const PASSWORD_MIN_LENGTH = 10;
 /** bcrypt ignores every byte after the 72nd, so longer passwords would be silently truncated. */
@@ -57,6 +60,22 @@ export const resetPasswordSchema = z.object({
 export const changeEmailSchema = z.object({
   email: emailField,
 });
+
+/** Shape of the user object the auth endpoints return (see `AuthUser`). */
+export const authUserSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string(),
+  role: z.enum([USER_ROLES.ADMIN, USER_ROLES.STAFF]),
+  status: z.enum([ACCOUNT_STATUS.PENDING, ACCOUNT_STATUS.ACTIVE, ACCOUNT_STATUS.REJECTED]),
+  emailVerified: z.boolean(),
+}) satisfies z.ZodType<AuthUser>;
+
+/** Response of PATCH /api/auth/email; `devMailUrl` only outside production when mail is only logged. */
+export const changeEmailResponseSchema = z.object({
+  user: authUserSchema,
+  devMailUrl: z.string().optional(),
+}) satisfies z.ZodType<ChangeEmailResponse>;
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;

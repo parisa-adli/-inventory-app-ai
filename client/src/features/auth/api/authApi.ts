@@ -1,4 +1,5 @@
 import { isAxiosError } from 'axios';
+import { changeEmailResponseSchema } from '@inventory/shared';
 import type {
   AuthUser,
   ChangeEmailInput,
@@ -110,8 +111,8 @@ export const resendVerification = async (): Promise<DevMailResponse> => {
 
 /** An unverified user fixes the address their verification link goes to. */
 export const changeEmail = async (input: ChangeEmailInput): Promise<ChangeEmailResponse> => {
-  const { data } = await api.patch<ChangeEmailResponse>('/auth/email', input);
-  return data;
+  const { data } = await api.patch('/auth/email', input);
+  return changeEmailResponseSchema.parse(data);
 };
 
 export const forgotPassword = (input: ForgotPasswordInput) => api.post('/auth/forgot-password', input);

@@ -303,7 +303,7 @@ router.post('/resend-verification', requireAuth, verificationMailLimiter, async 
 
 // An unverified user fixes a typo in their address; the old verification link stops working
 // requireAuth only, on purpose: callers are pending users (no requireActive) acting on their own account (no role guard)
-router.patch('/email', requireAuth, verificationMailLimiter, validate(changeEmailSchema), async (req, res) => {
+router.patch('/email', requireAuth, validate(changeEmailSchema), verificationMailLimiter, async (req, res) => {
   assertEmailAvailable();
   const user = await User.findById(req.user!.id);
   if (!user) throw new UnauthorizedError('User no longer exists');
@@ -332,11 +332,12 @@ router.patch('/email', requireAuth, verificationMailLimiter, validate(changeEmai
 });
 
 // Answers 204 before any lookup, so a known and an unknown email cannot be told apart by time or body.
-// The per-IP and per-email limits run first and are counted the same way for both.
+// Validation runs first (malformed bodies spend no budget), then the per-IP and per-email limits,
+// counted the same way for both.
 router.post(
   '/forgot-password',
-  forgotPasswordIpLimiter,
   validate(forgotPasswordSchema),
+  forgotPasswordIpLimiter,
   forgotPasswordEmailLimiter,
   (req, res) => {
     // Fails the same way for every email when mail is down, so it cannot reveal which accounts exist

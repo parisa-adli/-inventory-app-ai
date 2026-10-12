@@ -699,6 +699,45 @@ describe('Mongo rate limits (forced on)', () => {
     expect(res.body.error.details.retryAfter).toBeGreaterThan(0);
   });
 
+  it('does not spend the IP budget on malformed forgot-password requests', async () => {
+    for (let i = 0; i < 6; i++) {
+      expect((await request(app).post('/api/auth/forgot-password').send({ email: 'nope' })).status).toBe(400);
+    }
+    expect(await RateLimitHit.countDocuments({ _id: /^forgot:/ })).toBe(0);
+    expect(
+      (await request(app).post('/api/auth/forgot-password').send({ email: 'ok@inventory.local' })).status
+    ).toBe(204);
+  });
+
+  it('does not spend the resend budget on malformed change-email requests', async () => {
+    await makeUser();
+    const cookies = cookieHeader((await login()).headers['set-cookie']);
+    for (let i = 0; i < 4; i++) {
+      const res = await request(app).patch('/api/auth/email').set('Cookie', cookies).send({ email: 'nope' });
+      expect(res.status).toBe(400);
+    }
+    expect(await RateLimitHit.countDocuments({ _id: /^verify-mail:/ })).toBe(0);
+    expect((await request(app).post('/api/auth/resend-verification').set('Cookie', cookies)).status).toBe(200);
+  });
+
+  it('spends the shared budget on a change-email 409, so duplicate probing is bounded', async () => {
+    await makeUser();
+    await makeUser({ email: 'taken@inventory.local' });
+    const cookies = cookieHeader((await login()).headers['set-cookie']);
+    for (let i = 0; i < 3; i++) {
+      const res = await request(app)
+        .patch('/api/auth/email')
+        .set('Cookie', cookies)
+        .send({ email: 'taken@inventory.local' });
+      expect(res.status).toBe(409);
+    }
+    const res = await request(app)
+      .patch('/api/auth/email')
+      .set('Cookie', cookies)
+      .send({ email: 'taken@inventory.local' });
+    expect(res.status).toBe(429);
+  });
+
   it('keeps the counters in Mongo, so they are shared between instances', async () => {
     await request(app).post('/api/auth/forgot-password').send({ email: 'a@inventory.local' });
     expect(await RateLimitHit.countDocuments({ _id: /^forgot:ip:/ })).toBe(1);

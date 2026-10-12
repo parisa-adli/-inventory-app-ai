@@ -48,7 +48,7 @@ Names below use this repo's actual names; the right-hand column of the first tab
 
 - New model `RateLimitHit` (key, window start, count; TTL purge) and helper `rateLimit({ key, limit, windowMs })` in `middleware/rateLimit.ts`, replacing `express-rate-limit` for the **email** routes only (login, register, forgot, reset, resend, change-email). Telegram limiters are left as they are.
 - Limits: forgot 5 / IP / h and 3 / email / h; resend + change-email 3 / user / h combined. Login, register and reset keep their current numbers (10 / 15 min / IP) unless you give new ones.
-- Over the limit: `429 { error: { code: 'RATE_LIMITED', message, details: { retryAfter } } }` plus `Retry-After`; identical for real and unknown emails because the check runs before any lookup.
+- Over the limit: `429 { error: { code: 'RATE_LIMITED', message, details: { retryAfter } } }` plus `Retry-After`; identical for real and unknown emails because the check runs before any lookup. Validation runs before the limiter (decision 7 below).
 - Client: "Try again in N min" and a disabled resend button.
 
 ## C6. Distinguish expired links
@@ -89,3 +89,5 @@ Names below use this repo's actual names; the right-hand column of the first tab
 4. C8: an unverified account always lands on `/verify-email`, even when it is also rejected.
 5. C9: the password rule above is final (confirmed by the user).
 6. Error toasts (#8): every auth mutation toasts its error (CLAUDE.md: toast on every mutation's success/error), including verify-email, change-email (duplicate email) and reset-password (invalid/expired link). The inline UI on those pages stays as well, so no exception is recorded in `docs/DESIGN.md`.
+7. C5 limiter order (#15): validate runs before the limiter on `forgot-password` (IP and email) and `PATCH /auth/email`, so a malformed body spends no budget. Changed.
+8. C5 budget on 403/409 (#15): a change-email `403` (already verified) or `409` (duplicate) still spends the shared 3/user/hour budget. Kept: the limiter runs before any lookup by design, and the 409 is an email-existence probe that the budget bounds. Only requests that pass validation count.

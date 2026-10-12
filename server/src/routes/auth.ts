@@ -321,6 +321,8 @@ router.patch('/email', requireAuth, verificationMailLimiter, validate(changeEmai
   }
 
   await discardPendingTokens(user._id, 'verify-email');
+  // A Telegram link mailed to the old address must not be confirmable from that mailbox
+  await discardPendingTokens(user._id, 'link-telegram');
   const token = await createEmailToken(user._id, 'verify-email');
   const sent = await sendTracked(user._id, 'verify-email', () =>
     sendVerificationEmail(user.email, user.name, token)

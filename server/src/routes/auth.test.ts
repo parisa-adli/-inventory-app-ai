@@ -6,6 +6,7 @@ import { EmailToken } from '../models/EmailToken.js';
 import { RefreshToken } from '../models/RefreshToken.js';
 import { User } from '../models/User.js';
 import { hashPassword } from '../services/password.js';
+import { createEmailToken } from '../services/emailToken.js';
 import {
   sendPasswordResetEmail,
   sendUserAwaitingApprovalEmail,
@@ -496,6 +497,18 @@ describe('PATCH /api/auth/email', () => {
     expect((await request(app).get(`/api/auth/verify-email/${oldToken}`)).status).toBe(400);
     expect((await request(app).get(`/api/auth/verify-email/${newToken}`)).status).toBe(200);
     expect((await User.findOne({ email: 'fixed@inventory.local' }))!.emailVerified).toBe(true);
+  });
+
+  it('discards pending link-telegram tokens mailed to the old address', async () => {
+    const user = await makeUser();
+    const cookies = cookieHeader((await login()).headers['set-cookie']);
+    const oldLink = await createEmailToken(user._id, 'link-telegram');
+
+    const res = await request(app).patch('/api/auth/email').set('Cookie', cookies).send({ email: 'fixed@inventory.local' });
+    expect(res.status).toBe(200);
+
+    expect(await EmailToken.countDocuments({ user: user._id, type: 'link-telegram', consumed: false })).toBe(0);
+    expect((await request(app).get(`/api/auth/verify-email/${oldLink}`)).status).toBe(400);
   });
 
   it('answers 409 DUPLICATE_EMAIL when the address belongs to another account', async () => {

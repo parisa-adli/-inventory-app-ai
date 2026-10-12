@@ -32,7 +32,7 @@ Names below use this repo's actual names; the right-hand column of the first tab
 ## C3. Change email: `PATCH /api/auth/email`
 
 - Body `{ email }` (same normalized email field as register). Requires session.
-- `403 FORBIDDEN` if `emailVerified` is already true. `409 DUPLICATE_EMAIL` if taken. Otherwise: set the new email (stays unverified), discard pending `verify-email` tokens, create a new one, send it. Shares the resend limit (3 / user / hour).
+- `403 FORBIDDEN` if `emailVerified` is already true. `409 DUPLICATE_EMAIL` if taken. Otherwise: set the new email (stays unverified), discard pending `verify-email` and `link-telegram` tokens (a Telegram link mailed to the old address must not work), create a new `verify-email` one, send it. Shares the resend limit (3 / user / hour).
 - Response `200 { user, devMailUrl? }`.
 - Shared: `changeEmailSchema`, response schema.
 - UI: "Change my email" action on the verify screen and Awaiting Approval.

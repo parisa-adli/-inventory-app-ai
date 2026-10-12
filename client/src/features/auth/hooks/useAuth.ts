@@ -71,8 +71,8 @@ export const useVerifyEmail = () => {
       void queryClient.invalidateQueries({ queryKey: authKeys.me });
       toast.success(type === 'link-telegram' ? 'Telegram linked' : 'Email verified');
     },
-    // The page explains an expired or used link itself
-    onError: () => {},
+    // The page also explains an expired or used link inline; the toast keeps every mutation consistent
+    onError,
   });
 };
 
@@ -95,11 +95,8 @@ export const useChangeEmail = () => {
       queryClient.setQueryData(authKeys.me, user);
       toastMailSent(`Verification email sent to ${user.email}`, { devMailUrl });
     },
-    // Field-level errors (duplicate email) are shown by the form
-    onError: (err) => {
-      const { code } = getApiError(err);
-      if (code !== 'DUPLICATE_EMAIL') onError(err);
-    },
+    // The form also marks the field for a duplicate email; the toast keeps every mutation consistent
+    onError,
   });
 };
 
@@ -120,10 +117,7 @@ export const useResetPassword = () => {
       queryClient.setQueryData(authKeys.me, null);
       toast.success('Password updated. Sign in with your new password.');
     },
-    onError: (err) => {
-      // The page explains an expired or used link itself
-      const { code } = getApiError(err);
-      if (code !== 'INVALID_TOKEN' && code !== 'TOKEN_EXPIRED') onError(err);
-    },
+    // The page also explains an expired or used link inline; the toast keeps every mutation consistent
+    onError,
   });
 };

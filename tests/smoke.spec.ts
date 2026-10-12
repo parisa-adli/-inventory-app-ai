@@ -195,9 +195,11 @@ test.describe('client smoke', () => {
 
     await page.goto('/verify-email/expired');
     await expect(page.getByRole('heading', { name: 'Link expired' })).toBeVisible();
+    await expect(page.locator('[data-sonner-toast]', { hasText: 'expired' })).toBeVisible();
 
     await page.goto('/verify-email/unknown');
     await expect(page.getByText('This link is invalid or has already been used.')).toBeVisible();
+    await expect(page.locator('[data-sonner-toast]', { hasText: 'invalid' })).toBeVisible();
   });
 
   test('an unverified user is sent to /verify-email, can change the email and is rate limited on resend', async ({
@@ -234,7 +236,8 @@ test.describe('client smoke', () => {
     await page.getByRole('button', { name: 'Change my email' }).click();
     await page.locator('input[name="email"]').fill('taken@x.com');
     await page.getByRole('button', { name: 'Save and resend' }).click();
-    await expect(page.getByText('This email is already registered.')).toBeVisible();
+    await expect(page.locator('[data-sonner-toast]', { hasText: 'This email is already registered.' })).toBeVisible();
+    await expect(page.locator('form').getByText('This email is already registered.')).toBeVisible();
 
     await page.locator('input[name="email"]').fill('fixed@x.com');
     await page.getByRole('button', { name: 'Save and resend' }).click();

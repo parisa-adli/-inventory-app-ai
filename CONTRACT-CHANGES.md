@@ -87,3 +87,4 @@ Names below use this repo's actual names; the right-hand column of the first tab
 3. C4: no `server/.mail/` driver. Two modes only: console log (dev, no SMTP) and real SMTP.
 4. C8: an unverified account always lands on `/verify-email`, even when it is also rejected.
 5. C9: the password rule above is final (confirmed by the user).
+6. Error toasts (#8): every auth mutation toasts its error (CLAUDE.md: toast on every mutation's success/error), including verify-email, change-email (duplicate email) and reset-password (invalid/expired link). The inline UI on those pages stays as well, so no exception is recorded in `docs/DESIGN.md`.

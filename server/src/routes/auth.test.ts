@@ -23,6 +23,12 @@ vi.mock('../services/email.js', async (importOriginal) => ({
   sendUserAwaitingApprovalEmail: vi.fn(async () => ({})),
 }));
 
+// The real mailer is only exercised in the SMTP-mode devMailUrl test; its transport must never hit the network.
+const { sendMail } = vi.hoisted(() => ({ sendMail: vi.fn(async () => ({})) }));
+vi.mock('nodemailer', () => ({
+  default: { createTransport: () => ({ sendMail }) },
+}));
+
 const app = createApp();
 const PASSWORD = 'Str0ng!Passw0rd';
 
@@ -194,6 +200,46 @@ describe('GET /api/auth/verify-email/:token', () => {
       'new@inventory.local',
       `${env.CLIENT_URL}/users`
     );
+  });
+
+  describe('admin mail negatives (C7)', () => {
+    // The notification is fire-and-forget, so give it a few turns of the event loop before asserting silence.
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 100));
+    const verifyWith = async (userOverrides: Record<string, unknown>) => {
+      const user = await makeUser({ email: 'sub@inventory.local', name: 'Sub', ...userOverrides });
+      const raw = await createEmailToken(user._id, 'verify-email');
+      const res = await request(app).get(`/api/auth/verify-email/${raw}`);
+      expect(res.status).toBe(200);
+      await settle();
+    };
+
+    beforeEach(async () => {
+      await makeUser({ email: 'admin@inventory.local', name: 'Boss', role: 'admin', status: 'active', emailVerified: true });
+    });
+
+    it('sends nothing when an already verified email is verified again', async () => {
+      await verifyWith({ status: 'pending', emailVerified: true });
+      expect(sendUserAwaitingApprovalEmail).not.toHaveBeenCalled();
+    });
+
+    it('sends nothing for an active user', async () => {
+      await verifyWith({ status: 'active', emailVerified: false });
+      expect(sendUserAwaitingApprovalEmail).not.toHaveBeenCalled();
+    });
+
+    it('sends nothing for a rejected user', async () => {
+      await verifyWith({ status: 'rejected', emailVerified: false });
+      expect(sendUserAwaitingApprovalEmail).not.toHaveBeenCalled();
+    });
+
+    it('skips admins that are not active', async () => {
+      await makeUser({ email: 'pending-admin@inventory.local', role: 'admin', status: 'pending', emailVerified: true });
+      await makeUser({ email: 'rejected-admin@inventory.local', role: 'admin', status: 'rejected', emailVerified: true });
+      await verifyWith({ status: 'pending', emailVerified: false });
+
+      const recipients = vi.mocked(sendUserAwaitingApprovalEmail).mock.calls.map((call) => call[0]);
+      expect(recipients).toEqual(['admin@inventory.local']);
+    });
   });
 
   it('does not accept (or burn) a reset-password token', async () => {
@@ -553,6 +599,32 @@ describe('devMailUrl', () => {
     expect(change.body.devMailUrl).toBe(link);
 
     vi.mocked(sendVerificationEmail).mockResolvedValue({});
+  });
+
+  it('is absent when the real mailer delivers through SMTP', async () => {
+    const actual = await vi.importActual<typeof import('../services/email.js')>('../services/email.js');
+    const snapshot = { user: env.BREVO_SMTP_USER, pass: env.BREVO_SMTP_PASS };
+    env.BREVO_SMTP_USER = 'real-user@smtp-brevo.com';
+    env.BREVO_SMTP_PASS = 'xsmtpsib-real';
+    vi.mocked(sendVerificationEmail).mockImplementation(actual.sendVerificationEmail);
+    try {
+      const reg = await request(app)
+        .post('/api/auth/register')
+        .send({ name: 'New', email: 'new@inventory.local', password: PASSWORD });
+      expect(reg.status).toBe(201);
+      expect(reg.body).not.toHaveProperty('devMailUrl');
+      expect(sendMail).toHaveBeenCalledTimes(1);
+
+      const cookies = cookieHeader((await login('new@inventory.local')).headers['set-cookie']);
+      const resend = await request(app).post('/api/auth/resend-verification').set('Cookie', cookies);
+      expect(resend.body).toEqual({});
+      const change = await request(app).patch('/api/auth/email').set('Cookie', cookies).send({ email: 'n2@inventory.local' });
+      expect(change.body).not.toHaveProperty('devMailUrl');
+    } finally {
+      env.BREVO_SMTP_USER = snapshot.user;
+      env.BREVO_SMTP_PASS = snapshot.pass;
+      vi.mocked(sendVerificationEmail).mockResolvedValue({});
+    }
   });
 
   it('is never part of the forgot-password response', async () => {

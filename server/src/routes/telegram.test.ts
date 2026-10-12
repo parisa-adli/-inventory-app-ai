@@ -69,6 +69,16 @@ describe('GET /api/auth/verify-email/:token with a link-telegram token', () => {
     expect(again.body.error.code).toBe('INVALID_TOKEN');
   });
 
+  it('answers an expired confirm link with TOKEN_EXPIRED and links nothing', async () => {
+    const { user, token } = await startMerge('7001');
+    await EmailToken.updateMany({ type: 'link-telegram' }, { expiresAt: new Date(Date.now() - 1000) });
+
+    const res = await request(app).get(`/api/auth/verify-email/${token}`);
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('TOKEN_EXPIRED');
+    expect((await User.findById(user._id))!.telegramChatId).toBeUndefined();
+  });
+
   it('replaces a different chat that was linked before', async () => {
     const { user, token } = await startMerge('7001');
     await User.updateOne({ _id: user._id }, { telegramChatId: '6000' });

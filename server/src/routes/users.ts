@@ -89,19 +89,47 @@ router.patch('/:id/activate', async (req, res) => {
   throw await explainRefusal(id, 'activated');
 });
 
+// Rejecting a pending user and revoking an active one are the same transition (-> rejected)
 router.patch('/:id/reject', async (req, res) => {
   const id = parseId(req.params.id);
+  // An admin who locked themselves out could not undo it
+  if (id === req.user?.id) {
+    throw new AppError(409, 'CANNOT_REVOKE_SELF', 'You cannot revoke your own account.');
+  }
 
   const user = await User.findOneAndUpdate(
-    { _id: id, status: ACCOUNT_STATUS.PENDING },
+    { _id: id, status: { $in: [ACCOUNT_STATUS.PENDING, ACCOUNT_STATUS.ACTIVE] } },
     { status: ACCOUNT_STATUS.REJECTED },
     { returnDocument: 'after' }
   );
-  if (!user) throw await explainRefusal(id, 'rejected');
+  if (!user) {
+    const existing = await User.findById(id).select('status');
+    if (!existing) throw new NotFoundError('User not found');
+    throw new AppError(409, 'NOT_ACTIVE_OR_PENDING', `This user is already ${existing.status}.`);
+  }
 
-  // A pending user may already hold a session; end it so it cannot be refreshed
+  // End their sessions so a held refresh token cannot be used; the access token stops working on the
+  // next request anyway because requireAuth re-reads the status.
   await revokeAllUserTokens(id);
   res.json(toAdminUser(user));
+});
+
+router.patch('/:id/reactivate', async (req, res) => {
+  const id = parseId(req.params.id);
+
+  const user = await User.findOneAndUpdate(
+    { _id: id, status: ACCOUNT_STATUS.REJECTED, emailVerified: true },
+    { status: ACCOUNT_STATUS.ACTIVE },
+    { returnDocument: 'after' }
+  );
+  if (user) return res.json(toAdminUser(user));
+
+  const existing = await User.findById(id).select('status emailVerified');
+  if (!existing) throw new NotFoundError('User not found');
+  if (existing.status !== ACCOUNT_STATUS.REJECTED) {
+    throw new AppError(409, 'NOT_REJECTED', `Only rejected users can be reactivated (this user is ${existing.status}).`);
+  }
+  throw new AppError(400, 'EMAIL_NOT_VERIFIED', 'This user has not verified their email address yet.');
 });
 
 export default router;

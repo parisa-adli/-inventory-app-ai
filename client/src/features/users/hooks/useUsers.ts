@@ -36,3 +36,8 @@ const useStatusMutation = (
 export const useActivateUser = () => useStatusMutation(usersApi.activateUser, (name) => `${name} was activated`);
 
 export const useRejectUser = () => useStatusMutation(usersApi.rejectUser, (name) => `${name} was rejected`);
+
+export const useRevokeUser = () => useStatusMutation(usersApi.rejectUser, (name) => `${name} was revoked`);
+
+export const useReactivateUser = () =>
+  useStatusMutation(usersApi.reactivateUser, (name) => `${name} was reactivated`);

@@ -21,3 +21,8 @@ export const rejectUser = async (id: string): Promise<AdminUser> => {
   const { data } = await api.patch<AdminUser>(`/users/${id}/reject`);
   return data;
 };
+
+export const reactivateUser = async (id: string): Promise<AdminUser> => {
+  const { data } = await api.patch<AdminUser>(`/users/${id}/reactivate`);
+  return data;
+};

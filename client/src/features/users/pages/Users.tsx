@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ACCOUNT_STATUS, USERS_PAGE_SIZE_DEFAULT, type AdminUser } from '@inventory/shared';
+import { ACCOUNT_STATUS, USERS_PAGE_SIZE_DEFAULT, type AccountStatus, type AdminUser } from '@inventory/shared';
+import { useAuthUser } from '@/features/auth/hooks/useAuth';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,19 +11,49 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useActivateUser, useRejectUser, useUsers } from '../hooks/useUsers';
+import { useActivateUser, useReactivateUser, useRejectUser, useRevokeUser, useUsers } from '../hooks/useUsers';
 
 const formatDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' });
 
-/** Admin-only. Pending accounts, to activate or reject. */
+const VIEWS: Record<AccountStatus, { tab: string; title: string; hint: string; empty: string }> = {
+  pending: {
+    tab: 'Pending',
+    title: 'Pending users',
+    hint: 'Activate accounts once their email address is verified, or reject them.',
+    empty: 'No users are waiting for approval.',
+  },
+  active: {
+    tab: 'Active',
+    title: 'Active users',
+    hint: 'Revoke access for an account; it can be reactivated later.',
+    empty: 'No active users.',
+  },
+  rejected: {
+    tab: 'Rejected',
+    title: 'Rejected users',
+    hint: 'Rejected and revoked accounts. Reactivate one to let them sign in again.',
+    empty: 'No rejected users.',
+  },
+};
+
+/** Admin-only. Pending users to activate or reject, active users to revoke, rejected users to reactivate. */
 export default function Users() {
+  const [status, setStatus] = useState<AccountStatus>(ACCOUNT_STATUS.PENDING);
   const [page, setPage] = useState(1);
+  // Confirmed for both reject (pending) and revoke (active): the same server transition
   const [toReject, setToReject] = useState<AdminUser | null>(null);
-  const users = useUsers({ status: ACCOUNT_STATUS.PENDING, page, limit: USERS_PAGE_SIZE_DEFAULT });
+  const users = useUsers({ status, page, limit: USERS_PAGE_SIZE_DEFAULT });
+  const me = useAuthUser().data;
   const activate = useActivateUser();
   const reject = useRejectUser();
+  const revoke = useRevokeUser();
+  const reactivate = useReactivateUser();
+  const view = VIEWS[status];
+  const revoking = toReject?.status === ACCOUNT_STATUS.ACTIVE;
+  const confirmMutation = revoking ? revoke : reject;
 
   const data = users.data;
   // Handling the last user on a page would leave that page empty: step back to the previous one
@@ -35,11 +66,25 @@ export default function Users() {
   return (
     <div className="space-y-4 px-4 sm:px-0">
       <div>
-        <h1 className="text-xl font-semibold">Pending users</h1>
-        <p className="text-sm text-muted-foreground">
-          Activate accounts once their email address is verified, or reject them.
-        </p>
+        <h1 className="text-xl font-semibold">{view.title}</h1>
+        <p className="text-sm text-muted-foreground">{view.hint}</p>
       </div>
+
+      <Tabs
+        value={status}
+        onValueChange={(value: string) => {
+          setStatus(value as AccountStatus);
+          setPage(1);
+        }}
+      >
+        <TabsList>
+          {Object.entries(VIEWS).map(([value, { tab }]) => (
+            <TabsTrigger key={value} value={value}>
+              {tab}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       {users.isPending && <p className="text-sm text-muted-foreground" role="status">Loading users…</p>}
       {users.isError && (
@@ -53,7 +98,7 @@ export default function Users() {
 
       {data && data.items.length === 0 && (
         <p className="rounded-md border bg-white p-6 text-center text-sm text-muted-foreground">
-          No users are waiting for approval.
+          {view.empty}
         </p>
       )}
 
@@ -85,37 +130,74 @@ export default function Users() {
                     <TableCell>{formatDate(user.createdAt)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        {user.emailVerified ? (
+                        {user.status === ACCOUNT_STATUS.ACTIVE && user.id !== me?.id && (
                           <Button
                             size="sm"
-                            disabled={activate.isPending}
-                            onClick={() => activate.mutate(user.id, afterHandled)}
+                            variant="outline"
+                            disabled={revoke.isPending}
+                            onClick={() => setToReject(user)}
                           >
-                            Activate
+                            Revoke
                           </Button>
-                        ) : (
-                          <Tooltip>
-                            {/* A disabled button swallows pointer events, so the span carries the tooltip */}
-                            <TooltipTrigger asChild>
-                              <span tabIndex={0}>
-                                <Button size="sm" disabled aria-label={`Activate ${user.name}`}>
-                                  Activate
-                                </Button>
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              This user has not verified their email address yet.
-                            </TooltipContent>
-                          </Tooltip>
                         )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={reject.isPending}
-                          onClick={() => setToReject(user)}
-                        >
-                          Reject
-                        </Button>
+                        {user.status === ACCOUNT_STATUS.REJECTED &&
+                          (user.emailVerified ? (
+                            <Button
+                              size="sm"
+                              disabled={reactivate.isPending}
+                              onClick={() => reactivate.mutate(user.id, afterHandled)}
+                            >
+                              Reactivate
+                            </Button>
+                          ) : (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span tabIndex={0}>
+                                  <Button size="sm" disabled aria-label={`Reactivate ${user.name}`}>
+                                    Reactivate
+                                  </Button>
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                This user has not verified their email address yet.
+                              </TooltipContent>
+                            </Tooltip>
+                          ))}
+                        {user.status === ACCOUNT_STATUS.PENDING && (
+                          <>
+                            {user.emailVerified ? (
+                              <Button
+                                size="sm"
+                                disabled={activate.isPending}
+                                onClick={() => activate.mutate(user.id, afterHandled)}
+                              >
+                                Activate
+                              </Button>
+                            ) : (
+                              <Tooltip>
+                                {/* A disabled button swallows pointer events, so the span carries the tooltip */}
+                                <TooltipTrigger asChild>
+                                  <span tabIndex={0}>
+                                    <Button size="sm" disabled aria-label={`Activate ${user.name}`}>
+                                      Activate
+                                    </Button>
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  This user has not verified their email address yet.
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={reject.isPending}
+                              onClick={() => setToReject(user)}
+                            >
+                              Reject
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -150,9 +232,13 @@ export default function Users() {
       <Dialog open={toReject !== null} onOpenChange={(open: boolean) => !open && setToReject(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Reject {toReject?.name}?</DialogTitle>
+            <DialogTitle>
+              {revoking ? 'Revoke' : 'Reject'} {toReject?.name}?
+            </DialogTitle>
             <DialogDescription>
-              They will see a "not approved" screen the next time they open the app.
+              {revoking
+                ? 'They lose access on their next request and their sessions end. You can reactivate them later.'
+                : 'They will see a "not approved" screen the next time they open the app.'}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -161,17 +247,17 @@ export default function Users() {
             </Button>
             <Button
               variant="destructive"
-              disabled={reject.isPending}
+              disabled={confirmMutation.isPending}
               onClick={() => {
                 if (toReject) {
-                  reject.mutate(toReject.id, {
+                  confirmMutation.mutate(toReject.id, {
                     ...afterHandled,
                     onSettled: () => setToReject(null),
                   });
                 }
               }}
             >
-              Reject user
+              {revoking ? 'Revoke user' : 'Reject user'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -256,8 +256,8 @@ POST /api/auth/reset-password/:token    (204; 400 INVALID_TOKEN | TOKEN_EXPIRED)
 Users (admin)
 GET   /api/users?status=pending
 PATCH /api/users/:id/activate           (blocked if !emailVerified)
-PATCH /api/users/:id/reject
-PATCH /api/users/:id/reactivate
+PATCH /api/users/:id/reject             (pending or active -> rejected; revokes sessions; not yourself)
+PATCH /api/users/:id/reactivate         (rejected -> active; blocked if !emailVerified)
 
 Categories / Suppliers
 GET/POST/PUT/DELETE /api/categories     (mutations admin only)

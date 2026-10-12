@@ -113,6 +113,60 @@ test.describe('admin users page (stubbed API)', () => {
     await expect(page.getByText('No users are waiting for approval.')).toBeVisible();
   });
 
+  test('active tab: revoke asks for confirmation and never offers revoking yourself', async ({ page }) => {
+    await signInAs(page, admin);
+    const active = { ...verified, status: 'active' };
+    const self = { ...admin, status: 'active', telegramLinked: false, createdAt: '2026-01-01T10:00:00.000Z' };
+    let revokeCalls = 0;
+    await page.route('**/api/users?*', (route) => {
+      const status = new URL(route.request().url()).searchParams.get('status');
+      return route.fulfill({ json: page1(status === 'active' ? [self, active] : []) });
+    });
+    await page.route('**/api/users/u1/reject', (route) => {
+      revokeCalls += 1;
+      return route.fulfill({ json: { ...active, status: 'rejected' } });
+    });
+
+    await page.goto('/users');
+    await page.getByRole('tab', { name: 'Active' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Active users' })).toBeVisible();
+    await expect(page.getByRole('row', { name: /Admin/ }).getByRole('button')).toHaveCount(0);
+
+    await page.getByRole('row', { name: /Vera Verified/ }).getByRole('button', { name: 'Revoke' }).click();
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    expect(revokeCalls).toBe(0);
+
+    await page.getByRole('row', { name: /Vera Verified/ }).getByRole('button', { name: 'Revoke' }).click();
+    await page.getByRole('button', { name: 'Revoke user' }).click();
+    await expect(page.getByText('Vera Verified was revoked')).toBeVisible();
+    expect(revokeCalls).toBe(1);
+  });
+
+  test('rejected tab: reactivate sends the PATCH and toasts; unverified users are disabled', async ({ page }) => {
+    await signInAs(page, admin);
+    const rejected = { ...verified, status: 'rejected' };
+    const rejectedUnverified = { ...unverified, status: 'rejected' };
+    await page.route('**/api/users?*', (route) => {
+      const status = new URL(route.request().url()).searchParams.get('status');
+      return route.fulfill({ json: page1(status === 'rejected' ? [rejected, rejectedUnverified] : []) });
+    });
+    let reactivated = false;
+    await page.route('**/api/users/u1/reactivate', (route) => {
+      reactivated = true;
+      return route.fulfill({ json: { ...rejected, status: 'active' } });
+    });
+
+    await page.goto('/users');
+    await page.getByRole('tab', { name: 'Rejected' }).click();
+
+    await expect(page.getByRole('row', { name: /Uli Unverified/ }).getByRole('button')).toBeDisabled();
+    await page.getByRole('row', { name: /Vera Verified/ }).getByRole('button', { name: 'Reactivate' }).click();
+
+    await expect(page.getByText('Vera Verified was reactivated')).toBeVisible();
+    expect(reactivated).toBe(true);
+  });
+
   test('staff do not see the Users link and are redirected away from /users', async ({ page }) => {
     await signInAs(page, staff);
 

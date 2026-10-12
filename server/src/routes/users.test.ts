@@ -39,6 +39,7 @@ describe('guards', () => {
     ['get', '/api/users'],
     ['patch', '/api/users/000000000000000000000000/activate'],
     ['patch', '/api/users/000000000000000000000000/reject'],
+    ['patch', '/api/users/000000000000000000000000/reactivate'],
   ] as const;
 
   it.each(routes)('%s %s answers 401 without a session', async (method, url) => {
@@ -177,13 +178,98 @@ describe('PATCH /api/users/:id/reject', () => {
     expect(me.body.status).toBe('rejected');
   });
 
-  it('409s when the user is not pending', async () => {
+  it('revokes an active user: status rejected, sessions ended, access gone on the next request', async () => {
     const cookie = await adminSession();
     const target = await makeUser({ status: 'active', emailVerified: true });
+    const targetCookie = await sessionFor(target.email);
+    await request(app).get('/api/auth/me').set('Cookie', targetCookie).expect(200);
+
+    const res = await request(app).patch(`/api/users/${target._id}/reject`).set('Cookie', cookie);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ id: String(target._id), status: 'rejected' });
+    expect(await RefreshToken.countDocuments({ user: target._id, revoked: false })).toBe(0);
+    const me = await request(app).get('/api/auth/me').set('Cookie', targetCookie);
+    expect(me.body.status).toBe('rejected');
+    const data = await request(app).get('/api/users').set('Cookie', targetCookie);
+    expect(data.status).toBe(403);
+    const refresh = await request(app).post('/api/auth/refresh').set('Cookie', targetCookie);
+    expect(refresh.status).toBe(401);
+  });
+
+  it('409s when the user is already rejected', async () => {
+    const cookie = await adminSession();
+    const target = await makeUser({ status: 'rejected', emailVerified: true });
 
     const res = await request(app).patch(`/api/users/${target._id}/reject`).set('Cookie', cookie);
 
     expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('NOT_ACTIVE_OR_PENDING');
+  });
+
+  it('refuses to revoke the admin making the request', async () => {
+    const admin = await makeUser({ role: 'admin', status: 'active', emailVerified: true });
+    const cookie = await sessionFor(admin.email);
+
+    const res = await request(app).patch(`/api/users/${admin._id}/reject`).set('Cookie', cookie);
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('CANNOT_REVOKE_SELF');
+    expect((await User.findById(admin._id))?.status).toBe('active');
+  });
+});
+
+describe('PATCH /api/users/:id/reactivate', () => {
+  it('reactivates a rejected user, who can then sign in again', async () => {
+    const cookie = await adminSession();
+    const target = await makeUser({ status: 'rejected', emailVerified: true });
+    const blocked = await request(app).post('/api/auth/login').send({ email: target.email, password: PASSWORD });
+    expect(blocked.status).toBe(403);
+
+    const res = await request(app).patch(`/api/users/${target._id}/reactivate`).set('Cookie', cookie);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ id: String(target._id), status: 'active' });
+    const login = await request(app).post('/api/auth/login').send({ email: target.email, password: PASSWORD });
+    expect(login.status).toBe(200);
+    expect(login.body.user.status).toBe('active');
+  });
+
+  it('round-trips revoke then reactivate', async () => {
+    const cookie = await adminSession();
+    const target = await makeUser({ status: 'active', emailVerified: true });
+
+    await request(app).patch(`/api/users/${target._id}/reject`).set('Cookie', cookie).expect(200);
+    await request(app).patch(`/api/users/${target._id}/reactivate`).set('Cookie', cookie).expect(200);
+
     expect((await User.findById(target._id))?.status).toBe('active');
+  });
+
+  it('409s for users who are not rejected', async () => {
+    const cookie = await adminSession();
+    for (const status of ['pending', 'active']) {
+      const target = await makeUser({ status, emailVerified: true });
+      const res = await request(app).patch(`/api/users/${target._id}/reactivate`).set('Cookie', cookie);
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('NOT_REJECTED');
+    }
+  });
+
+  it('refuses a rejected user whose email was never verified', async () => {
+    const cookie = await adminSession();
+    const target = await makeUser({ status: 'rejected', emailVerified: false });
+
+    const res = await request(app).patch(`/api/users/${target._id}/reactivate`).set('Cookie', cookie);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('EMAIL_NOT_VERIFIED');
+    expect((await User.findById(target._id))?.status).toBe('rejected');
+  });
+
+  it('404s for an unknown id', async () => {
+    const res = await request(app)
+      .patch('/api/users/000000000000000000000000/reactivate')
+      .set('Cookie', await adminSession());
+    expect(res.status).toBe(404);
   });
 });

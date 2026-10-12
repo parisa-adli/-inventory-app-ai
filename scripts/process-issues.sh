@@ -18,8 +18,9 @@ DEFAULT_ISSUES=(12 8 9 13 14 10 15 11 17 18)
 ISSUES=("${@:-${DEFAULT_ISSUES[@]}}")
 
 # Tools the headless session may use without prompting. Pushing is done by this
-# script, not by the agent, so `git push` is deliberately absent.
-ALLOWED_TOOLS='Read,Write,Edit,Glob,Grep,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(npm run:*),Bash(npm test:*),Bash(npx vitest:*),Bash(npx playwright:*),Bash(gh issue view:*),Bash(gh issue comment:*)'
+# script, not by the agent, so `git push` is deliberately absent. `gh` is absent
+# too: the script fetches the issue text and passes it in the prompt.
+ALLOWED_TOOLS='Read,Write,Edit,Glob,Grep,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(npm run:*),Bash(npm test:*),Bash(npx vitest:*),Bash(npx playwright:*)'
 
 cd "$(git rev-parse --show-toplevel)"
 
@@ -33,6 +34,19 @@ if [[ -n "$(git status --porcelain)" ]]; then
   echo "Working tree is not clean; commit or stash first." >&2
   exit 1
 fi
+
+# Fetch an issue's title, labels, body and comments; retry, and fail if it comes back empty.
+fetch_issue() {
+  local n=$1 out attempt
+  for attempt in 1 2 3; do
+    if out=$(gh issue view "$n" --comments 2>/dev/null) && [[ -n "${out//[[:space:]]/}" ]]; then
+      printf '%s' "$out"
+      return 0
+    fi
+    sleep $((attempt * 5))
+  done
+  return 1
+}
 
 checks() {
   npm run typecheck && npm run lint && npm test
@@ -49,16 +63,22 @@ for n in "${ISSUES[@]}"; do
     continue
   fi
 
+  if ! issue_text=$(fetch_issue "$n"); then
+    echo "Could not fetch issue #$n from GitHub (empty or failed); stopping." >&2
+    exit 1
+  fi
+
   start_sha=$(git rev-parse HEAD)
 
   prompt="Implement GitHub issue #$n of this repo, following CLAUDE.md and tasks/TASK.md.
 
-1. Read it with: gh issue view $n --comments. Every checkbox in the issue is part of the work.
+1. The full issue text (title, body, comments) is below. Every checkbox in it is part of the work.
+   You have no GitHub access in this session; do not try to run gh.
 2. Use TDD where it fits: write or extend the failing test first, then the fix.
 3. Where the issue says 'decide and record', pick the option that best matches
    CLAUDE.md, PRD.md and CONTRACT-CHANGES.md and record the decision in CONTRACT-CHANGES.md
    (and docs/DESIGN.md for UI exceptions). If it is genuinely the user's call, do not guess:
-   leave the code unchanged, comment on the issue with the question, and exit non-zero.
+   leave the code unchanged, state the question in your final message, and exit non-zero.
 4. Keep the change scoped to this issue. Do not touch other open issues' items.
 5. Run typecheck, lint and the relevant test files while working; run the full server tests once at the end.
 6. Update tasks/TASK.md / docs if the issue changes anything they describe.
@@ -67,7 +87,11 @@ for n in "${ISSUES[@]}"; do
    'Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>'.
 8. Do NOT push. The caller pushes.
 
-Finish with one line: what changed and which tests cover it."
+Finish with one line: what changed and which tests cover it.
+
+----- ISSUE #$n (fetched by the caller) -----
+$issue_text
+----- END ISSUE -----"
 
   # Fresh process => fresh context for every issue.
   if ! claude -p "$prompt" --allowedTools "$ALLOWED_TOOLS" --permission-mode acceptEdits; then

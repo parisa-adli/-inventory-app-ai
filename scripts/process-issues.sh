@@ -39,7 +39,16 @@ fi
 fetch_issue() {
   local n=$1 out attempt
   for attempt in 1 2 3; do
-    if out=$(gh issue view "$n" --comments 2>/dev/null) && [[ -n "${out//[[:space:]]/}" ]]; then
+    # NB: `gh issue view --comments` prints ONLY the comments (nothing if there are none), so use --json.
+    if out=$(gh issue view "$n" --json number,title,state,labels,body,comments --jq       '"#\(.number) \(.title) [\(.state)]
+Labels: \(.labels | map(.name) | join(", "))
+
+\(.body)
+
+" + (.comments | map("--- comment by \(.author.login):
+\(.body)") | join("
+
+"))'       2>/dev/null) && [[ -n "${out//[[:space:]]/}" ]]; then
       printf '%s' "$out"
       return 0
     fi

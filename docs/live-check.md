@@ -4,13 +4,19 @@ Runs the email-auth and Telegram flows against the real bot and Brevo SMTP (issu
 transports, so this is the only place real delivery is confirmed. Mark each step `PASS` or `FAIL` in the Result
 column and file every failure as its own issue (label `needs-triage`, title `Live check: <step id> <what broke>`).
 
+## Mail mode: console log (no Brevo account yet)
+Real SMTP delivery is **deferred**. Leave `BREVO_SMTP_USER` / `BREVO_SMTP_PASS` unset: the server logs every mail as a
+`[email:dev] ... "<subject>" for <address>: <link>` line in its console and the API returns `devMailUrl`. Wherever a step
+below says a mail "arrives", read the link from that console line and open it in the browser; a mail that must **not**
+arrive means no `[email:dev]` line. Steps marked `(SMTP)` only prove real delivery and stay `SKIP` until Brevo is set up.
+
 ## Setup (once)
-1. `server/.env`: real `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_MODE=polling`, `BREVO_SMTP_USER`,
-   `BREVO_SMTP_PASS`, and `EMAIL_FROM` set to a **verified Brevo sender**. `CLIENT_URL=http://localhost:5173` so mailed links open the local client.
+1. `server/.env`: real `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_MODE=polling`, and (only for real
+   mail) `BREVO_SMTP_USER`, `BREVO_SMTP_PASS`, `EMAIL_FROM` set to a **verified Brevo sender**. `CLIENT_URL=http://localhost:5173` so mailed links open the local client.
 2. **One polling consumer per bot token.** Stop every other process using this token (a second `npm run dev`,
    a deployed instance, another machine) before starting. Two pollers split the updates and codes will randomly "not arrive".
-3. `npm run live-check -- --send-to <your inbox>` must print only `PASS`. It checks the token, the bot username,
-   that no webhook owns the bot, the SMTP login, and sends one test mail.
+3. `npm run live-check` must print no `FAIL`. It checks the token, the bot username and that no webhook owns the bot;
+   the SMTP part prints `SKIP` in log mode. With Brevo configured, add `-- --send-to <your inbox>` to also test the login and send one mail.
 4. `npm run seed`, then `npm run dev`. Watch the server log for `Telegram bot @<name>: polling` exactly once.
 5. Have ready: a Telegram account **not yet linked** to any user, two mailboxes you can read (`A`, `B`), and the admin
    login `admin@inventory.local` (see `tasks/TASK.md` > Dev Environment). Give the admin account mailbox `A` if you want to
@@ -23,7 +29,7 @@ profile submissions, QR/session valid 5 min, profile step 10 min.
 
 | ID | Step | Expect | Result |
 | --- | --- | --- | --- |
-| M1 | Register by email with mailbox `A` | 201; verification mail arrives in `A` from the verified sender; link opens `/verify-email/<token>` | |
+| M1 | Register by email with mailbox `A` | 201; verification mail arrives in `A` from the verified sender (SMTP); in log mode the link is in the server console; link opens `/verify-email/<token>` | |
 | M2 | Click the link | "Email verified"; user is Awaiting Approval; admin notification mail arrives (to the admin address) linking to `/users` | |
 | M3 | Click the same link again | Invalid or already-used link message | |
 | M4 | Admin approves on `/users` | User reloads and reaches the dashboard | |

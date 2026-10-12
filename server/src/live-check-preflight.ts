@@ -45,8 +45,12 @@ const checkTelegram = async () => {
 };
 
 const checkMail = async () => {
-  report(isSmtpConfigured(), 'Brevo SMTP credentials are set', `mode=${emailMode()}`);
-  if (!isSmtpConfigured()) return;
+  if (!isSmtpConfigured()) {
+    // No Brevo account yet: mails are logged to the server console as `[email:dev]` lines. Not a failure.
+    console.log(`SKIP  Brevo SMTP not configured (mode=${emailMode()}): mails are logged to the server console, real delivery is deferred`);
+    return;
+  }
+  report(true, 'Brevo SMTP credentials are set', `mode=${emailMode()}`);
   report(isSet(env.EMAIL_FROM) && !!env.EMAIL_FROM, 'EMAIL_FROM is set (must be a verified Brevo sender)', env.EMAIL_FROM ?? 'unset');
 
   const transport = nodemailer.createTransport({

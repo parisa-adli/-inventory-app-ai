@@ -302,6 +302,7 @@ router.post('/resend-verification', requireAuth, verificationMailLimiter, async 
 });
 
 // An unverified user fixes a typo in their address; the old verification link stops working
+// requireAuth only, on purpose: callers are pending users (no requireActive) acting on their own account (no role guard)
 router.patch('/email', requireAuth, verificationMailLimiter, validate(changeEmailSchema), async (req, res) => {
   assertEmailAvailable();
   const user = await User.findById(req.user!.id);

@@ -530,6 +530,15 @@ describe('PATCH /api/auth/email', () => {
     expect((await request(app).patch('/api/auth/email').send({ email: 'a@inventory.local' })).status).toBe(401);
   });
 
+  it('has no role or status guard: pending and active unverified users can both fix their address', async () => {
+    for (const status of ['pending', 'active']) {
+      await User.deleteMany({});
+      const cookies = await sessionFor({ status, role: 'staff' });
+      const res = await request(app).patch('/api/auth/email').set('Cookie', cookies).send({ email: `${status}@inventory.local` });
+      expect(res.status).toBe(200);
+    }
+  });
+
   it('changes the address, stays unverified and replaces the verification link', async () => {
     const cookies = await sessionFor();
     await request(app).post('/api/auth/resend-verification').set('Cookie', cookies);

@@ -36,6 +36,7 @@ Names below use this repo's actual names; the right-hand column of the first tab
 - Response `200 { user, devMailUrl? }`.
 - Shared: `changeEmailSchema`, response schema.
 - UI: "Change my email" action on the verify screen and Awaiting Approval.
+- Guard: `requireAuth` only; no `requireActive`, no `requireRole`. Decision: the route is for unverified users, who are `pending` (awaiting approval) by definition, so `requireActive` would lock out the exact users it exists for, and it is self-service on the caller's own account (`req.user.id`), so a role check has no meaning. It matches `/me` and `/resend-verification`. Abuse is bounded by the shared resend limit, the verified-user 403 and the duplicate check. Covered by the `PATCH /api/auth/email` tests (401 without a session, success for pending and active users).
 
 ## C4. `devMailUrl` (dev only)
 

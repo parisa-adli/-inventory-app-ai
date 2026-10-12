@@ -39,3 +39,13 @@ export class ConflictError extends AppError {
     super(409, 'CONFLICT', message);
   }
 }
+
+/** `retryAfter` (seconds) is only known to the Mongo limiter; the IP limiter sends the Retry-After header itself. */
+export class RateLimitedError extends AppError {
+  constructor(public retryAfter?: number) {
+    super(429, 'RATE_LIMITED', 'Too many requests. Please try again later.');
+  }
+}
+
+/** MongoDB's E11000: a unique index rejected the write. */
+export const isDuplicateKeyError = (err: unknown): boolean => (err as { code?: number } | null)?.code === 11000;

@@ -46,7 +46,7 @@ Names below use this repo's actual names; the right-hand column of the first tab
 
 ## C5. Rate limits: Mongo-backed, 429 with details
 
-- New model `RateLimitHit` (key, window start, count; TTL purge) and helper `rateLimit({ key, limit, windowMs })` in `middleware/rateLimit.ts`, replacing `express-rate-limit` for the **email** routes only (login, register, forgot, reset, resend, change-email). Telegram limiters are left as they are.
+- New model `RateLimitHit` (key, window start, count; TTL purge) and helper `createMongoLimiter({ key, limit, windowMs })` in `middleware/rateLimit.ts` (the `express-rate-limit` factory is `createIpLimiter`; every limit lives in `RATE_LIMITS`; both answer by passing a `RateLimitedError` to `errorHandler`, which adds `details.retryAfter` when set), replacing `express-rate-limit` for the **email** routes only (login, register, forgot, reset, resend, change-email). Telegram limiters are left as they are.
 - Limits: forgot 5 / IP / h and 3 / email / h; resend + change-email 3 / user / h combined. Login, register and reset keep their current numbers (10 / 15 min / IP) unless you give new ones.
 - Over the limit: `429 { error: { code: 'RATE_LIMITED', message, details: { retryAfter } } }` plus `Retry-After`; identical for real and unknown emails because the check runs before any lookup. Validation runs before the limiter (decision 7 below).
 - Client: "Try again in N min" and a disabled resend button.
@@ -60,7 +60,7 @@ Names below use this repo's actual names; the right-hand column of the first tab
 ## C7. Admin notification and email-failure tracking
 
 - `sendUserAwaitingApproval(to, adminName, userName, userEmail, url)` added to `services/email.ts`; `url` = `${CLIENT_URL}/users` (page arrives with Part D). Sent to every `active` admin on successful verify of a still-`pending` user; failures are swallowed.
-- `User` gets `lastEmailFailedAt: Date` and `lastEmailFailedType: 'verify-email' | 'reset-password' | 'link-telegram'`, set when a send fails and cleared on the next successful send. Not exposed in `AuthUser` / shared types for now. `signupWithTelegram` uses the same `sendTracked`, so Telegram signup and confirm-link mails are tracked too.
+- `User` gets `lastEmailFailedAt: Date` and `lastEmailFailedType: 'verify-email' | 'reset-password' | 'link-telegram'`, set when a send fails and cleared on the next successful send. Not exposed in `AuthUser` / shared types for now. `sendTracked` and `notifyAdminsAwaitingApproval` live in `services/accountMail.ts` (they touch `User`; `services/email.ts` only sends). A failed admin notice is logged, never silent. `signupWithTelegram` uses the same `sendTracked`, so Telegram signup and confirm-link mails are tracked too.
 
 ## C8. Client landing logic (no wire change)
 

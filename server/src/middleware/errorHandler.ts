@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
-import { AppError } from '../utils/errors.js';
+import { AppError, RateLimitedError } from '../utils/errors.js';
 
 export const errorHandler = (
   err: Error,
@@ -13,10 +13,12 @@ export const errorHandler = (
   if (!(err instanceof AppError) || err.statusCode >= 500) console.error('Error:', err);
 
   if (err instanceof AppError) {
+    const details = err instanceof RateLimitedError && err.retryAfter ? { retryAfter: err.retryAfter } : undefined;
     return res.status(err.statusCode).json({
       error: {
         code: err.code,
         message: err.message,
+        ...(details && { details }),
       },
     });
   }

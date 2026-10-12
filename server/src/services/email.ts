@@ -1,8 +1,5 @@
 import nodemailer, { type Transporter } from 'nodemailer';
-import type { Types } from 'mongoose';
-import type { EmailTokenType } from '@inventory/shared';
 import { env } from '../config/env.js';
-import { User } from '../models/User.js';
 import { AppError } from '../utils/errors.js';
 
 const PLACEHOLDER_PREFIX = 'your-';
@@ -148,27 +145,3 @@ export const sendUserAwaitingApprovalEmail = ({
   });
 
 export const pendingUsersUrl = (): string => `${env.CLIENT_URL}/users`;
-
-/**
- * Runs a send and records the outcome on the user: a failure sets lastEmailFailedAt/Type,
- * the next successful send clears them. The original error is rethrown.
- */
-export const sendTracked = async <T>(
-  userId: Types.ObjectId | string,
-  type: EmailTokenType,
-  send: () => Promise<T>
-): Promise<T> => {
-  try {
-    const result = await send();
-    await User.updateOne(
-      { _id: userId, lastEmailFailedAt: { $exists: true } },
-      { $unset: { lastEmailFailedAt: 1, lastEmailFailedType: 1 } }
-    );
-    return result;
-  } catch (err) {
-    await User.updateOne({ _id: userId }, { lastEmailFailedAt: new Date(), lastEmailFailedType: type }).catch(
-      () => {}
-    );
-    throw err;
-  }
-};

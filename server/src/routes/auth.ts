@@ -2,7 +2,6 @@ import { Router, type Request } from 'express';
 import { env } from '../config/env.js';
 import {
   ACCOUNT_STATUS,
-  USER_ROLES,
   changeEmailSchema,
   forgotPasswordSchema,
   loginSchema,
@@ -28,12 +27,10 @@ import {
 import { validate } from '../middleware/validate.js';
 import { EmailToken } from '../models/EmailToken.js';
 import { User } from '../models/User.js';
+import { notifyAdminsAwaitingApproval, sendTracked } from '../services/accountMail.js';
 import {
   assertEmailAvailable,
-  pendingUsersUrl,
   sendPasswordResetEmail,
-  sendTracked,
-  sendUserAwaitingApprovalEmail,
   sendVerificationEmail,
   type DeliveryResult,
 } from '../services/email.js';
@@ -63,7 +60,7 @@ import {
 } from '../services/telegramAuth.js';
 import { toAuthUser } from '../utils/authUser.js';
 import { randomToken } from '../utils/crypto.js';
-import { AppError, ForbiddenError, UnauthorizedError } from '../utils/errors.js';
+import { AppError, ForbiddenError, UnauthorizedError, isDuplicateKeyError } from '../utils/errors.js';
 
 const router = Router();
 
@@ -75,20 +72,11 @@ const DUMMY_HASH = hashPassword(randomToken());
 /** `{ devMailUrl }` when the mail was only logged to the console (dev), otherwise nothing. */
 const devMail = (sent?: DeliveryResult) => (sent?.devMailUrl ? { devMailUrl: sent.devMailUrl } : {});
 
-/** Fire-and-forget: tells every active admin that a user can now be approved. */
-const notifyAdminsAwaitingApproval = async (user: { name: string; email: string }) => {
-  const admins = await User.find({ role: USER_ROLES.ADMIN, status: ACCOUNT_STATUS.ACTIVE });
-  await Promise.allSettled(
-    admins.map((admin) =>
-      sendUserAwaitingApprovalEmail({
-        to: admin.email,
-        adminName: admin.name,
-        userName: user.name,
-        userEmail: user.email,
-        url: pendingUsersUrl(),
-      })
-    )
-  );
+/** The signed-in user's document; a session can outlive its account. */
+const currentUser = async (req: Request) => {
+  const user = await User.findById(req.user!.id);
+  if (!user) throw new UnauthorizedError('User no longer exists');
+  return user;
 };
 
 /** The background half of POST /forgot-password. Never throws: the caller already got its 204. */
@@ -115,7 +103,7 @@ router.post('/register', registerLimiter, validate(registerSchema), async (req, 
   try {
     user = await User.create({ name, email, passwordHash: await hashPassword(password) });
   } catch (err) {
-    if ((err as { code?: number }).code === 11000) throw duplicateEmailError();
+    if (isDuplicateKeyError(err)) throw duplicateEmailError();
     throw err;
   }
 
@@ -142,10 +130,12 @@ router.get('/verify-email/:token', async (req, res) => {
   switch (token.type) {
     case 'verify-email': {
       // Returns the document as it was before the update
-      const before = await User.findByIdAndUpdate(token.user, { emailVerified: true });
-      if (!before) throw invalidTokenError();
-      if (!before.emailVerified && before.status === ACCOUNT_STATUS.PENDING) {
-        void notifyAdminsAwaitingApproval(before).catch(() => {});
+      const userBeforeUpdate = await User.findByIdAndUpdate(token.user, { emailVerified: true });
+      if (!userBeforeUpdate) throw invalidTokenError();
+      if (!userBeforeUpdate.emailVerified && userBeforeUpdate.status === ACCOUNT_STATUS.PENDING) {
+        notifyAdminsAwaitingApproval(userBeforeUpdate).catch((err) => {
+          console.error('Admin approval notice failed:', err instanceof Error ? err.message : 'unknown error');
+        });
       }
       res.json({ verified: true, type: 'verify-email' });
       return;
@@ -162,7 +152,7 @@ router.get('/verify-email/:token', async (req, res) => {
         const user = await User.findByIdAndUpdate(token.user, { telegramChatId: chatId });
         if (!user) throw invalidTokenError();
       } catch (err) {
-        if ((err as { code?: number }).code === 11000) throw invalidTokenError();
+        if (isDuplicateKeyError(err)) throw invalidTokenError();
         throw err;
       }
       res.json({ verified: true, type: 'link-telegram' });
@@ -287,16 +277,13 @@ router.post('/logout', async (req, res) => {
 });
 
 router.get('/me', requireAuth, async (req, res) => {
-  const user = await User.findById(req.user!.id);
-  if (!user) throw new UnauthorizedError('User no longer exists');
-  res.json(toAuthUser(user));
+  res.json(toAuthUser(await currentUser(req)));
 });
 
 // Resend and change-email share one budget (3 per user per hour)
 router.post('/resend-verification', requireAuth, verificationMailLimiter, async (req, res) => {
   assertEmailAvailable();
-  const user = await User.findById(req.user!.id);
-  if (!user) throw new UnauthorizedError('User no longer exists');
+  const user = await currentUser(req);
 
   let sent;
   if (!user.emailVerified) {
@@ -311,8 +298,7 @@ router.post('/resend-verification', requireAuth, verificationMailLimiter, async 
 // requireAuth only, on purpose: callers are pending users (no requireActive) acting on their own account (no role guard)
 router.patch('/email', requireAuth, validate(changeEmailSchema), verificationMailLimiter, async (req, res) => {
   assertEmailAvailable();
-  const user = await User.findById(req.user!.id);
-  if (!user) throw new UnauthorizedError('User no longer exists');
+  const user = await currentUser(req);
   if (user.emailVerified) throw new ForbiddenError('Your email address is already verified.');
 
   const { email } = req.body;
@@ -322,7 +308,7 @@ router.patch('/email', requireAuth, validate(changeEmailSchema), verificationMai
     try {
       await user.save();
     } catch (err) {
-      if ((err as { code?: number }).code === 11000) throw duplicateEmailError();
+      if (isDuplicateKeyError(err)) throw duplicateEmailError();
       throw err;
     }
   }

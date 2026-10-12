@@ -1,7 +1,8 @@
 import { EmailToken } from '../models/EmailToken.js';
 import type { HydratedDocument } from 'mongoose';
 import { User, type UserDoc } from '../models/User.js';
-import { sendTelegramLinkEmail, sendTracked, sendVerificationEmail } from './email.js';
+import { sendTracked } from './accountMail.js';
+import { sendTelegramLinkEmail, sendVerificationEmail } from './email.js';
 import { createEmailToken, discardPendingTokens } from './emailToken.js';
 
 export type TelegramSignupOutcome =

@@ -2,9 +2,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import { env } from '../config/env.js';
-import { RATE_LIMITS, createLimiter } from './rateLimit.js';
+import { errorHandler } from './errorHandler.js';
+import { RATE_LIMITS, createIpLimiter } from './rateLimit.js';
 
-describe('createLimiter', () => {
+describe('createIpLimiter', () => {
   beforeAll(() => {
     env.FORCE_RATE_LIMIT = true; // limiters are skipped under NODE_ENV=test otherwise
   });
@@ -14,9 +15,10 @@ describe('createLimiter', () => {
 
   it('answers 429 RATE_LIMITED once the limit is exceeded', async () => {
     const app = express();
-    app.post('/limited', createLimiter(2), (_req, res) => {
+    app.post('/limited', createIpLimiter(2), (_req, res) => {
       res.json({ ok: true });
     });
+    app.use(errorHandler);
 
     expect((await request(app).post('/limited')).status).toBe(200);
     expect((await request(app).post('/limited')).status).toBe(200);

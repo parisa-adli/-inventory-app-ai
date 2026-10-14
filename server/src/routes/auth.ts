@@ -1,15 +1,11 @@
 import { Router, type Request } from 'express';
-import { env } from '../config/env.js';
 import {
-  ACCOUNT_STATUS,
   changeEmailSchema,
   changePasswordSchema,
   forgotPasswordSchema,
   loginSchema,
   registerSchema,
   resetPasswordSchema,
-  telegramCompleteSchema,
-  telegramVerifySchema,
 } from '@inventory/shared';
 import { signedIn } from '../middleware/guards.js';
 import {
@@ -19,57 +15,34 @@ import {
   loginLimiter,
   registerLimiter,
   resetPasswordLimiter,
-  telegramCompleteLimiter,
-  telegramResendLimiter,
-  telegramStartLimiter,
-  telegramStatusLimiter,
-  telegramVerifyLimiter,
   verificationMailLimiter,
 } from '../middleware/rateLimit.js';
 import { validate } from '../middleware/validate.js';
-import { EmailToken } from '../models/EmailToken.js';
 import { User } from '../models/User.js';
-import { notifyAdminsAwaitingApproval, sendTracked } from '../services/accountMail.js';
 import {
-  assertEmailAvailable,
-  sendPasswordResetEmail,
-  sendVerificationEmail,
-  type DeliveryResult,
-} from '../services/email.js';
-import {
-  consumeEmailToken,
-  createEmailToken,
-  discardPendingTokens,
-  invalidTokenError,
-} from '../services/emailToken.js';
+  authenticate,
+  changePassword,
+  changeUnverifiedEmail,
+  confirmEmailToken,
+  issueResetLink,
+  registerUser,
+  resendVerification,
+  resetPassword,
+} from '../services/authAccount.js';
+import { assertEmailAvailable, type DeliveryResult } from '../services/email.js';
 import {
   REFRESH_COOKIE,
   clearAuthCookies,
   issueSession,
-  revokeAllUserTokens,
   revokeRefreshToken,
   rotateRefreshToken,
 } from '../services/jwt.js';
-import { hashPassword, verifyPassword } from '../services/password.js';
-import { assertTelegramAvailable, telegramDeepLink } from '../services/telegram.js';
-import {
-  completeTelegramSignup,
-  createAuthSession,
-  discardAuthSession,
-  getAuthSessionStatus,
-  resendOtp,
-  verifyOtp,
-} from '../services/telegramAuth.js';
 import { toAuthUser } from '../utils/authUser.js';
-import { randomToken } from '../utils/crypto.js';
-import { AppError, ForbiddenError, UnauthorizedError, isDuplicateKeyError } from '../utils/errors.js';
+import { UnauthorizedError } from '../utils/errors.js';
+import telegramAuthRouter from './telegramAuth.js';
 
+// Account rules live in services/authAccount.ts; this router only guards, calls and shapes responses.
 const router = Router();
-
-const duplicateEmailError = () => new AppError(409, 'DUPLICATE_EMAIL', 'This email is already registered.');
-
-// Compared against when the email is unknown, so response time does not reveal which emails exist.
-const DUMMY_HASH = hashPassword(randomToken());
 
 /** `{ devMailUrl }` when the mail was only logged to the console (dev), otherwise nothing. */
 const devMail = (sent?: DeliveryResult) => (sent?.devMailUrl ? { devMailUrl: sent.devMailUrl } : {});
@@ -81,45 +54,11 @@ const currentUser = async (req: Request) => {
   return user;
 };
 
-/** The background half of POST /forgot-password. Never throws: the caller already got its 204. */
-const issueResetLink = async (email: string) => {
-  try {
-    const user = await User.findOne({ email });
-    if (!user) return;
-    await discardPendingTokens(user._id, 'reset-password');
-    const token = await createEmailToken(user._id, 'reset-password');
-    await sendTracked(user._id, 'reset-password', () => sendPasswordResetEmail(user.email, user.name, token));
-  } catch (err) {
-    console.error('Password reset email failed:', err instanceof Error ? err.message : 'unknown error');
-  }
-};
+router.use('/telegram', telegramAuthRouter);
 
 router.post('/register', registerLimiter, validate(registerSchema), async (req, res) => {
   assertEmailAvailable();
-  const { name, email, password } = req.body;
-
-  // Registration deliberately reveals duplicates (PRD §3)
-  if (await User.exists({ email })) throw duplicateEmailError();
-
-  let user;
-  try {
-    user = await User.create({ name, email, passwordHash: await hashPassword(password) });
-  } catch (err) {
-    if (isDuplicateKeyError(err)) throw duplicateEmailError();
-    throw err;
-  }
-
-  let sent;
-  try {
-    const token = await createEmailToken(user._id, 'verify-email');
-    sent = await sendVerificationEmail(user.email, user.name, token);
-  } catch (err) {
-    // No unverifiable account may be left behind when the email could not go out
-    await EmailToken.deleteMany({ user: user._id });
-    await User.deleteOne({ _id: user._id });
-    throw err;
-  }
-
+  const sent = await registerUser(req.body);
   res.status(201).json({
     message: 'Account created. Check your email to verify your address.',
     ...devMail(sent),
@@ -127,134 +66,15 @@ router.post('/register', registerLimiter, validate(registerSchema), async (req, 
 });
 
 router.get('/verify-email/:token', async (req, res) => {
-  const token = await consumeEmailToken(req.params.token, ['verify-email', 'link-telegram']);
-
-  switch (token.type) {
-    case 'verify-email': {
-      // Returns the document as it was before the update
-      const userBeforeUpdate = await User.findByIdAndUpdate(token.user, { emailVerified: true });
-      if (!userBeforeUpdate) throw invalidTokenError();
-      if (!userBeforeUpdate.emailVerified && userBeforeUpdate.status === ACCOUNT_STATUS.PENDING) {
-        notifyAdminsAwaitingApproval(userBeforeUpdate).catch((err) => {
-          console.error('Admin approval notice failed:', err instanceof Error ? err.message : 'unknown error');
-        });
-      }
-      res.json({ verified: true, type: 'verify-email' });
-      return;
-    }
-    case 'link-telegram': {
-      // Attaches the chat only; confirming a Telegram link does not verify the email (PRD §3)
-      const chatId = token.telegramChatId;
-      if (!chatId) throw invalidTokenError();
-      // The chat may have been linked to another account since this link was emailed
-      if (await User.exists({ telegramChatId: chatId, _id: { $ne: token.user } })) throw invalidTokenError();
-
-      try {
-        // An already linked, different chat is replaced
-        const user = await User.findByIdAndUpdate(token.user, { telegramChatId: chatId });
-        if (!user) throw invalidTokenError();
-      } catch (err) {
-        if (isDuplicateKeyError(err)) throw invalidTokenError();
-        throw err;
-      }
-      res.json({ verified: true, type: 'link-telegram' });
-      return;
-    }
-    default:
-      throw invalidTokenError();
-  }
+  const type = await confirmEmailToken(req.params.token);
+  res.json({ verified: true, type });
 });
 
 router.post('/login', loginLimiter, validate(loginSchema), async (req, res) => {
-  const { email, password } = req.body;
-
-  const user = await User.findOne({ email });
-  const passwordOk = await verifyPassword(password, user?.passwordHash ?? (await DUMMY_HASH));
-  if (!user || !user.passwordHash || !passwordOk) {
-    throw new AppError(401, 'INVALID_CREDENTIALS', 'Invalid email or password.');
-  }
-
-  // Only reached with a correct password, so the status is not leaked to strangers
-  if (user.status === ACCOUNT_STATUS.REJECTED) {
-    throw new AppError(403, 'ACCOUNT_REJECTED', 'Your account has been rejected or revoked.');
-  }
-
+  const user = await authenticate(req.body.email, req.body.password);
   // Pending users still get a session; the client routes them by /auth/me
   await issueSession(res, user);
   res.json({ user: toAuthUser(user) });
-});
-
-// Telegram sign in / sign up: QR -> code from the bot -> code on the website (-> username + email if new).
-// The browser is identified by an httpOnly cookie holding the raw session id; the nonce only travels in the deep link.
-const TELEGRAM_SESSION_COOKIE = 'tg_auth_session';
-const TELEGRAM_COOKIE_PATH = '/api/auth/telegram';
-const TELEGRAM_COOKIE_MAX_AGE_MS = 15 * 60_000;
-
-const telegramCookieOptions = {
-  httpOnly: true,
-  secure: true,
-  sameSite: 'lax',
-  path: TELEGRAM_COOKIE_PATH,
-  ...(env.COOKIE_DOMAIN ? { domain: env.COOKIE_DOMAIN } : {}),
-} as const;
-
-const telegramSessionId = (req: Request): string | undefined => req.cookies?.[TELEGRAM_SESSION_COOKIE];
-
-/** A rejected account never gets a session, whichever way it arrives. */
-const assertNotRejected = (user: { status: string }) => {
-  if (user.status === ACCOUNT_STATUS.REJECTED) {
-    throw new AppError(403, 'ACCOUNT_REJECTED', 'Your account has been rejected or revoked.');
-  }
-};
-
-router.post('/telegram/start', telegramStartLimiter, async (req, res) => {
-  assertTelegramAvailable();
-  const previous = telegramSessionId(req);
-  if (previous) await discardAuthSession(previous);
-
-  const { sessionId, nonce, expiresAt } = await createAuthSession();
-  res.cookie(TELEGRAM_SESSION_COOKIE, sessionId, { ...telegramCookieOptions, maxAge: TELEGRAM_COOKIE_MAX_AGE_MS });
-  res.status(201).json({ deepLink: telegramDeepLink(nonce), expiresAt: expiresAt.toISOString() });
-});
-
-router.get('/telegram/status', telegramStatusLimiter, async (req, res) => {
-  assertTelegramAvailable();
-  res.json(await getAuthSessionStatus(telegramSessionId(req)));
-});
-
-router.post('/telegram/verify', telegramVerifyLimiter, validate(telegramVerifySchema), async (req, res) => {
-  assertTelegramAvailable();
-  const result = await verifyOtp(telegramSessionId(req), req.body.code);
-  if (result.status === 'AWAITING_PROFILE') {
-    res.json({ status: 'AWAITING_PROFILE', prefillDisplayName: result.prefillDisplayName });
-    return;
-  }
-
-  assertNotRejected(result.user);
-  // Pending users still get a session; the client routes them by /auth/me
-  await issueSession(res, result.user);
-  res.clearCookie(TELEGRAM_SESSION_COOKIE, telegramCookieOptions);
-  res.json({ status: 'COMPLETED', user: toAuthUser(result.user) });
-});
-
-router.post('/telegram/resend', telegramResendLimiter, async (req, res) => {
-  assertTelegramAvailable();
-  res.json(await resendOtp(telegramSessionId(req)));
-});
-
-router.post('/telegram/complete', telegramCompleteLimiter, validate(telegramCompleteSchema), async (req, res) => {
-  assertTelegramAvailable();
-  assertEmailAvailable();
-  const result = await completeTelegramSignup(telegramSessionId(req), req.body);
-
-  res.clearCookie(TELEGRAM_SESSION_COOKIE, telegramCookieOptions);
-  if (result.outcome === 'created') {
-    await issueSession(res, result.user);
-    res.status(201).json({ status: 'COMPLETED', outcome: 'created', user: toAuthUser(result.user) });
-    return;
-  }
-  // 'link-sent': the email belongs to an account; the owner confirms by link. Nobody is signed in.
-  res.json({ status: 'COMPLETED', outcome: result.outcome });
 });
 
 router.post('/refresh', async (req, res) => {
@@ -285,43 +105,14 @@ router.get('/me', ...signedIn, async (req, res) => {
 // Resend and change-email share one budget (3 per user per hour)
 router.post('/resend-verification', ...signedIn, verificationMailLimiter, async (req, res) => {
   assertEmailAvailable();
-  const user = await currentUser(req);
-
-  let sent;
-  if (!user.emailVerified) {
-    await discardPendingTokens(user._id, 'verify-email');
-    const token = await createEmailToken(user._id, 'verify-email');
-    sent = await sendTracked(user._id, 'verify-email', () => sendVerificationEmail(user.email, user.name, token));
-  }
-  res.json(devMail(sent));
+  res.json(devMail(await resendVerification(await currentUser(req))));
 });
 
-// An unverified user fixes a typo in their address; the old verification link stops working
 // signedIn only, on purpose: callers are unverified, pending users acting on their own account (no role guard)
 router.patch('/email', ...signedIn, validate(changeEmailSchema), verificationMailLimiter, async (req, res) => {
   assertEmailAvailable();
   const user = await currentUser(req);
-  if (user.emailVerified) throw new ForbiddenError('Your email address is already verified.');
-
-  const { email } = req.body;
-  if (email !== user.email) {
-    if (await User.exists({ email })) throw duplicateEmailError();
-    user.email = email;
-    try {
-      await user.save();
-    } catch (err) {
-      if (isDuplicateKeyError(err)) throw duplicateEmailError();
-      throw err;
-    }
-  }
-
-  await discardPendingTokens(user._id, 'verify-email');
-  // A Telegram link mailed to the old address must not be confirmable from that mailbox
-  await discardPendingTokens(user._id, 'link-telegram');
-  const token = await createEmailToken(user._id, 'verify-email');
-  const sent = await sendTracked(user._id, 'verify-email', () =>
-    sendVerificationEmail(user.email, user.name, token)
-  );
+  const sent = await changeUnverifiedEmail(user, req.body.email);
   res.json({ user: toAuthUser(user), ...devMail(sent) });
 });
 
@@ -342,35 +133,17 @@ router.post(
 );
 
 router.post('/reset-password/:token', resetPasswordLimiter, validate(resetPasswordSchema), async (req, res) => {
-  // Hash before spending the token, so a failure here cannot burn the user's only link
-  const passwordHash = await hashPassword(req.body.password);
-  const token = await consumeEmailToken(String(req.params.token), ['reset-password']);
-
-  // A password the user chose themselves also ends an admin-issued temporary one
-  const user = await User.findByIdAndUpdate(token.user, { passwordHash, mustChangePassword: false });
-  if (!user) throw invalidTokenError();
-  await revokeAllUserTokens(String(user._id));
-
+  await resetPassword(String(req.params.token), req.body.password);
   // No session: the user signs in with the new password
   res.status(204).end();
 });
 
 // signedIn only: this is the way out of PASSWORD_CHANGE_REQUIRED, and gated (pending) users may change
-// their own password too. A wrong current password is 400, not 401, so the client does not try a refresh.
+// their own password too.
 router.post('/password', ...signedIn, changePasswordLimiter, validate(changePasswordSchema), async (req, res) => {
   const user = await currentUser(req);
-  const { currentPassword, newPassword } = req.body;
-
-  if (!user.passwordHash || !(await verifyPassword(currentPassword, user.passwordHash))) {
-    throw new AppError(400, 'INVALID_CREDENTIALS', 'Your current password is incorrect.');
-  }
-
-  user.passwordHash = await hashPassword(newPassword);
-  user.mustChangePassword = false;
-  await user.save();
-
-  // Sign out every other device (they may hold the temporary password's sessions), keep this one
-  await revokeAllUserTokens(String(user._id));
+  await changePassword(user, req.body.currentPassword, req.body.newPassword);
+  // Every other device was signed out; this one gets a fresh session
   await issueSession(res, user);
   res.json({ user: toAuthUser(user) });
 });

@@ -11,7 +11,7 @@ Tokens live in `app/globals.css` (shadcn CSS variables). **Use the semantic Tail
 ## 1. Design language
 
 - **Vibe:** monochrome, minimal, neutral grays, generous whitespace.
-- **Theme:** light by default, with dark mode support (theme toggle in the header). Every UI must work in both modes. This works automatically if you use only semantic tokens.
+- **Theme:** light by default, with dark mode support (theme toggle in the top bar). Every UI must work in both modes. This works automatically if you use only semantic tokens.
 - **Depth:** almost flat. Use borders to separate surfaces. Use shadows only at shadcn's defaults: `shadow-xs` on inputs and outline buttons, `shadow-sm` on the active tab and on popovers.
 - **Color:** the only strong color is the near-black primary. Everything else is gray. The one exception is status colors (see §2.2).
 
@@ -58,11 +58,11 @@ Dark-mode values come from shadcn's neutral `.dark` block in `globals.css`. Do n
   - `rounded-xl` for cards and the table wrapper.
   - `rounded-full` for badges and chips.
   - Never use arbitrary radius values.
-- **App shell:** a top navbar (not a sidebar).
-  - Height is about 56px, with `border-b`.
-  - On the left: the logo (lucide icon + "Inventory", `font-semibold`), then the nav links.
-  - Nav links are `text-sm text-muted-foreground`. The active link is `bg-muted text-foreground font-medium rounded-md px-3 py-1.5`.
-  - On the right: the user email (muted), a role badge (outline), the theme toggle and the logout button. The toggle and logout are ghost icon buttons.
+- **App shell:** a left sidebar plus a top bar (see `docs/design/dashboard.png`; built in `client/src/app/layouts/AppNav.tsx`).
+  - Sidebar: `w-64`, `border-r bg-muted/40`, full height and sticky. On top, a 56px logo row (`h-14 border-b`): the lucide `Boxes` icon + "Inventory Manager", `text-lg font-semibold`, linking home.
+  - Nav links stack vertically below it, each with a `size-4` lucide icon: `gap-3 rounded-md px-3 py-2 text-sm text-foreground`, hover `bg-muted`. Inactive links use the same text color as the active one; the active link is set apart by `bg-muted font-medium`.
+  - Top bar: `h-14 border-b`. On the right is one account control (see `docs/design/avatar.png`): a ghost button with an initials `Avatar`, the name and a `ChevronDown`, which gets `bg-accent` while open. It opens a `DropdownMenu` with the email (muted), a separator, then Profile (`UserRound`) and Sign out (`LogOut`). Signed out, it shows a ghost "Log in" link with a `LogIn` icon. The theme toggle is not built yet.
+  - Below `md`: the sidebar is hidden. The top bar shows a ghost `Menu` icon button, the "Inventory Manager" text (`text-base font-semibold`, no icon, links home) and the account control (avatar only). The same sidebar content opens in a left `Sheet` (`w-72`), which closes on navigation, backdrop click and Escape.
 - **Content container:** `mx-auto max-w-5xl px-4 py-8`.
 - **Page header:** H1 plus a muted subtitle (`text-sm text-muted-foreground`) on the left, and the primary action on the right (`flex items-start justify-between`).
 - **Auth pages:** a single centered `Card` (`max-w-sm w-full`).

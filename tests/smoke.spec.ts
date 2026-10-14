@@ -324,11 +324,59 @@ test.describe('client smoke', () => {
     await expect(page.getByRole('heading', { level: 2, name: 'Dashboard' })).toBeVisible();
 
     const nav = page.getByRole('navigation');
-    for (const name of ['Dashboard', 'Products', 'Categories', 'Suppliers']) {
+    for (const name of ['Dashboard', 'Products', 'Categories', 'Suppliers', 'Movements', 'Users']) {
       await expect(nav.getByRole('link', { name })).toBeVisible();
     }
+    // Sidebar: one icon per link
+    await expect(nav.locator('a svg')).toHaveCount(6);
+    await expect(page.getByRole('link', { name: 'Inventory Manager' })).toHaveAttribute('href', '/');
+    await expect(page.getByRole('button', { name: 'Open menu' })).toBeHidden();
+
+    await page.getByRole('button', { name: 'Account' }).click();
+    await expect(page.getByRole('menu').getByText('a@x.com')).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Profile' })).toHaveAttribute('href', '/profile');
+    await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeVisible();
 
     expect(errors).toEqual([]);
+  });
+
+  test('mobile header moves the nav into a drawer', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 800 });
+    await page.route('**/api/auth/me', (route) =>
+      route.fulfill({
+        json: { id: '1', name: 'Test Admin', email: 'a@x.com', role: 'admin', status: 'active', emailVerified: true },
+      })
+    );
+    await page.route('**/api/users?*', (route) =>
+      route.fulfill({ json: { items: [], page: 1, limit: 10, total: 0, totalPages: 1 } })
+    );
+
+    await page.goto('/');
+    await expect(page.getByRole('navigation')).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Account' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Inventory Manager' })).toHaveAttribute('href', '/');
+
+    const openMenu = page.getByRole('button', { name: 'Open menu' });
+    const drawer = page.getByRole('dialog');
+
+    // Closes on navigation
+    await openMenu.click();
+    await expect(drawer.getByRole('link', { name: 'Movements' })).toBeVisible();
+    await drawer.getByRole('link', { name: 'Users' }).click();
+    await expect(drawer).toBeHidden();
+    await expect(page).toHaveURL(/\/users$/);
+
+    // Closes on Escape
+    await openMenu.click();
+    await expect(drawer).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(drawer).toBeHidden();
+
+    // Closes on a backdrop click (right of the 256px drawer)
+    await openMenu.click();
+    await expect(drawer).toBeVisible();
+    await page.mouse.click(370, 400);
+    await expect(drawer).toBeHidden();
   });
 
   test('uses the shadcn theme variables', async ({ page }) => {

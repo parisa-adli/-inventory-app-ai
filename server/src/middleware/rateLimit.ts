@@ -12,6 +12,7 @@ export const RATE_LIMITS = {
   login: 10,
   register: 10,
   resetPassword: 10,
+  changePassword: 10,
   telegramStart: 10,
   // The browser polls status every 2 s while the QR code is shown (5 min = ~150 requests)
   telegramStatus: 600,
@@ -44,6 +45,7 @@ export const createIpLimiter = (max: number, windowMs = WINDOW_MS) =>
 export const loginLimiter = createIpLimiter(RATE_LIMITS.login);
 export const registerLimiter = createIpLimiter(RATE_LIMITS.register);
 export const resetPasswordLimiter = createIpLimiter(RATE_LIMITS.resetPassword);
+export const changePasswordLimiter = createIpLimiter(RATE_LIMITS.changePassword);
 export const telegramStartLimiter = createIpLimiter(RATE_LIMITS.telegramStart);
 export const telegramStatusLimiter = createIpLimiter(RATE_LIMITS.telegramStatus);
 export const telegramVerifyLimiter = createIpLimiter(RATE_LIMITS.telegramVerify);

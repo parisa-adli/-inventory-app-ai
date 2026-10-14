@@ -30,7 +30,8 @@ For any UI work, read and follow docs/DESIGN.md first (shadcn/ui; screenshots in
   /config         (env.ts validated env, load-env.ts, database.ts)
   /models         (Mongoose schemas: User, EmailToken, AuthSession, RefreshToken, ...)
   /routes         (Express routers, mounted from routes/index.ts under /api)
-  /middleware     (auth: requireAuth/requireActive, roleGuard: requireRole, validate, errorHandler)
+  /middleware     (one guard per file: requireAuth, requireVerified, requireActive, requirePasswordChanged, requireRole;
+                   guards.ts composes them as signedIn / authenticated / withRole / adminOnly; validate, errorHandler, rateLimit)
   /services       (jwt, password, email, otp, telegram, ...)
   /utils          (errors: AppError + subclasses, crypto: sha256/randomToken/randomOtp/hmacSha256/safeEqual; every secret and code is generated here)
   /types          (express.d.ts adds req.user)

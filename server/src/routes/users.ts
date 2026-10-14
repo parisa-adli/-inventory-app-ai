@@ -1,135 +1,103 @@
 import { Router } from 'express';
 import { isValidObjectId } from 'mongoose';
-import { ACCOUNT_STATUS, USER_ROLES, listUsersQuerySchema } from '@inventory/shared';
-import type { AdminUser, UsersPage } from '@inventory/shared';
-import { requireActive, requireAuth } from '../middleware/auth.js';
-import { requireRole } from '../middleware/roleGuard.js';
+import { ACCOUNT_STATUS, listUsersQuerySchema, updateUserSchema } from '@inventory/shared';
+import type { TempPasswordResponse } from '@inventory/shared';
+import { adminOnly } from '../middleware/guards.js';
+import { validate } from '../middleware/validate.js';
 import { User } from '../models/User.js';
-import { revokeAllUserTokens } from '../services/jwt.js';
+import {
+  issueTemporaryPassword,
+  listUsers,
+  resendVerificationFor,
+  toAdminUser,
+  unlinkTelegram,
+  updateUser,
+  verifyEmailManually,
+} from '../services/userAdmin.js';
 import { AppError, NotFoundError, ValidationError } from '../utils/errors.js';
 
 const router = Router();
 
 // Admin user management. requireAuth re-reads the user, so a demoted, rejected or revoked admin
-// loses access on the next request.
-router.use(requireAuth, requireActive, requireRole(USER_ROLES.ADMIN));
-
-interface UserLike {
-  _id: unknown;
-  name: string;
-  email: string;
-  role: AdminUser['role'];
-  status: AdminUser['status'];
-  emailVerified: boolean;
-  telegramChatId?: string | null;
-  createdAt: Date;
-}
-
-const toAdminUser = (user: UserLike): AdminUser => ({
-  id: String(user._id),
-  name: user.name,
-  email: user.email,
-  role: user.role,
-  status: user.status,
-  emailVerified: user.emailVerified,
-  telegramLinked: Boolean(user.telegramChatId),
-  createdAt: user.createdAt.toISOString(),
-});
+// loses access on the next request. The rules live in services/userAdmin.ts.
+router.use(...adminOnly);
 
 const parseId = (raw: string): string => {
   if (!isValidObjectId(raw)) throw new ValidationError('Invalid user id');
   return raw;
 };
 
+const actorId = (req: { user?: { id: string } }) => req.user!.id;
+
 router.get('/', async (req, res) => {
-  const { status, page, limit } = listUsersQuerySchema.parse(req.query);
-  const filter = status ? { status } : {};
+  res.json(await listUsers(listUsersQuerySchema.parse(req.query)));
+});
 
-  const [total, users] = await Promise.all([
-    User.countDocuments(filter),
-    User.find(filter)
-      .sort({ createdAt: -1, _id: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit),
-  ]);
+router.patch('/:id', validate(updateUserSchema), async (req, res) => {
+  const user = await updateUser(actorId(req), parseId(String(req.params.id)), req.body);
+  res.json(toAdminUser(user));
+});
 
-  const body: UsersPage = {
-    items: users.map(toAdminUser),
-    page,
-    limit,
-    total,
-    totalPages: Math.max(1, Math.ceil(total / limit)),
-  };
+router.post('/:id/password/temp', async (req, res) => {
+  const temporaryPassword = await issueTemporaryPassword(parseId(String(req.params.id)));
+  // Shown once: no cache may keep it
+  res.set('Cache-Control', 'no-store');
+  const body: TempPasswordResponse = { temporaryPassword };
   res.json(body);
 });
 
-/** Why a pending-only transition matched nothing: no such user, or the user is no longer pending. */
-const explainRefusal = async (id: string, action: string): Promise<AppError> => {
+router.post('/:id/email/verify-manually', async (req, res) => {
+  res.json(toAdminUser(await verifyEmailManually(parseId(String(req.params.id)))));
+});
+
+router.post('/:id/email/verify/resend', async (req, res) => {
+  const sent = await resendVerificationFor(parseId(String(req.params.id)));
+  res.json(sent.devMailUrl ? { devMailUrl: sent.devMailUrl } : {});
+});
+
+router.delete('/:id/credentials/telegram', async (req, res) => {
+  res.json(toAdminUser(await unlinkTelegram(parseId(String(req.params.id)))));
+});
+
+// The original single-purpose routes, kept for the shipped Admin Users page. They keep their own
+// error codes for "wrong starting status" and self-revoke, then run the same rules as PATCH /:id.
+
+const currentStatus = async (id: string) => {
   const user = await User.findById(id).select('status');
-  if (!user) return new NotFoundError('User not found');
-  return new AppError(409, 'NOT_PENDING', `Only pending users can be ${action} (this user is ${user.status}).`);
+  if (!user) throw new NotFoundError('User not found');
+  return user.status;
 };
 
 router.patch('/:id/activate', async (req, res) => {
-  const id = parseId(req.params.id);
-
-  // One conditional update, so two admins clicking at once cannot both "win" and a user whose
-  // email is not verified is never activated, whatever the client sent.
-  const user = await User.findOneAndUpdate(
-    { _id: id, status: ACCOUNT_STATUS.PENDING, emailVerified: true },
-    { status: ACCOUNT_STATUS.ACTIVE },
-    { returnDocument: 'after' }
-  );
-  if (user) return res.json(toAdminUser(user));
-
-  const existing = await User.findById(id).select('status emailVerified');
-  if (existing?.status === ACCOUNT_STATUS.PENDING && !existing.emailVerified) {
-    throw new AppError(400, 'EMAIL_NOT_VERIFIED', 'This user has not verified their email address yet.');
+  const id = parseId(String(req.params.id));
+  const status = await currentStatus(id);
+  if (status !== ACCOUNT_STATUS.PENDING) {
+    throw new AppError(409, 'NOT_PENDING', `Only pending users can be activated (this user is ${status}).`);
   }
-  throw await explainRefusal(id, 'activated');
+  res.json(toAdminUser(await updateUser(actorId(req), id, { status: ACCOUNT_STATUS.ACTIVE })));
 });
 
 // Rejecting a pending user and revoking an active one are the same transition (-> rejected)
 router.patch('/:id/reject', async (req, res) => {
-  const id = parseId(req.params.id);
+  const id = parseId(String(req.params.id));
   // An admin who locked themselves out could not undo it
-  if (id === req.user?.id) {
+  if (id === actorId(req)) {
     throw new AppError(409, 'CANNOT_REVOKE_SELF', 'You cannot revoke your own account.');
   }
-
-  const user = await User.findOneAndUpdate(
-    { _id: id, status: { $in: [ACCOUNT_STATUS.PENDING, ACCOUNT_STATUS.ACTIVE] } },
-    { status: ACCOUNT_STATUS.REJECTED },
-    { returnDocument: 'after' }
-  );
-  if (!user) {
-    const existing = await User.findById(id).select('status');
-    if (!existing) throw new NotFoundError('User not found');
-    throw new AppError(409, 'NOT_ACTIVE_OR_PENDING', `This user is already ${existing.status}.`);
+  const status = await currentStatus(id);
+  if (status === ACCOUNT_STATUS.REJECTED) {
+    throw new AppError(409, 'NOT_ACTIVE_OR_PENDING', `This user is already ${status}.`);
   }
-
-  // End their sessions so a held refresh token cannot be used; the access token stops working on the
-  // next request anyway because requireAuth re-reads the status.
-  await revokeAllUserTokens(id);
-  res.json(toAdminUser(user));
+  res.json(toAdminUser(await updateUser(actorId(req), id, { status: ACCOUNT_STATUS.REJECTED })));
 });
 
 router.patch('/:id/reactivate', async (req, res) => {
-  const id = parseId(req.params.id);
-
-  const user = await User.findOneAndUpdate(
-    { _id: id, status: ACCOUNT_STATUS.REJECTED, emailVerified: true },
-    { status: ACCOUNT_STATUS.ACTIVE },
-    { returnDocument: 'after' }
-  );
-  if (user) return res.json(toAdminUser(user));
-
-  const existing = await User.findById(id).select('status emailVerified');
-  if (!existing) throw new NotFoundError('User not found');
-  if (existing.status !== ACCOUNT_STATUS.REJECTED) {
-    throw new AppError(409, 'NOT_REJECTED', `Only rejected users can be reactivated (this user is ${existing.status}).`);
+  const id = parseId(String(req.params.id));
+  const status = await currentStatus(id);
+  if (status !== ACCOUNT_STATUS.REJECTED) {
+    throw new AppError(409, 'NOT_REJECTED', `Only rejected users can be reactivated (this user is ${status}).`);
   }
-  throw new AppError(400, 'EMAIL_NOT_VERIFIED', 'This user has not verified their email address yet.');
+  res.json(toAdminUser(await updateUser(actorId(req), id, { status: ACCOUNT_STATUS.ACTIVE })));
 });
 
 export default router;

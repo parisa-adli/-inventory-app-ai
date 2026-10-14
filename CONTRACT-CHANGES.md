@@ -81,10 +81,37 @@ Names below use this repo's actual names; the right-hand column of the first tab
 - Client restyle with no wire change: `TextField` (`features/auth/components`) renders hints through `FormDescription` and gets `aria-pressed` on the password reveal button; the full-screen auth spinner in `guards.tsx` uses theme tokens (`border-border`, `border-primary`) instead of fixed grays.
 - `useCooldown` (`features/auth/hooks/useCooldown.ts`): a seconds countdown started from the server's `retryAfter`, used by `VerifyEmailPending` to keep the resend button disabled (C5 "disabled resend button").
 
+## C11. Guard chain and admin user management v2 (Part D server, 2026-10-14)
+
+Server half only; the client moves over in its own session. `/shared` was unfrozen for this by the user.
+
+**Guards** (`server/src/middleware/`, one per file; routes spread `signedIn`, `authenticated`, `withRole(...)` or `adminOnly` from `guards.ts`):
+`requireAuth` (401 `UNAUTHORIZED`) -> `requireVerified` (403 `EMAIL_UNVERIFIED`) -> `requireActive` (403 `ACCOUNT_PENDING` / `ACCOUNT_REJECTED`) -> `requirePasswordChanged` (403 `PASSWORD_CHANGE_REQUIRED`) -> `requireRole` (403 `FORBIDDEN`). Before this, every gate answered a generic 403 `FORBIDDEN`. `requireAuth` re-reads role, status, emailVerified and mustChangePassword from the DB on every request (not the token), so a rejection or demotion applies on the next request instead of after the 15-minute access token expires.
+`/auth/me`, `/auth/resend-verification`, `PATCH /auth/email` and the new `POST /auth/password` use `signedIn` (session only); logout stays unguarded; everything under `/api/users` is `adminOnly`.
+
+**New endpoints** (all `adminOnly`):
+- `GET /api/users` gains `role`, `verified` (`true|false`) and `search` (name or email, case-insensitive); pending users are listed first, then newest first.
+- `PATCH /api/users/:id` `{ role?, status?: 'active'|'rejected', statusReason? }` -> `AdminUser`. 400 `EMAIL_NOT_VERIFIED` (activate unverified), 403 `FORBIDDEN` (self reject/demote, last active admin), 409 `CONFLICT` (changed concurrently), 404.
+- `POST /api/users/:id/password/temp` -> `{ temporaryPassword }` once (`Cache-Control: no-store`); sets `mustChangePassword`, revokes refresh tokens.
+- `POST /api/users/:id/email/verify-manually` -> `AdminUser` (idempotent).
+- `POST /api/users/:id/email/verify/resend` -> `{ devMailUrl? }`; 409 `CONFLICT` if already verified.
+- `DELETE /api/users/:id/credentials/telegram` -> `AdminUser` (idempotent).
+- `PATCH /:id/{activate,reject,reactivate}` are kept (same codes as before) and now run the same rules, so `reject` also refuses the last active admin.
+
+**Self-service:** `POST /api/auth/password` `{ currentPassword, newPassword }` (`signedIn`, 10 / 15 min / IP) -> `{ user }`, clears `mustChangePassword`, revokes all refresh tokens and issues a fresh session. Wrong current password: **400** `INVALID_CREDENTIALS` (not 401, so the client's refresh interceptor does not retry it). `reset-password` also clears `mustChangePassword`.
+
+**Shared:** `listUsersQuerySchema` (+ role, verified, search), `updateUserSchema`, `STATUS_REASON_MAX`, `USER_SEARCH_MAX`, `changePasswordSchema`; `AuthUser.mustChangePassword` (+ `authUserSchema`); `AdminUser` + `mustChangePassword`, `statusReason`, `statusChangedAt`, `statusChangedBy`; `TempPasswordResponse`. `User` model gains the same four fields.
+
+**Rules:** rejection never changes `role`, so reinstating restores it; `statusReason` is optional, kept only while rejected; `statusChangedAt/By` are written on every admin status change.
+
+**Proposed codes (not applied; `FORBIDDEN` is used for now):**
+- `CANNOT_MODIFY_SELF` (403): an admin rejects or demotes their own account via `PATCH /users/:id`. (The legacy `PATCH /:id/reject` keeps its 409 `CANNOT_REVOKE_SELF`; unify on one code when the client moves.)
+- `LAST_ADMIN` (403 or 409): the change would leave no active admin.
+
 ## Not applicable (nothing to change)
 
 - Stale JWT: the access token carries only `sub`; `/me` and `requireAuth` read the DB.
-- `mustChangePassword`: does not exist, so no `/change-password` gate.
+- ~~`mustChangePassword`: does not exist, so no `/change-password` gate.~~ Added in C11.
 - Lockout clearing on reset: no `loginAttempt` model or lockout exists (rate limiting is per IP). Adding lockout would be a new feature; not proposed.
 - Link base: already `CLIENT_URL`. `APP_URL` was dropped (see `tasks/TASK.md`, Open Question 13); the PRD does not mention it.
 

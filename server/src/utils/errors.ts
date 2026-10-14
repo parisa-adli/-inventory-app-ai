@@ -28,6 +28,18 @@ export class ForbiddenError extends AppError {
   }
 }
 
+/**
+ * A guard refused a signed-in user for a reason the client routes on
+ * (EMAIL_UNVERIFIED, ACCOUNT_PENDING, ACCOUNT_REJECTED, PASSWORD_CHANGE_REQUIRED).
+ */
+export class AccessGateError extends AppError {
+  constructor(code: AccessGateCode, message: string) {
+    super(403, code, message);
+  }
+}
+
+export type AccessGateCode = 'EMAIL_UNVERIFIED' | 'ACCOUNT_PENDING' | 'ACCOUNT_REJECTED' | 'PASSWORD_CHANGE_REQUIRED';
+
 export class NotFoundError extends AppError {
   constructor(message: string = 'Resource not found') {
     super(404, 'NOT_FOUND', message);

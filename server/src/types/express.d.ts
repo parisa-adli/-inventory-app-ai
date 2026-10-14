@@ -7,6 +7,8 @@ declare global {
         id: string;
         role: UserRole;
         status: AccountStatus;
+        emailVerified: boolean;
+        mustChangePassword: boolean;
       };
     }
   }

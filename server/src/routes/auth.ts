@@ -3,6 +3,7 @@ import { env } from '../config/env.js';
 import {
   ACCOUNT_STATUS,
   changeEmailSchema,
+  changePasswordSchema,
   forgotPasswordSchema,
   loginSchema,
   registerSchema,
@@ -10,8 +11,9 @@ import {
   telegramCompleteSchema,
   telegramVerifySchema,
 } from '@inventory/shared';
-import { requireAuth } from '../middleware/auth.js';
+import { signedIn } from '../middleware/guards.js';
 import {
+  changePasswordLimiter,
   forgotPasswordEmailLimiter,
   forgotPasswordIpLimiter,
   loginLimiter,
@@ -276,12 +278,12 @@ router.post('/logout', async (req, res) => {
   res.status(204).end();
 });
 
-router.get('/me', requireAuth, async (req, res) => {
+router.get('/me', ...signedIn, async (req, res) => {
   res.json(toAuthUser(await currentUser(req)));
 });
 
 // Resend and change-email share one budget (3 per user per hour)
-router.post('/resend-verification', requireAuth, verificationMailLimiter, async (req, res) => {
+router.post('/resend-verification', ...signedIn, verificationMailLimiter, async (req, res) => {
   assertEmailAvailable();
   const user = await currentUser(req);
 
@@ -295,8 +297,8 @@ router.post('/resend-verification', requireAuth, verificationMailLimiter, async 
 });
 
 // An unverified user fixes a typo in their address; the old verification link stops working
-// requireAuth only, on purpose: callers are pending users (no requireActive) acting on their own account (no role guard)
-router.patch('/email', requireAuth, validate(changeEmailSchema), verificationMailLimiter, async (req, res) => {
+// signedIn only, on purpose: callers are unverified, pending users acting on their own account (no role guard)
+router.patch('/email', ...signedIn, validate(changeEmailSchema), verificationMailLimiter, async (req, res) => {
   assertEmailAvailable();
   const user = await currentUser(req);
   if (user.emailVerified) throw new ForbiddenError('Your email address is already verified.');
@@ -344,12 +346,33 @@ router.post('/reset-password/:token', resetPasswordLimiter, validate(resetPasswo
   const passwordHash = await hashPassword(req.body.password);
   const token = await consumeEmailToken(String(req.params.token), ['reset-password']);
 
-  const user = await User.findByIdAndUpdate(token.user, { passwordHash });
+  // A password the user chose themselves also ends an admin-issued temporary one
+  const user = await User.findByIdAndUpdate(token.user, { passwordHash, mustChangePassword: false });
   if (!user) throw invalidTokenError();
   await revokeAllUserTokens(String(user._id));
 
   // No session: the user signs in with the new password
   res.status(204).end();
+});
+
+// signedIn only: this is the way out of PASSWORD_CHANGE_REQUIRED, and gated (pending) users may change
+// their own password too. A wrong current password is 400, not 401, so the client does not try a refresh.
+router.post('/password', ...signedIn, changePasswordLimiter, validate(changePasswordSchema), async (req, res) => {
+  const user = await currentUser(req);
+  const { currentPassword, newPassword } = req.body;
+
+  if (!user.passwordHash || !(await verifyPassword(currentPassword, user.passwordHash))) {
+    throw new AppError(400, 'INVALID_CREDENTIALS', 'Your current password is incorrect.');
+  }
+
+  user.passwordHash = await hashPassword(newPassword);
+  user.mustChangePassword = false;
+  await user.save();
+
+  // Sign out every other device (they may hold the temporary password's sessions), keep this one
+  await revokeAllUserTokens(String(user._id));
+  await issueSession(res, user);
+  res.json({ user: toAuthUser(user) });
 });
 
 export default router;

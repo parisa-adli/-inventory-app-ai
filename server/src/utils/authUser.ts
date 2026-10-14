@@ -7,6 +7,7 @@ interface UserLike {
   role: UserRole;
   status: AccountStatus;
   emailVerified: boolean;
+  mustChangePassword?: boolean | null;
 }
 
 /** Shape returned by /auth/me and by login/refresh. */
@@ -17,4 +18,5 @@ export const toAuthUser = (user: UserLike): AuthUser => ({
   role: user.role,
   status: user.status,
   emailVerified: user.emailVerified,
+  mustChangePassword: Boolean(user.mustChangePassword),
 });

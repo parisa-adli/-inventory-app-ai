@@ -61,6 +61,12 @@ export const changeEmailSchema = z.object({
   email: emailField,
 });
 
+/** POST /api/auth/password: a signed-in user replaces their password (also clears mustChangePassword). */
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Enter your current password'),
+  newPassword: passwordField,
+});
+
 /** Shape of the user object the auth endpoints return (see `AuthUser`). */
 export const authUserSchema = z.object({
   id: z.string(),
@@ -69,6 +75,7 @@ export const authUserSchema = z.object({
   role: z.enum([USER_ROLES.ADMIN, USER_ROLES.STAFF]),
   status: z.enum([ACCOUNT_STATUS.PENDING, ACCOUNT_STATUS.ACTIVE, ACCOUNT_STATUS.REJECTED]),
   emailVerified: z.boolean(),
+  mustChangePassword: z.boolean(),
 }) satisfies z.ZodType<AuthUser>;
 
 /** Response of PATCH /api/auth/email; `devMailUrl` only outside production when mail is only logged. */
@@ -85,3 +92,4 @@ export type RegisterFormInput = z.infer<typeof registerFormSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export type ChangeEmailInput = z.infer<typeof changeEmailSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

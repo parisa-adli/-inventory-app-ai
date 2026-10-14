@@ -10,6 +10,8 @@ export interface AuthUser {
   role: UserRole;
   status: AccountStatus;
   emailVerified: boolean;
+  /** Signed in with an admin-issued temporary password: only POST /api/auth/password and logout work. */
+  mustChangePassword: boolean;
 }
 
 /**

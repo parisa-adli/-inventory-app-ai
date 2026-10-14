@@ -16,6 +16,12 @@ const userSchema = new Schema(
     },
     emailVerified: { type: Boolean, default: false, required: true },
     telegramChatId: { type: String },
+    // Set by an admin-issued temporary password; every guarded route is closed until the user changes it
+    mustChangePassword: { type: Boolean, default: false, required: true },
+    // Last admin status change. statusReason is kept only while the account is rejected
+    statusReason: { type: String },
+    statusChangedAt: { type: Date },
+    statusChangedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     // Set when the last mail to this user failed to send, cleared by the next successful send
     lastEmailFailedAt: { type: Date },
     lastEmailFailedType: { type: String, enum: EMAIL_TOKEN_TYPES },
@@ -26,6 +32,8 @@ const userSchema = new Schema(
 userSchema.index({ telegramChatId: 1 }, { unique: true, sparse: true });
 // Admin Users list: filter by status, newest first
 userSchema.index({ status: 1, createdAt: -1, _id: -1 });
+// Last-active-admin check
+userSchema.index({ role: 1, status: 1 });
 
 export type UserDoc = InferSchemaType<typeof userSchema>;
 export const User = model('User', userSchema);

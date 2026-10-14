@@ -20,3 +20,23 @@ export const safeEqual = (a: string, b: string): boolean => {
   const right = Buffer.from(b);
   return left.length === right.length && timingSafeEqual(left, right);
 };
+
+const PASSWORD_LETTERS = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ';
+const PASSWORD_DIGITS = '23456789';
+const PASSWORD_ALPHABET = PASSWORD_LETTERS + PASSWORD_DIGITS;
+
+/**
+ * Admin-issued temporary password (crypto.randomInt): `length` characters from an alphabet without
+ * look-alikes, always with a letter and a digit so it passes the shared password rule.
+ */
+export const randomPassword = (length = 16): string => {
+  const pick = (alphabet: string) => alphabet[randomInt(0, alphabet.length)];
+  const chars = [pick(PASSWORD_LETTERS), pick(PASSWORD_DIGITS)];
+  while (chars.length < length) chars.push(pick(PASSWORD_ALPHABET));
+  // Fisher-Yates, so the guaranteed letter and digit are not always first
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = randomInt(0, i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join('');
+};

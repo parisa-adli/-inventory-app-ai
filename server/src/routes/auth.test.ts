@@ -329,6 +329,7 @@ describe('sessions: /me, /refresh, /logout', () => {
       role: 'staff',
       status: 'active',
       emailVerified: true,
+      mustChangePassword: false,
     });
   });
 

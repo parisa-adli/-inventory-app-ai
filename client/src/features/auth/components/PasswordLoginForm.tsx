@@ -15,7 +15,7 @@ export function PasswordLoginForm() {
     defaultValues: { email: '', password: '' },
   });
 
-  // On success the route guard redirects, so there is nothing to navigate to here
+  // On success the route guards re-run and redirect, so there is nothing to navigate to here
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit((values) => login.mutate(values))} className="space-y-4" noValidate>

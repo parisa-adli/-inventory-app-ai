@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { Outlet } from 'react-router';
 import { Boxes } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -19,5 +20,14 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/** AuthLayout as a layout route: renders the matched child route. */
+export function AuthShell() {
+  return (
+    <AuthLayout>
+      <Outlet />
+    </AuthLayout>
   );
 }

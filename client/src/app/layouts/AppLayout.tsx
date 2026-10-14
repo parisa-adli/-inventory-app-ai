@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { Outlet } from 'react-router';
 import { AppSidebar, AppTopBar } from './AppNav';
 
 interface AppLayoutProps {
@@ -14,5 +15,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
         <main className="mx-auto w-full max-w-5xl px-4 py-8">{children}</main>
       </div>
     </div>
+  );
+}
+
+/** AppLayout as a layout route: renders the matched child route. */
+export function AppShell() {
+  return (
+    <AppLayout>
+      <Outlet />
+    </AppLayout>
   );
 }

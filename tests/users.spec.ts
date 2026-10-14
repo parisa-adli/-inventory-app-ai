@@ -167,12 +167,13 @@ test.describe('admin users page (stubbed API)', () => {
     expect(reactivated).toBe(true);
   });
 
-  test('staff do not see the Users link and are redirected away from /users', async ({ page }) => {
+  test('staff do not see the Users link and get "no access" on /users', async ({ page }) => {
     await signInAs(page, staff);
 
     await page.goto('/users');
 
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/users$/);
+    await expect(page.getByText("You don't have access to this page")).toBeVisible();
     await expect(page.getByRole('link', { name: 'Users' })).toHaveCount(0);
   });
 

@@ -1,14 +1,11 @@
-import { Navigate, Outlet, Route, Routes } from 'react-router';
-import { ACCOUNT_STATUS } from '@inventory/shared';
-import AuthLayout from './layouts/AuthLayout';
-import AppLayout from './layouts/AppLayout';
-import {
-  PublicOnly,
-  RequireActive,
-  RequireAdmin,
-  RequireStatus,
-  RequireUnverified,
-} from '@/features/auth/components/guards';
+import { createBrowserRouter, Navigate } from 'react-router';
+import { ACCOUNT_STATUS, USER_ROLES } from '@inventory/shared';
+import { AuthShell } from './layouts/AuthLayout';
+import { AppShell } from './layouts/AppLayout';
+import AppSkeleton from './layouts/AppSkeleton';
+import RouteError from './layouts/RouteError';
+import { NoAccessBoundary } from '@/features/auth/components/NoAccess';
+import { requireGate, requireGuest, requireRole, requireSignedIn } from '@/features/auth/routeGuards';
 import AwaitingApproval from '@/features/auth/pages/AwaitingApproval';
 import ForgotPassword from '@/features/auth/pages/ForgotPassword';
 import Login from '@/features/auth/pages/Login';
@@ -20,60 +17,76 @@ import VerifyEmailPending from '@/features/auth/pages/VerifyEmailPending';
 import Dashboard from '@/features/dashboard/pages/Dashboard';
 import Users from '@/features/users/pages/Users';
 
-const AuthShell = () => (
-  <AuthLayout>
-    <Outlet />
-  </AuthLayout>
-);
+// Client middleware only runs on a navigation that has a loader to call, so every guarded route has one
+const runGuards = () => null;
 
-const AppShell = () => (
-  <AppLayout>
-    <Outlet />
-  </AppLayout>
-);
+export const router = createBrowserRouter([
+  {
+    HydrateFallback: AppSkeleton,
+    ErrorBoundary: RouteError,
+    children: [
+      // Guest pages: a signed-in user is sent to their landing route (or ?next=)
+      {
+        middleware: [requireGuest],
+        loader: runGuards,
+        Component: AuthShell,
+        children: [
+          { path: '/login', Component: Login },
+          { path: '/register', Component: Register },
+          { path: '/forgot-password', Component: ForgotPassword },
+        ],
+      },
 
-export default function AppRoutes() {
-  return (
-    <Routes>
-      {/* Public: logged-in users are redirected to where they belong */}
-      <Route element={<PublicOnly />}>
-        <Route element={<AuthShell />}>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-        </Route>
-      </Route>
+      // Emailed links work for a guest and a signed-in user alike
+      {
+        Component: AuthShell,
+        children: [
+          { path: '/verify-email/:token', Component: VerifyEmail },
+          { path: '/reset-password/:token', Component: ResetPassword },
+        ],
+      },
 
-      {/* Emailed links work whether or not the visitor is logged in */}
-      <Route element={<AuthShell />}>
-        <Route path="/verify-email/:token" element={<VerifyEmail />} />
-        <Route path="/reset-password/:token" element={<ResetPassword />} />
-      </Route>
+      // Gate screens: each only while its gate applies; an unverified email is handled first
+      {
+        Component: AuthShell,
+        children: [
+          {
+            path: '/verify-email',
+            middleware: [requireGate((user) => !user.emailVerified)],
+            loader: runGuards,
+            Component: VerifyEmailPending,
+          },
+          {
+            path: '/awaiting-approval',
+            middleware: [requireGate((user) => user.emailVerified && user.status === ACCOUNT_STATUS.PENDING)],
+            loader: runGuards,
+            Component: AwaitingApproval,
+          },
+          {
+            path: '/rejected',
+            middleware: [requireGate((user) => user.emailVerified && user.status === ACCOUNT_STATUS.REJECTED)],
+            loader: runGuards,
+            Component: Rejected,
+          },
+        ],
+      },
 
-      {/* Pending / rejected screens; an unverified email is handled first, on /verify-email */}
-      <Route element={<AuthShell />}>
-        <Route element={<RequireUnverified />}>
-          <Route path="/verify-email" element={<VerifyEmailPending />} />
-        </Route>
-        <Route element={<RequireStatus status={ACCOUNT_STATUS.PENDING} />}>
-          <Route path="/awaiting-approval" element={<AwaitingApproval />} />
-        </Route>
-        <Route element={<RequireStatus status={ACCOUNT_STATUS.REJECTED} />}>
-          <Route path="/rejected" element={<Rejected />} />
-        </Route>
-      </Route>
-
-      {/* App shell: active users only */}
-      <Route element={<RequireActive />}>
-        <Route element={<AppShell />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route element={<RequireAdmin />}>
-            <Route path="/users" element={<Users />} />
-          </Route>
-        </Route>
-      </Route>
-
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-  );
-}
+      // App shell: signed in with no gate. Unknown URLs live here too, so a guest typo goes to /login?next=
+      {
+        middleware: [requireSignedIn],
+        loader: runGuards,
+        Component: AppShell,
+        children: [
+          { path: '/', Component: Dashboard },
+          {
+            middleware: [requireRole(USER_ROLES.ADMIN)],
+            loader: runGuards,
+            ErrorBoundary: NoAccessBoundary,
+            children: [{ path: '/users', Component: Users }],
+          },
+          { path: '*', element: <Navigate to="/" replace /> },
+        ],
+      },
+    ],
+  },
+]);

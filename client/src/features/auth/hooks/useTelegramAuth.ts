@@ -88,7 +88,7 @@ export const useTelegramAuth = () => {
   }, []);
 
   const signedIn = (user: Parameters<typeof queryClient.setQueryData>[1], name: string, message: string) => {
-    // The route guards react to this and redirect, exactly like a password login
+    // Changing the cached user re-runs the route guards, which redirect, exactly like a password login
     queryClient.setQueryData(authKeys.me, user);
     toast.success(`${message}, ${name}`);
   };

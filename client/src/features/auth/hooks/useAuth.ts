@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ACCOUNT_STATUS, type DevMailResponse } from '@inventory/shared';
 import { getApiError } from '@/lib/apiError';
@@ -6,13 +7,14 @@ import * as authApi from '../api/authApi';
 
 export const authKeys = { me: ['auth', 'me'] as const };
 
-/** Single source of truth for "who is logged in": data is the user, null when logged out. */
-export const useAuthUser = () =>
-  useQuery({
-    queryKey: authKeys.me,
-    queryFn: authApi.fetchMe,
-    retry: false,
-  });
+/** "Who is signed in": the user, or null for a guest. Shared by components and the route guards. */
+export const meQuery = queryOptions({
+  queryKey: authKeys.me,
+  queryFn: authApi.fetchMe,
+  retry: false,
+});
+
+export const useAuthUser = () => useQuery(meQuery);
 
 const onError = (err: unknown) => {
   toast.error(getApiError(err).message);
@@ -32,7 +34,7 @@ export const useLogin = () => {
   return useMutation({
     mutationFn: authApi.login,
     onSuccess: (user) => {
-      // The route guards react to this and redirect
+      // Changing the cached user re-runs the route guards, which redirect (honouring ?next=)
       queryClient.setQueryData(authKeys.me, user);
       toast.success(user.status === ACCOUNT_STATUS.ACTIVE ? `Welcome back, ${user.name}` : 'Signed in');
     },
@@ -49,13 +51,15 @@ export const useRegister = () =>
 
 export const useLogout = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   return useMutation({
     mutationFn: authApi.logout,
     onSuccess: () => {
-      // Nothing from this session may leak to the next user. Keep (not remove) the auth query:
-      // mounted route guards observe it, and setting it to null is what sends them to /login.
+      // Nothing from this session may leak to the next user. Mark the browser a guest first, then
+      // go to a plain /login: a ?next= of this page would carry the next person back into it.
       queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== authKeys.me[0] });
       queryClient.setQueryData(authKeys.me, null);
+      void navigate('/login', { replace: true });
       toast.success('Logged out');
     },
     onError,

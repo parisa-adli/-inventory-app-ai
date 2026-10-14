@@ -13,11 +13,22 @@ The user has proved they own their email address by using the link we sent. Inde
 _Avoid_: "confirmed", "activated" (activation is the admin's decision, not the email's).
 
 **Awaiting approval**
-What a `pending` user sees after logging in: they have a session but no access to data until an admin activates them.
+What a `pending` user sees after signing in: they have a session but no access to data until an admin activates them.
 
 **Session**
-A logged-in browser: a short-lived access cookie plus a longer-lived refresh cookie. Logging out, resetting a password or being rejected ends it.
-_Avoid_: "token" for the whole thing (a token is one cookie's value).
+A signed-in browser: a short-lived access cookie plus a longer-lived refresh cookie. Signing out, resetting a password or being rejected ends it.
+_Avoid_: "token" for the whole thing (a token is one cookie's value), "logged in".
+
+**Guest**
+A browser with no **Session**. A guest can only sign in, sign up, ask for a password reset, or use an **Emailed link**.
+_Avoid_: "logged out", "anonymous".
+
+**Gate**
+A state of a signed-in account that keeps it out of the app: an email that is not a **Verified email**, a `pending` account, or a `rejected` one. When several apply, the unverified email comes first, then rejected, then pending.
+_Avoid_: "unauthorized", "blocked".
+
+**Gate screen**
+The page that explains a **Gate** and what to do next (verify your email, **Awaiting approval**, rejected). A gated user is always sent to theirs, and nowhere else in the app.
 
 **Emailed link**
 A single-use, expiring link sent to a user's email address, used to verify the email, to reset the password, or to confirm a **Telegram link**. Using it twice, or a link that never existed, fails as invalid; a link that has expired is told apart so the person can ask for a new one.

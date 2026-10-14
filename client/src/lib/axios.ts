@@ -20,6 +20,12 @@ const NO_REFRESH_PATHS = [
 
 const skipsRefresh = (url?: string) => NO_REFRESH_PATHS.some((path) => url?.startsWith(path));
 
+// The app registers what "the session is gone" means (mark the browser a guest); lib/ stays feature-free.
+let onSessionEnded: (() => void) | undefined;
+export const setOnSessionEnded = (callback: () => void) => {
+  onSessionEnded = callback;
+};
+
 let isRefreshing = false;
 let failedQueue: Array<{
   resolve: (value?: unknown) => void;
@@ -74,6 +80,8 @@ axiosInstance.interceptors.response.use(
           })
           .catch((err) => {
             processQueue(err);
+            // /auth/me reports a guest itself (fetchMe returns null); any other call means the session ended mid-use
+            if (!originalRequest.url?.startsWith('/auth/me')) onSessionEnded?.();
             reject(err);
           })
           .finally(() => {

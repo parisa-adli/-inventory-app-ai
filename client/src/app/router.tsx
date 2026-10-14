@@ -1,8 +1,9 @@
 import { createBrowserRouter, Navigate } from 'react-router';
 import { ACCOUNT_STATUS, USER_ROLES } from '@inventory/shared';
 import { AuthShell } from './layouts/AuthLayout';
-import { AppShell } from './layouts/AppLayout';
+import AppLayout, { AppShell } from './layouts/AppLayout';
 import AppSkeleton from './layouts/AppSkeleton';
+import NotFound from './layouts/NotFound';
 import RouteError from './layouts/RouteError';
 import { APP_BASE, APP_HOME } from './paths';
 import { NoAccessBoundary } from '@/features/auth/components/NoAccess';
@@ -72,7 +73,7 @@ export const router = createBrowserRouter([
         ],
       },
 
-      // App shell under /app: signed in with no gate. Unknown /app URLs live here too, so a guest typo goes to /login?next=
+      // App shell under /app: signed in with no gate. An unknown /app URL shows "not found" inside it
       {
         path: APP_BASE,
         middleware: [requireSignedIn],
@@ -87,13 +88,25 @@ export const router = createBrowserRouter([
             ErrorBoundary: NoAccessBoundary,
             children: [{ path: 'users', Component: Users }],
           },
-          { path: '*', element: <Navigate to={APP_HOME} replace /> },
+          { path: '*', Component: NotFound },
         ],
       },
 
-      // The root and any URL outside /app go to the app, whose guard sends a guest to /login
+      // The root goes to the app, whose guard sends a guest to /login
       { path: '/', element: <Navigate to={APP_HOME} replace /> },
-      { path: '*', element: <Navigate to={APP_HOME} replace /> },
+
+      // Any other unknown URL: "not found" inside the shell, behind the same guard. A leaf route, since an
+      // index child under '*' would also match '/' and outrank the redirect above
+      {
+        path: '*',
+        middleware: [requireSignedIn],
+        loader: runGuards,
+        element: (
+          <AppLayout>
+            <NotFound />
+          </AppLayout>
+        ),
+      },
     ],
   },
 ]);

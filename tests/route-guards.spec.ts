@@ -47,9 +47,9 @@ test.describe('route guards (stubbed API)', () => {
       await page.goto('/app/no-such-page');
       await expect(page).toHaveURL(`/login?next=${encodeURIComponent('/app/no-such-page')}`);
 
-      // Outside /app an unknown URL means "the app", which is not worth remembering
+      // Outside /app an unknown URL is guarded the same way
       await page.goto('/no-such-page');
-      await expect(page).toHaveURL('/login');
+      await expect(page).toHaveURL(`/login?next=${encodeURIComponent('/no-such-page')}`);
       await expect(appShell(page)).toHaveCount(0);
     });
 
@@ -196,6 +196,47 @@ test.describe('route guards (stubbed API)', () => {
       await expect(appShell(page)).toBeVisible();
       await expect(page).toHaveURL('/app/users');
       expect(usersRequested).toBe(false);
+    });
+
+    test('an unknown URL shows "not found" inside the shell, never the dashboard', async ({ page }) => {
+      await stubApi(page, admin);
+      const notFound = page.getByText('Page not found');
+      const dashboard = page.getByRole('heading', { level: 2, name: 'Dashboard' });
+
+      for (const path of ['/app/dahboardd', '/app/users/extra', '/no-such-page']) {
+        await page.goto(path);
+        await expect(notFound).toBeVisible();
+        await expect(appShell(page)).toBeVisible();
+        await expect(page).toHaveURL(path);
+        await expect(dashboard).toHaveCount(0);
+      }
+
+      await page.getByRole('link', { name: 'Go to the dashboard' }).click();
+      await expect(page).toHaveURL('/app/dashboard');
+    });
+
+    test('staff on an unknown URL also see "not found"', async ({ page }) => {
+      await stubApi(page, staff);
+      await page.goto('/app/dahboardd');
+      await expect(page.getByText('Page not found')).toBeVisible();
+      await expect(page).toHaveURL('/app/dahboardd');
+    });
+
+    test('/ and /app still open the dashboard', async ({ page }) => {
+      await stubApi(page, staff);
+      for (const path of ['/', '/app']) {
+        await page.goto(path);
+        await expect(page).toHaveURL('/app/dashboard');
+        await expect(page.getByRole('heading', { level: 2, name: 'Dashboard' })).toBeVisible();
+      }
+    });
+
+    test('a gated user on an unknown URL goes to their gate screen', async ({ page }) => {
+      await stubApi(page, pending);
+      for (const path of ['/app/dahboardd', '/no-such-page']) {
+        await page.goto(path);
+        await expect(page).toHaveURL('/awaiting-approval');
+      }
     });
 
     test('admin opens the admin page', async ({ page }) => {

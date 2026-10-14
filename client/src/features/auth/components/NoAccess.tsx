@@ -1,26 +1,21 @@
 import { isRouteErrorResponse, Link, useRouteError } from 'react-router';
-import { ShieldX } from 'lucide-react';
 import { APP_HOME } from '@/app/paths';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 /** Rendered inside the app shell when the signed-in user's role may not open the page. The URL stays. */
 export default function NoAccess() {
   return (
-    <Card className="mx-auto max-w-md">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <ShieldX className="size-5" />
-          You don&apos;t have access to this page
-        </CardTitle>
-        <CardDescription>Ask an admin if you think you should.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Button asChild variant="outline">
-          <Link to={APP_HOME}>Back to dashboard</Link>
-        </Button>
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <h2 className="text-xl font-bold">You don&apos;t have access to this page</h2>
+        <p className="text-sm text-muted-foreground">
+          It&apos;s only available to admins. Ask an admin if you think you need it.
+        </p>
+      </div>
+      <Button asChild variant="outline">
+        <Link to={APP_HOME}>Go to the dashboard</Link>
+      </Button>
+    </div>
   );
 }
 

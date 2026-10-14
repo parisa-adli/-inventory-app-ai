@@ -101,7 +101,7 @@ describe('journey: email sign up -> verify -> approve -> in', () => {
         adminName: 'Admin',
         userName: 'Jo Urney',
         userEmail: email,
-        url: expect.stringContaining('/users'),
+        url: expect.stringMatching(/\/app\/users$/),
       })
     );
 

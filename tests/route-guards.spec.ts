@@ -41,11 +41,15 @@ test.describe('route guards (stubbed API)', () => {
       await page.goto('/');
       await expect(page).toHaveURL('/login');
 
-      await page.goto('/users?tab=active');
-      await expect(page).toHaveURL(`/login?next=${encodeURIComponent('/users?tab=active')}`);
+      await page.goto('/app/users?tab=active');
+      await expect(page).toHaveURL(`/login?next=${encodeURIComponent('/app/users?tab=active')}`);
 
+      await page.goto('/app/no-such-page');
+      await expect(page).toHaveURL(`/login?next=${encodeURIComponent('/app/no-such-page')}`);
+
+      // Outside /app an unknown URL means "the app", which is not worth remembering
       await page.goto('/no-such-page');
-      await expect(page).toHaveURL(`/login?next=${encodeURIComponent('/no-such-page')}`);
+      await expect(page).toHaveURL('/login');
       await expect(appShell(page)).toHaveCount(0);
     });
 
@@ -75,12 +79,12 @@ test.describe('route guards (stubbed API)', () => {
       await stubApi(page, null);
       await page.route('**/api/auth/login', (route) => route.fulfill({ json: { user: admin } }));
 
-      await page.goto(`/login?next=${encodeURIComponent('/users')}`);
+      await page.goto(`/login?next=${encodeURIComponent('/app/users')}`);
       await page.getByRole('textbox', { name: 'Email' }).fill('admin@inventory.local');
       await page.getByLabel('Password', { exact: true }).fill('Admin@1234');
       await page.getByRole('button', { name: 'Sign in' }).click();
 
-      await expect(page).toHaveURL('/users');
+      await expect(page).toHaveURL('/app/users');
       await expect(page.getByRole('heading', { name: 'Pending users' })).toBeVisible();
     });
 
@@ -88,7 +92,7 @@ test.describe('route guards (stubbed API)', () => {
       await stubApi(page, admin);
       for (const next of ['//evil.example', '/\\evil.example', 'https://evil.example', '/login']) {
         await page.goto(`/login?next=${encodeURIComponent(next)}`);
-        await expect(page).toHaveURL('/');
+        await expect(page).toHaveURL('/app/dashboard');
       }
     });
 
@@ -101,20 +105,20 @@ test.describe('route guards (stubbed API)', () => {
         await route.fulfill(unauthorized);
       });
 
-      await page.goto('/users');
+      await page.goto('/app/users');
       await expect(page.getByRole('status', { name: 'Loading' })).toBeVisible();
       await expect(appShell(page)).toHaveCount(0);
       await expect(page.getByRole('link', { name: 'Users' })).toHaveCount(0);
 
       answerMe();
-      await expect(page).toHaveURL(`/login?next=${encodeURIComponent('/users')}`);
+      await expect(page).toHaveURL(`/login?next=${encodeURIComponent('/app/users')}`);
     });
 
     test('a session check that fails for another reason shows an error page, not the app or /login', async ({ page }) => {
       await stubApi(page, null);
       await page.route('**/api/auth/me', (route) => route.fulfill({ status: 503, json: {} }));
 
-      await page.goto('/users');
+      await page.goto('/app/users');
       await expect(page.getByText('Something went wrong')).toBeVisible();
       await expect(appShell(page)).toHaveCount(0);
     });
@@ -140,8 +144,8 @@ test.describe('route guards (stubbed API)', () => {
 
   test.describe('signed in', () => {
     for (const [label, me, landing] of [
-      ['active admin', admin, '/'],
-      ['active staff', staff, '/'],
+      ['active admin', admin, '/app/dashboard'],
+      ['active staff', staff, '/app/dashboard'],
       ['unverified', unverified, '/verify-email'],
       ['pending', pending, '/awaiting-approval'],
       ['rejected', rejected, '/rejected'],
@@ -158,11 +162,11 @@ test.describe('route guards (stubbed API)', () => {
     test('a gated user is sent to their gate screen, and ?next= is ignored for them', async ({ page }) => {
       await stubApi(page, pending);
 
-      await page.goto('/users');
+      await page.goto('/app/users');
       await expect(page).toHaveURL('/awaiting-approval');
       await expect(page.getByRole('heading', { name: 'Awaiting approval' })).toBeVisible();
 
-      await page.goto(`/login?next=${encodeURIComponent('/users')}`);
+      await page.goto(`/login?next=${encodeURIComponent('/app/users')}`);
       await expect(page).toHaveURL('/awaiting-approval');
 
       // Another gate's screen is not theirs
@@ -174,7 +178,7 @@ test.describe('route guards (stubbed API)', () => {
       await stubApi(page, staff);
       for (const path of ['/verify-email', '/awaiting-approval', '/rejected']) {
         await page.goto(path);
-        await expect(page).toHaveURL('/');
+        await expect(page).toHaveURL('/app/dashboard');
       }
     });
 
@@ -186,17 +190,17 @@ test.describe('route guards (stubbed API)', () => {
         return route.fulfill({ json: emptyUsersPage });
       });
 
-      await page.goto('/users');
+      await page.goto('/app/users');
 
       await expect(page.getByText("You don't have access to this page")).toBeVisible();
       await expect(appShell(page)).toBeVisible();
-      await expect(page).toHaveURL('/users');
+      await expect(page).toHaveURL('/app/users');
       expect(usersRequested).toBe(false);
     });
 
     test('admin opens the admin page', async ({ page }) => {
       await stubApi(page, admin);
-      await page.goto('/users');
+      await page.goto('/app/users');
       await expect(page.getByRole('heading', { name: 'Pending users' })).toBeVisible();
     });
 
@@ -226,7 +230,7 @@ test.describe('route guards (stubbed API)', () => {
       await page.route('**/api/users?*', (route) => route.fulfill(unauthorized));
       await page.getByRole('link', { name: 'Users' }).first().click();
 
-      await expect(page).toHaveURL(`/login?next=${encodeURIComponent('/users')}`);
+      await expect(page).toHaveURL(`/login?next=${encodeURIComponent('/app/users')}`);
     });
   });
 });

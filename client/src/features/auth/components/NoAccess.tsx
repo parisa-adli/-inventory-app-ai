@@ -1,5 +1,6 @@
 import { isRouteErrorResponse, Link, useRouteError } from 'react-router';
 import { ShieldX } from 'lucide-react';
+import { APP_HOME } from '@/app/paths';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -16,7 +17,7 @@ export default function NoAccess() {
       </CardHeader>
       <CardContent>
         <Button asChild variant="outline">
-          <Link to="/">Back to dashboard</Link>
+          <Link to={APP_HOME}>Back to dashboard</Link>
         </Button>
       </CardContent>
     </Card>

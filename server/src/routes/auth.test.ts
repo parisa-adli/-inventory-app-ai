@@ -199,7 +199,7 @@ describe('GET /api/auth/verify-email/:token', () => {
       adminName: 'Boss',
       userName: 'New',
       userEmail: 'new@inventory.local',
-      url: `${env.CLIENT_URL}/users`,
+      url: `${env.CLIENT_URL}/app/users`,
     });
   });
 

@@ -30,9 +30,9 @@ profile submissions, QR/session valid 5 min, profile step 10 min.
 | ID | Step | Expect | Result |
 | --- | --- | --- | --- |
 | M1 | Register by email with mailbox `A` | 201; verification mail arrives in `A` from the verified sender (SMTP); in log mode the link is in the server console; link opens `/verify-email/<token>` | |
-| M2 | Click the link | "Email verified"; user is Awaiting Approval; admin notification mail arrives (to the admin address) linking to `/users` | |
+| M2 | Click the link | "Email verified"; user is Awaiting Approval; admin notification mail arrives (to the admin address) linking to `/app/users` | |
 | M3 | Click the same link again | Invalid or already-used link message | |
-| M4 | Admin approves on `/users` | User reloads and reaches the dashboard | |
+| M4 | Admin approves on `/app/users` | User reloads and reaches the dashboard | |
 | M5 | Forgot password for `A` | Always the generic response; reset mail arrives; link sets a new password (10+ chars, letter + digit); old password refused | |
 | M6 | Forgot password for an unknown address | Same generic response; **no** mail arrives | |
 | T1 | Login > Telegram tab, scan the QR (or open the deep link), press Start | Bot replies with a 6 digit code | |

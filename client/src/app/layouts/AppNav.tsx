@@ -29,6 +29,7 @@ import {
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { useAuthUser, useLogout } from '@/features/auth/hooks/useAuth'
 import { cn } from '@/lib/utils'
+import { APP_HOME, PATHS } from '@/app/paths'
 
 interface NavItem {
   to: string
@@ -37,14 +38,14 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/products', label: 'Products', icon: Package },
-  { to: '/categories', label: 'Categories', icon: FolderTree },
-  { to: '/suppliers', label: 'Suppliers', icon: Truck },
-  { to: '/movements', label: 'Movements', icon: ArrowLeftRight },
+  { to: PATHS.dashboard, label: 'Dashboard', icon: LayoutDashboard },
+  { to: PATHS.products, label: 'Products', icon: Package },
+  { to: PATHS.categories, label: 'Categories', icon: FolderTree },
+  { to: PATHS.suppliers, label: 'Suppliers', icon: Truck },
+  { to: PATHS.movements, label: 'Movements', icon: ArrowLeftRight },
 ]
 
-const ADMIN_NAV_ITEMS: NavItem[] = [{ to: '/users', label: 'Users', icon: Users }]
+const ADMIN_NAV_ITEMS: NavItem[] = [{ to: PATHS.users, label: 'Users', icon: Users }]
 
 const useNavItems = () => {
   const { data: user } = useAuthUser()
@@ -70,7 +71,7 @@ function SidebarContent({ items, onNavigate }: SidebarContentProps) {
   return (
     <>
       <div className="flex h-14 shrink-0 items-center border-b px-4">
-        <Link to="/" onClick={onNavigate}>
+        <Link to={APP_HOME} onClick={onNavigate}>
           <Logo />
         </Link>
       </div>
@@ -79,7 +80,6 @@ function SidebarContent({ items, onNavigate }: SidebarContentProps) {
           <NavLink
             key={to}
             to={to}
-            end={to === '/'}
             onClick={onNavigate}
             className={({ isActive }) =>
               cn(
@@ -140,7 +140,7 @@ function AccountMenu({ user }: { user: AuthUser | null | undefined }) {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link to="/profile">
+          <Link to={PATHS.profile}>
             <UserRound className="size-4" />
             Profile
           </Link>
@@ -184,7 +184,7 @@ export function AppTopBar() {
         </SheetContent>
       </Sheet>
 
-      <Link to="/" className="text-base font-semibold md:hidden">
+      <Link to={APP_HOME} className="text-base font-semibold md:hidden">
         Inventory Manager
       </Link>
 

@@ -144,4 +144,4 @@ export const sendUserAwaitingApprovalEmail = ({
     outro: 'You are receiving this because you are an administrator of Inventory Manager.',
   });
 
-export const pendingUsersUrl = (): string => `${env.CLIENT_URL}/users`;
+export const pendingUsersUrl = (): string => `${env.CLIENT_URL}/app/users`;

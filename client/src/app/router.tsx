@@ -4,6 +4,7 @@ import { AuthShell } from './layouts/AuthLayout';
 import { AppShell } from './layouts/AppLayout';
 import AppSkeleton from './layouts/AppSkeleton';
 import RouteError from './layouts/RouteError';
+import { APP_BASE, APP_HOME } from './paths';
 import { NoAccessBoundary } from '@/features/auth/components/NoAccess';
 import { requireGate, requireGuest, requireRole, requireSignedIn } from '@/features/auth/routeGuards';
 import AwaitingApproval from '@/features/auth/pages/AwaitingApproval';
@@ -71,22 +72,28 @@ export const router = createBrowserRouter([
         ],
       },
 
-      // App shell: signed in with no gate. Unknown URLs live here too, so a guest typo goes to /login?next=
+      // App shell under /app: signed in with no gate. Unknown /app URLs live here too, so a guest typo goes to /login?next=
       {
+        path: APP_BASE,
         middleware: [requireSignedIn],
         loader: runGuards,
         Component: AppShell,
         children: [
-          { path: '/', Component: Dashboard },
+          { index: true, element: <Navigate to={APP_HOME} replace /> },
+          { path: 'dashboard', Component: Dashboard },
           {
             middleware: [requireRole(USER_ROLES.ADMIN)],
             loader: runGuards,
             ErrorBoundary: NoAccessBoundary,
-            children: [{ path: '/users', Component: Users }],
+            children: [{ path: 'users', Component: Users }],
           },
-          { path: '*', element: <Navigate to="/" replace /> },
+          { path: '*', element: <Navigate to={APP_HOME} replace /> },
         ],
       },
+
+      // The root and any URL outside /app go to the app, whose guard sends a guest to /login
+      { path: '/', element: <Navigate to={APP_HOME} replace /> },
+      { path: '*', element: <Navigate to={APP_HOME} replace /> },
     ],
   },
 ]);

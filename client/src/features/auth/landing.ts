@@ -1,4 +1,5 @@
 import { ACCOUNT_STATUS, type AuthUser } from '@inventory/shared';
+import { APP_BASE, APP_HOME } from '@/app/paths';
 
 /** Pages only a guest may see; a signed-in user is sent to their landing route instead. */
 export const GUEST_ROUTES = ['/login', '/register', '/forgot-password'];
@@ -15,7 +16,7 @@ export const resolveLandingRoute = (user: AuthUser, next?: string): string => {
   if (!user.emailVerified) return '/verify-email';
   if (user.status === ACCOUNT_STATUS.REJECTED) return '/rejected';
   if (user.status === ACCOUNT_STATUS.PENDING) return '/awaiting-approval';
-  return next ?? '/';
+  return next ?? APP_HOME;
 };
 
 /**
@@ -32,8 +33,11 @@ export const safeNext = (url: URL): string | undefined => {
   return target.pathname + target.search + target.hash;
 };
 
+/** Paths that just mean "the app", so remembering them adds nothing. */
+const DEFAULT_LANDINGS = ['/', APP_BASE, `${APP_BASE}/`, APP_HOME];
+
 /** The guest's way back in: /login, remembering the page they asked for. */
 export const loginRedirect = (url: URL): string => {
   const next = url.pathname + url.search;
-  return next === '/' ? '/login' : `/login?next=${encodeURIComponent(next)}`;
+  return DEFAULT_LANDINGS.includes(next) ? '/login' : `/login?next=${encodeURIComponent(next)}`;
 };

@@ -84,7 +84,7 @@ test.describe('client smoke', () => {
     await expect(page.getByText(/Resend code \(\d:\d{2}\)/)).toBeVisible();
     await page.getByLabel('6-digit verification code').fill('123456');
 
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/app\/dashboard$/);
   });
 
   test('telegram sign up: a new Telegram account is asked for a username and an email', async ({ page }) => {
@@ -329,12 +329,12 @@ test.describe('client smoke', () => {
     }
     // Sidebar: one icon per link
     await expect(nav.locator('a svg')).toHaveCount(6);
-    await expect(page.getByRole('link', { name: 'Inventory Manager' })).toHaveAttribute('href', '/');
+    await expect(page.getByRole('link', { name: 'Inventory Manager' })).toHaveAttribute('href', '/app/dashboard');
     await expect(page.getByRole('button', { name: 'Open menu' })).toBeHidden();
 
     await page.getByRole('button', { name: 'Account' }).click();
     await expect(page.getByRole('menu').getByText('a@x.com')).toBeVisible();
-    await expect(page.getByRole('menuitem', { name: 'Profile' })).toHaveAttribute('href', '/profile');
+    await expect(page.getByRole('menuitem', { name: 'Profile' })).toHaveAttribute('href', '/app/profile');
     await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeVisible();
 
     expect(errors).toEqual([]);
@@ -354,7 +354,7 @@ test.describe('client smoke', () => {
     await page.goto('/');
     await expect(page.getByRole('navigation')).toBeHidden();
     await expect(page.getByRole('button', { name: 'Account' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Inventory Manager' })).toHaveAttribute('href', '/');
+    await expect(page.getByRole('link', { name: 'Inventory Manager' })).toHaveAttribute('href', '/app/dashboard');
 
     const openMenu = page.getByRole('button', { name: 'Open menu' });
     const drawer = page.getByRole('dialog');
@@ -364,7 +364,7 @@ test.describe('client smoke', () => {
     await expect(drawer.getByRole('link', { name: 'Movements' })).toBeVisible();
     await drawer.getByRole('link', { name: 'Users' }).click();
     await expect(drawer).toBeHidden();
-    await expect(page).toHaveURL(/\/users$/);
+    await expect(page).toHaveURL(/\/app\/users$/);
 
     // Closes on Escape
     await openMenu.click();

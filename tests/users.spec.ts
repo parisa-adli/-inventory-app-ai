@@ -38,7 +38,7 @@ test.describe('admin users page (stubbed API)', () => {
     await signInAs(page, admin);
     await page.route('**/api/users?*', (route) => route.fulfill({ json: page1([verified, unverified]) }));
 
-    await page.goto('/users');
+    await page.goto('/app/users');
 
     await expect(page.getByRole('heading', { name: 'Pending users' })).toBeVisible();
     const verifiedRow = page.getByRole('row', { name: /Vera Verified/ });
@@ -61,7 +61,7 @@ test.describe('admin users page (stubbed API)', () => {
       return route.fulfill({ json: { ...verified, status: 'active' } });
     });
 
-    await page.goto('/users');
+    await page.goto('/app/users');
     await page.getByRole('row', { name: /Vera Verified/ }).getByRole('button', { name: 'Activate' }).click();
 
     await expect(page.getByText('Vera Verified was activated')).toBeVisible();
@@ -77,7 +77,7 @@ test.describe('admin users page (stubbed API)', () => {
       return route.fulfill({ json: { ...unverified, status: 'rejected' } });
     });
 
-    await page.goto('/users');
+    await page.goto('/app/users');
     await page.getByRole('button', { name: 'Reject' }).click();
     await page.getByRole('button', { name: 'Cancel' }).click();
     expect(rejectCalls).toBe(0);
@@ -98,7 +98,7 @@ test.describe('admin users page (stubbed API)', () => {
       })
     );
 
-    await page.goto('/users');
+    await page.goto('/app/users');
     await page.getByRole('button', { name: 'Activate' }).click();
 
     await expect(page.getByText('This user has not verified their email address yet.')).toBeVisible();
@@ -108,7 +108,7 @@ test.describe('admin users page (stubbed API)', () => {
     await signInAs(page, admin);
     await page.route('**/api/users?*', (route) => route.fulfill({ json: page1([]) }));
 
-    await page.goto('/users');
+    await page.goto('/app/users');
 
     await expect(page.getByText('No users are waiting for approval.')).toBeVisible();
   });
@@ -127,7 +127,7 @@ test.describe('admin users page (stubbed API)', () => {
       return route.fulfill({ json: { ...active, status: 'rejected' } });
     });
 
-    await page.goto('/users');
+    await page.goto('/app/users');
     await page.getByRole('tab', { name: 'Active' }).click();
 
     await expect(page.getByRole('heading', { name: 'Active users' })).toBeVisible();
@@ -157,7 +157,7 @@ test.describe('admin users page (stubbed API)', () => {
       return route.fulfill({ json: { ...rejected, status: 'active' } });
     });
 
-    await page.goto('/users');
+    await page.goto('/app/users');
     await page.getByRole('tab', { name: 'Rejected' }).click();
 
     await expect(page.getByRole('row', { name: /Uli Unverified/ }).getByRole('button')).toBeDisabled();
@@ -170,9 +170,9 @@ test.describe('admin users page (stubbed API)', () => {
   test('staff do not see the Users link and get "no access" on /users', async ({ page }) => {
     await signInAs(page, staff);
 
-    await page.goto('/users');
+    await page.goto('/app/users');
 
-    await expect(page).toHaveURL(/\/users$/);
+    await expect(page).toHaveURL(/\/app\/users$/);
     await expect(page.getByText("You don't have access to this page")).toBeVisible();
     await expect(page.getByRole('link', { name: 'Users' })).toHaveCount(0);
   });

@@ -37,7 +37,7 @@ interface RouteCase {
 
 const UNAUTH: Expected = [401, 'UNAUTHORIZED'];
 
-/** Routes behind `adminOnly`: every gate in order, then the role. `admin` is what the handler answers. */
+/** Routes behind `can(USERS_MANAGE)`: every gate in order, then the permission. `admin` is what the handler answers. */
 const adminRoute = (method: Method, path: string, admin: Expected, body?: object): RouteCase => ({
   method,
   path,

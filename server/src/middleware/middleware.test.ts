@@ -3,7 +3,7 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { requireActive } from './requireActive.js';
 import { requirePasswordChanged } from './requirePasswordChanged.js';
-import { requireRole } from './requireRole.js';
+import { requirePermission } from './requirePermission.js';
 import { requireVerified } from './requireVerified.js';
 import { validate } from './validate.js';
 
@@ -24,19 +24,24 @@ const user = (overrides: Partial<SessionUser> = {}): SessionUser => ({
   ...overrides,
 });
 
-describe('requireRole', () => {
-  it('passes a matching role', () => {
-    const next = run(requireRole('admin'), { user: user({ role: 'admin' }) });
+describe('requirePermission', () => {
+  it('passes when the role grants the permission', () => {
+    const next = run(requirePermission('users.manage'), { user: user({ role: 'admin' }) });
     expect(next).toHaveBeenCalledWith();
   });
 
-  it('403s a non-matching role', () => {
-    const next = run(requireRole('admin'), { user: user() });
+  it('403s FORBIDDEN when the role lacks it', () => {
+    const next = run(requirePermission('users.manage'), { user: user() });
     expect(next.mock.calls[0][0]).toMatchObject({ statusCode: 403, code: 'FORBIDDEN' });
   });
 
+  it('needs every permission listed', () => {
+    const next = run(requirePermission('stock.adjust', 'products.delete'), { user: user() });
+    expect(next.mock.calls[0][0]).toMatchObject({ statusCode: 403 });
+  });
+
   it('401s when unauthenticated', () => {
-    const next = run(requireRole('admin'), {});
+    const next = run(requirePermission('inventory.view'), {});
     expect(next.mock.calls[0][0]).toMatchObject({ statusCode: 401 });
   });
 });

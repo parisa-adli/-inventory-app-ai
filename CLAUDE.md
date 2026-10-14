@@ -30,8 +30,8 @@ For any UI work, read and follow docs/DESIGN.md first (shadcn/ui; screenshots in
   /config         (env.ts validated env, load-env.ts, database.ts)
   /models         (Mongoose schemas: User, EmailToken, AuthSession, RefreshToken, ...)
   /routes         (Express routers, mounted from routes/index.ts under /api)
-  /middleware     (one guard per file: requireAuth, requireVerified, requireActive, requirePasswordChanged, requireRole;
-                   guards.ts composes them as signedIn / authenticated / withRole / adminOnly; validate, errorHandler, rateLimit)
+  /middleware     (one guard per file: requireAuth, requireVerified, requireActive, requirePasswordChanged, requirePermission;
+                   guards.ts composes them as signedIn / authenticated / can(...permissions); validate, errorHandler, rateLimit)
   /services       (jwt, password, email, otp, telegram, ...)
   /utils          (errors: AppError + subclasses, crypto: sha256/randomToken/randomOtp/hmacSha256/safeEqual; every secret and code is generated here)
   /types          (express.d.ts adds req.user)
@@ -56,7 +56,7 @@ Directories like `controllers/` (server) and a feature's `hooks/` / `api/` do no
 - `npm run test:e2e` runs Playwright. On this machine use `PW_CHROMIUM_CHANNEL=msedge` and `--project=chromium` (details in `tasks/TASK.md` → Dev Environment).
 
 ## Working conventions
-- Every mutating server route is guarded by auth middleware + role-guard middleware — never trust the client for role checks.
+- **RBAC:** what each role may do is one table, `ROLE_PERMISSIONS` in `shared/constants/permissions.ts` (PRD §2; fixed in code, not in the DB). Every guarded server route spreads `can(PERMISSIONS.X)` (or `authenticated` / `signedIn`) from `server/src/middleware/guards.ts`; the client hides UI with `useCan` / `<Can>` and guards pages with `requirePermission` in `features/auth/routeGuards.ts`. Never check `role === 'admin'` directly. A new guarded action gets a permission first, and the client is never trusted: the server guard is the boundary.
 - Every stock quantity change (receive, ship, adjustment, or the inline +/- buttons) MUST write a `StockMovement` record in the same transaction/operation as the quantity update. Movements are the audit source of truth — do not let `product.quantity` drift from the sum of its history.
 - Every form: React Hook Form + Zod resolver. Every server mutation route: validate the body with the matching Zod schema (from `@inventory/shared`, via the `validate()` middleware) before touching the DB.
 - Every server read list endpoint (products, stock-movements, users) supports pagination; wire these into TanStack Query with proper `queryKey`s so filters/sort/page all invalidate correctly.

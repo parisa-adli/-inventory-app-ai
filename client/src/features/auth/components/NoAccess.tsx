@@ -19,7 +19,7 @@ export default function NoAccess() {
   );
 }
 
-/** Error boundary for a role-guarded route: a 403 from requireRole shows NoAccess, anything else bubbles on. */
+/** Error boundary for a permission-guarded route: a 403 from requirePermission shows NoAccess, anything else bubbles on. */
 export function NoAccessBoundary() {
   const error = useRouteError();
   if (isRouteErrorResponse(error) && error.status === 403) return <NoAccess />;

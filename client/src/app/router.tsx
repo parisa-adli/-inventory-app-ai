@@ -1,5 +1,5 @@
 import { createBrowserRouter, Navigate } from 'react-router';
-import { ACCOUNT_STATUS, USER_ROLES } from '@inventory/shared';
+import { ACCOUNT_STATUS, PERMISSIONS } from '@inventory/shared';
 import { AuthShell } from './layouts/AuthLayout';
 import AppLayout, { AppShell } from './layouts/AppLayout';
 import AppSkeleton from './layouts/AppSkeleton';
@@ -7,7 +7,7 @@ import NotFound from './layouts/NotFound';
 import RouteError from './layouts/RouteError';
 import { APP_BASE, APP_HOME } from './paths';
 import { NoAccessBoundary } from '@/features/auth/components/NoAccess';
-import { requireGate, requireGuest, requireRole, requireSignedIn } from '@/features/auth/routeGuards';
+import { requireGate, requireGuest, requirePermission, requireSignedIn } from '@/features/auth/routeGuards';
 import AwaitingApproval from '@/features/auth/pages/AwaitingApproval';
 import ForgotPassword from '@/features/auth/pages/ForgotPassword';
 import Login from '@/features/auth/pages/Login';
@@ -83,7 +83,7 @@ export const router = createBrowserRouter([
           { index: true, element: <Navigate to={APP_HOME} replace /> },
           { path: 'dashboard', Component: Dashboard },
           {
-            middleware: [requireRole(USER_ROLES.ADMIN)],
+            middleware: [requirePermission(PERMISSIONS.USERS_MANAGE)],
             loader: runGuards,
             ErrorBoundary: NoAccessBoundary,
             children: [{ path: 'users', Component: Users }],

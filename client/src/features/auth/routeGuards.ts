@@ -1,5 +1,5 @@
 import { data, redirect, type MiddlewareFunction } from 'react-router';
-import { ACCOUNT_STATUS, type AuthUser, type UserRole } from '@inventory/shared';
+import { ACCOUNT_STATUS, hasPermission, type AuthUser, type Permission } from '@inventory/shared';
 import { queryClient } from '@/app/queryClient';
 import { meQuery } from './hooks/useAuth';
 import { loginRedirect, resolveLandingRoute, safeNext } from './landing';
@@ -8,7 +8,7 @@ import { loginRedirect, resolveLandingRoute, safeNext } from './landing';
  * Route middleware: each guard runs before its routes render, so nobody sees a screen they are about
  * to be sent away from. A route using one of these needs a `loader` (even `() => null`): client
  * middleware only runs on a navigation that has a loader to call. These are UX only; the server's
- * requireAuth / requireActive / requireRole remain the real boundary.
+ * guards (`can(...)` in server/src/middleware/guards.ts) remain the real boundary.
  */
 
 /** Cache first; a stale entry is used immediately and refetched in the background. */
@@ -39,14 +39,15 @@ export const requireGate =
   };
 
 /**
- * A page for one role, inside requireSignedIn. Anyone else gets a 403 that the route's errorElement
- * renders inside the shell, keeping the URL. It is thrown after next(): an error thrown before it
- * would bubble to the shell's own boundary and replace the whole shell.
+ * A page that needs `permission` (ROLE_PERMISSIONS in @inventory/shared), inside requireSignedIn.
+ * Anyone else gets a 403 that the route's errorElement renders inside the shell, keeping the URL.
+ * It is thrown after next(): an error thrown before it would bubble to the shell's own boundary and
+ * replace the whole shell.
  */
-export const requireRole =
-  (role: UserRole): MiddlewareFunction =>
+export const requirePermission =
+  (permission: Permission): MiddlewareFunction =>
   async (_args, next) => {
     const user = await getMe();
     await next();
-    if (user?.role !== role) throw data(null, { status: 403 });
+    if (!user || !hasPermission(user.role, permission)) throw data(null, { status: 403 });
   };

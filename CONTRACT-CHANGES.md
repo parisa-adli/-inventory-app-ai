@@ -108,6 +108,12 @@ Server half only; the client moves over in its own session. `/shared` was unfroz
 - `CANNOT_MODIFY_SELF` (403): an admin rejects or demotes their own account via `PATCH /users/:id`. (The legacy `PATCH /:id/reject` keeps its 409 `CANNOT_REVOKE_SELF`; unify on one code when the client moves.)
 - `LAST_ADMIN` (403 or 409): the change would leave no active admin.
 
+## C12. RBAC permission map (no wire change)
+
+- `shared/constants/permissions.ts`: `PERMISSIONS` (`inventory.view`, `products.write`, `stock.adjust`, `products.archive`, `products.delete`, `categories.manage`, `suppliers.manage`, `users.manage`), `ROLE_PERMISSIONS` (staff: the first three; admin: all) and `hasPermission(role, permission)`. Taken from PRD §2; fixed in code, not stored in the DB. `ROLE_HIERARCHY` (unused) removed.
+- Server: `requirePermission(...)` replaces `requireRole`; `can(...)` replaces `adminOnly` / `withRole` (C11's `adminOnly` routes are now `can(USERS_MANAGE)`). Same status codes (403 `FORBIDDEN`).
+- Client works out permissions from `AuthUser.role` with the shared map, so `/me` is unchanged.
+
 ## Not applicable (nothing to change)
 
 - Stale JWT: the access token carries only `sub`; `/me` and `requireAuth` read the DB.

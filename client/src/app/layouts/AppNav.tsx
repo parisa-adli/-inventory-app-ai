@@ -15,7 +15,7 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react'
-import { USER_ROLES, type AuthUser } from '@inventory/shared'
+import { PERMISSIONS, hasPermission, type AuthUser, type Permission } from '@inventory/shared'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -35,21 +35,22 @@ interface NavItem {
   to: string
   label: string
   icon: LucideIcon
+  /** Shown only to users whose role grants it; omitted = every signed-in user. */
+  permission?: Permission
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { to: PATHS.dashboard, label: 'Dashboard', icon: LayoutDashboard },
-  { to: PATHS.products, label: 'Products', icon: Package },
-  { to: PATHS.categories, label: 'Categories', icon: FolderTree },
-  { to: PATHS.suppliers, label: 'Suppliers', icon: Truck },
-  { to: PATHS.movements, label: 'Movements', icon: ArrowLeftRight },
+  { to: PATHS.dashboard, label: 'Dashboard', icon: LayoutDashboard, permission: PERMISSIONS.INVENTORY_VIEW },
+  { to: PATHS.products, label: 'Products', icon: Package, permission: PERMISSIONS.INVENTORY_VIEW },
+  { to: PATHS.categories, label: 'Categories', icon: FolderTree, permission: PERMISSIONS.INVENTORY_VIEW },
+  { to: PATHS.suppliers, label: 'Suppliers', icon: Truck, permission: PERMISSIONS.INVENTORY_VIEW },
+  { to: PATHS.movements, label: 'Movements', icon: ArrowLeftRight, permission: PERMISSIONS.INVENTORY_VIEW },
+  { to: PATHS.users, label: 'Users', icon: Users, permission: PERMISSIONS.USERS_MANAGE },
 ]
-
-const ADMIN_NAV_ITEMS: NavItem[] = [{ to: PATHS.users, label: 'Users', icon: Users }]
 
 const useNavItems = () => {
   const { data: user } = useAuthUser()
-  return user?.role === USER_ROLES.ADMIN ? [...NAV_ITEMS, ...ADMIN_NAV_ITEMS] : NAV_ITEMS
+  return NAV_ITEMS.filter((item) => !item.permission || (user && hasPermission(user.role, item.permission)))
 }
 
 function Logo() {

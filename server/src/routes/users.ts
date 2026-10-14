@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { isValidObjectId } from 'mongoose';
-import { ACCOUNT_STATUS, listUsersQuerySchema, updateUserSchema } from '@inventory/shared';
+import { ACCOUNT_STATUS, PERMISSIONS, listUsersQuerySchema, updateUserSchema } from '@inventory/shared';
 import type { TempPasswordResponse } from '@inventory/shared';
-import { adminOnly } from '../middleware/guards.js';
+import { can } from '../middleware/guards.js';
 import { validate } from '../middleware/validate.js';
 import { User } from '../models/User.js';
 import {
@@ -20,7 +20,7 @@ const router = Router();
 
 // Admin user management. requireAuth re-reads the user, so a demoted, rejected or revoked admin
 // loses access on the next request. The rules live in services/userAdmin.ts.
-router.use(...adminOnly);
+router.use(...can(PERMISSIONS.USERS_MANAGE));
 
 const parseId = (raw: string): string => {
   if (!isValidObjectId(raw)) throw new ValidationError('Invalid user id');

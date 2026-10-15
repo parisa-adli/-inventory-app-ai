@@ -20,6 +20,8 @@ export interface TelegramSignupResult {
 
 interface TelegramSignupInput {
   chatId: string;
+  /** Telegram @handle without the "@", if the account has one. */
+  telegramUsername?: string;
   name: string;
   /** Already normalized (trimmed + lowercased) by the shared email rule. */
   email: string;
@@ -33,6 +35,7 @@ interface TelegramSignupInput {
  */
 export const signupWithTelegram = async ({
   chatId,
+  telegramUsername,
   name,
   email,
 }: TelegramSignupInput): Promise<TelegramSignupResult> => {
@@ -56,7 +59,7 @@ export const signupWithTelegram = async ({
   }
 
   // No password: the account is Telegram-only until the owner sets one via password reset
-  const user = await User.create({ name, email, telegramChatId: chatId });
+  const user = await User.create({ name, email, telegramChatId: chatId, telegramUsername });
   try {
     const token = await createEmailToken(user._id, 'verify-email');
     await sendTracked(user._id, 'verify-email', () => sendVerificationEmail(user.email, user.name, token));

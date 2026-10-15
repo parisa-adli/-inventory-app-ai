@@ -114,6 +114,33 @@ Server half only; the client moves over in its own session. `/shared` was unfroz
 - Server: `requirePermission(...)` replaces `requireRole`; `can(...)` replaces `adminOnly` / `withRole` (C11's `adminOnly` routes are now `can(USERS_MANAGE)`). Same status codes (403 `FORBIDDEN`).
 - Client works out permissions from `AuthUser.role` with the shared map, so `/me` is unchanged.
 
+## C13. Profile & sessions (Phase 1 Part E, 2026-10-15; approved by the user)
+
+Self-service for the signed-in user: display name, sign-in methods (add / change / remove password, link / unlink Telegram) and device sessions. Design: `docs/design/{profile,set-password-to-profile,password-and-telegram-linked}.png`. Terms: **Session**, **Sign out everywhere**, **Sign-in method** in `CONTEXT.md`.
+
+**`AuthUser`** (+ `authUserSchema`) gains `hasPassword: boolean`, `telegramLinked: boolean`, `telegramUsername: string | null` (Telegram `@handle` without the `@`; null when unlinked or the Telegram account has none). Every endpoint returning `AuthUser` carries them, `/me` included.
+
+**New endpoints.** All `authenticated` (verified, active, no forced password change); a temporary-password user still goes through `POST /auth/password`. Mutations answer `{ user: AuthUser }` unless noted.
+- `PATCH /api/auth/me` `{ name }` (`updateProfileSchema` = `registerSchema.pick({ name: true })`).
+- `POST /api/auth/password/set` `{ newPassword }` (`setPasswordSchema`, the C9 rule) for an account without a password; **409 `PASSWORD_ALREADY_SET`** otherwise. Other sessions are kept. Limiter: the change-password one (10 / 15 min / IP).
+- `DELETE /api/auth/password`: removes the password; **409 `LAST_SIGN_IN_METHOD`** without a Telegram link. No re-auth; forgot-password is the recovery path. Other sessions are kept. Same limiter.
+- `DELETE /api/auth/telegram`: unlinks the caller's chat (and discards a pending link-telegram email); **409 `LAST_SIGN_IN_METHOD`** without a password. Other sessions are kept.
+- `POST /api/auth/telegram/link` -> `201 { deepLink, expiresAt }` (same shape as `/telegram/start`), sets the `tg_auth_session` cookie for an `AuthSession` with purpose `LINK` bound to the caller. **409 `TELEGRAM_ALREADY_LINKED`** if the caller already has a chat; 503 `TELEGRAM_UNAVAILABLE` as for `/start`. Telegram start limiter.
+- `GET /api/auth/sessions` -> `{ items: DeviceSession[] }`, `DeviceSession = { id, device, ip, signedInAt, lastActiveAt, current }` (ISO dates; `device` e.g. "Chrome on Windows" or "Unknown device"; `current` = the browser asking). Live sessions only, current first, then most recently active. Not paginated (one user's live sessions).
+- `DELETE /api/auth/sessions` -> `204`: **Sign out everywhere**, this browser included; cookies cleared.
+
+**Changed endpoints.**
+- `POST /api/auth/telegram/verify` on a `LINK` session: links the chat and answers the existing `{ status: 'COMPLETED', user }`, but **issues no new session** (the caller keeps theirs); the Telegram cookie is cleared. 401 `UNAUTHORIZED` when the access cookie is missing or expired (the client refreshes and retries), 403 `FORBIDDEN` when it belongs to another user (the attempt ends), **409 `TELEGRAM_IN_USE`** when the chat belongs to another account or the caller linked one meanwhile (the attempt ends). Login and signup attempts are unchanged. `/status` and `/resend` are unchanged.
+- `DELETE /api/users/:id/credentials/telegram` (admin): **409 `LAST_SIGN_IN_METHOD`** for a user without a password (issue a temporary password first). Otherwise unchanged.
+- Sessions end at once everywhere: `User.sessionsValidAfter` is set on sign out everywhere, change password, reset password, temporary password and refresh-token reuse (`endAllSessions` in `services/jwt.ts`), and `requireAuth` answers 401 for an access token issued before it. Before this, other browsers kept working for up to the 15-minute access token lifetime. Change password still keeps the caller signed in with a fresh session.
+  - **Not admin reject** (changed during implementation, from the approved Q16 list): a rejected user is already shut out of every data route on the next request (`requireActive` re-reads the status), so ending the access token adds no protection. It would only take away the "rejected" screen the browser reaches through `/me`. Reject keeps revoking refresh tokens only (`revokeAllUserTokens`), as before.
+
+**Race safety.** Removing a sign-in method (self password, self unlink, admin unlink) is one conditional update that requires the other method to still exist, so two parallel removals can never leave an account with none. Linking is conditional on the caller having no chat.
+
+**Models (no wire change).** `User` + `telegramUsername`, `sessionsValidAfter`; `telegramUsername` is written on link, Telegram signup and every Telegram sign in. `RefreshToken` + `familyId` (one per **Session**, kept across rotation), `familyCreatedAt`, `lastUsedAt`, `userAgent`, `ip` (`req.ip`, honours `TRUST_PROXY`; deleted with the token by the TTL index). Rows from before this change count as their own session. `AuthSession.purpose` + `LINK` (set at creation). The bot sends link-specific text for `LINK` codes.
+
+**Shared:** `updateProfileSchema`, `setPasswordSchema`, `deviceSessionSchema` / `DeviceSession`, `SessionsResponse`; `AuthUser` + the three fields above.
+
 ## Not applicable (nothing to change)
 
 - Stale JWT: the access token carries only `sub`; `/me` and `requireAuth` read the DB.

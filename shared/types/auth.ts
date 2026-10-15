@@ -12,6 +12,28 @@ export interface AuthUser {
   emailVerified: boolean;
   /** Signed in with an admin-issued temporary password: only POST /api/auth/password and logout work. */
   mustChangePassword: boolean;
+  /** False for a Telegram-only account (it can add one on the Profile page). */
+  hasPassword: boolean;
+  telegramLinked: boolean;
+  /** Telegram handle without the "@"; null when unlinked or the Telegram account has none. */
+  telegramUsername: string | null;
+}
+
+/** One signed-in browser (a refresh-token family), as listed on the Profile page. */
+export interface DeviceSession {
+  id: string;
+  /** e.g. "Chrome on Windows", or "Unknown device". */
+  device: string;
+  ip: string | null;
+  signedInAt: string;
+  lastActiveAt: string;
+  /** The browser that asked. */
+  current: boolean;
+}
+
+/** GET /api/auth/sessions: live sessions only, the current one first, then most recently active. */
+export interface SessionsResponse {
+  items: DeviceSession[];
 }
 
 /**

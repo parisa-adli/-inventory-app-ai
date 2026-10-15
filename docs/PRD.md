@@ -76,6 +76,8 @@ A `pending` user can still log in (either method) but is routed to an **"awaitin
 - On successful login, issue JWT **access** + **refresh** tokens as **httpOnly cookies**, `Secure` flag (HTTPS only), `SameSite=Strict`.
 - Default lifetimes (flagged assumption, unchanged after review): access 15 min, refresh 7 days, with rotation (new refresh token + revoke old one on each use).
 - `POST /api/auth/refresh` rotates tokens; `POST /api/auth/logout` clears cookies + revokes the refresh token server-side.
+- Each signed-in browser is one **Session** (a refresh-token family that survives rotation). The Profile page lists them and offers **Sign out everywhere**, which ends every session at once, this browser included. Sign out everywhere, a password change or reset, and an admin temporary password also make older access tokens stop working immediately (`sessionsValidAfter`); an admin rejection only revokes refresh tokens, so the rejected user still reaches the rejected screen.
+- **Sign-in methods:** a password, a Telegram link, or both. An account always keeps at least one: the last one cannot be removed by the user or by an admin (`409 LAST_SIGN_IN_METHOD`).
 
 ## 4. Data Models
 
@@ -88,6 +90,8 @@ A `pending` user can still log in (either method) but is routed to an **"awaitin
   status: "pending" | "active" | "rejected",
   emailVerified: Boolean,
   telegramChatId: String (optional),
+  telegramUsername: String (optional),  // Telegram @handle without "@", refreshed on every Telegram sign in
+  sessionsValidAfter: Date (optional),  // set by sign out everywhere / password change / reset; older access tokens stop working
   lastEmailFailedAt: Date (optional),   // set when a mail send fails, cleared by the next success
   lastEmailFailedType: "verify-email" | "reset-password" | "link-telegram" (optional),
   createdAt
@@ -107,14 +111,14 @@ A `pending` user can still log in (either method) but is routed to an **"awaitin
 }
 ```
 
-### AuthSession (one Telegram sign in / sign up attempt)
+### AuthSession (one Telegram sign in / sign up / link attempt)
 
 ```
 {
   _id,
   sessionIdHash: String,        // sha256 of the session id held in the browser cookie (unique)
   nonceHash: String,            // sha256 of the nonce in the t.me deep link (unique, single use)
-  purpose: "LOGIN" | "SIGNUP",  // set when the code is verified: linked account vs new account
+  purpose: "LOGIN" | "SIGNUP" | "LINK",  // LOGIN/SIGNUP set when the code is verified; LINK set at creation (Profile) with user = the signed-in user
   status: "PENDING" | "AWAITING_OTP" | "AWAITING_PROFILE" | "COMPLETED" | "EXPIRED" | "LOCKED",
   user: ref User (optional),    // set when the attempt signed someone in or created the account
   attempts: Number,             // wrong entries for the current code (max 5)
@@ -134,7 +138,8 @@ A `pending` user can still log in (either method) but is routed to an **"awaitin
 ### RefreshToken
 
 ```
-{ _id, user: ref User, tokenHash, expiresAt, revoked: Boolean, createdAt }
+{ _id, user: ref User, tokenHash, expiresAt, revoked: Boolean, createdAt,
+  familyId, familyCreatedAt, lastUsedAt, userAgent, ip }   // one family per Session (browser); kept across rotation
 ```
 
 ### Category
@@ -233,6 +238,13 @@ Global read-only table: Date, Product, Type (receive/ship/adjustment), Quantity,
 - "Rejected/revoked" screen.
 - Admin: "Pending Users" panel (activate/reject, blocked until `emailVerified`), and a users list to revoke/reactivate active users.
 
+### 6.7 Profile
+
+`/app/profile`, from the account menu (`docs/design/profile.png`, `set-password-to-profile.png`, `password-and-telegram-linked.png`):
+- **Account:** display name (editable, same rule as sign up; Save enabled once changed) and the email with its Verified badge (read-only).
+- **Sign-in methods:** Password `Set | Not set` with Add password (Telegram-only accounts), Change password (current + new; signs out other devices) and Remove password; Telegram `Linked as @handle | Not linked` with Link Telegram (a dialog running the QR -> code steps of Telegram sign in, for the signed-in user) and Unlink Telegram. The removal of the only remaining method is disabled with "Your only way to sign in — add another before removing it." Removals and sign out everywhere ask for confirmation.
+- **Active sessions:** device ("Chrome on Windows"), "This device", IP, last active and signed-in times, and Sign out everywhere (then `/login`).
+
 ## 7. API Endpoints (suggested)
 
 ```
@@ -252,6 +264,17 @@ POST /api/auth/resend-verification      (session; 200 { devMailUrl? }; 429 RATE_
 PATCH /api/auth/email                   (session, unverified only; 200 { user, devMailUrl? }; 403 FORBIDDEN, 409 DUPLICATE_EMAIL)
 POST /api/auth/forgot-password          (always an empty 204, same for unknown emails; 429 RATE_LIMITED)
 POST /api/auth/reset-password/:token    (204; 400 INVALID_TOKEN | TOKEN_EXPIRED)
+
+Profile (signed in, verified, active)
+PATCH  /api/auth/me                     ({ name } -> { user })
+POST   /api/auth/password               ({ currentPassword, newPassword } -> { user }; other sessions end)
+POST   /api/auth/password/set           ({ newPassword } -> { user }; 409 PASSWORD_ALREADY_SET)
+DELETE /api/auth/password               (-> { user }; 409 LAST_SIGN_IN_METHOD)
+DELETE /api/auth/telegram               (-> { user }; 409 LAST_SIGN_IN_METHOD)
+POST   /api/auth/telegram/link          (-> deepLink, expiresAt; 409 TELEGRAM_ALREADY_LINKED; then status/resend/verify as sign in,
+                                          verify links without a new session; 409 TELEGRAM_IN_USE)
+GET    /api/auth/sessions               (-> { items: [{ id, device, ip, signedInAt, lastActiveAt, current }] })
+DELETE /api/auth/sessions               (204; sign out everywhere, this browser included)
 
 Users (admin)
 GET   /api/users?status=pending

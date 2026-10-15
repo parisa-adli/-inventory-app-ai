@@ -330,6 +330,9 @@ describe('sessions: /me, /refresh, /logout', () => {
       status: 'active',
       emailVerified: true,
       mustChangePassword: false,
+      hasPassword: true,
+      telegramLinked: false,
+      telegramUsername: null,
     });
   });
 

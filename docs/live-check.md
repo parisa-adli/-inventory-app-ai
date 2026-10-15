@@ -50,6 +50,11 @@ profile submissions, QR/session valid 5 min, profile step 10 min.
 | R3 | Resend verification mail from the awaiting-approval screen 4 times in an hour | 4th refused (shared budget of 3 per hour with change-email) | |
 | X1 | Change email while still unverified (`PATCH /auth/email` from the UI; refused once verified) | New verification mail goes to the **new** address; old link no longer works | |
 | X2 | Reject a user, then try to sign in (email and Telegram) | Rejected screen / 403; reactivate restores access | |
+| P1 | Signed in with a password-only account (no Telegram), Profile > Link Telegram, scan the QR, press Start | Bot replies "Your code to link this Telegram account to Inventory Manager is …" | |
+| P2 | Enter the code in the dialog | Dialog closes, "Telegram linked", Profile shows "Linked as @<your handle>"; still signed in (no new sign in) | |
+| P3 | Sign out, Telegram sign in with that Telegram account | Signs in to the same account | |
+| P4 | Profile > Link Telegram from a second account with the **same** Telegram account | After the code: "already linked to an account" (409 `TELEGRAM_IN_USE`); nothing changes | |
+| P5 | Sign in from two browsers, Profile > Sign out everywhere in one | Both lists showed 2 sessions; this browser goes to `/login`; the other loses access on its next click | |
 
 ## Report
 - Date, who ran it, bot username, Brevo sender: _fill in_

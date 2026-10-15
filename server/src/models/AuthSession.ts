@@ -9,7 +9,9 @@ export const AUTH_SESSION_STATUSES = [
   'LOCKED', // too many wrong codes or profile attempts; "Start over" required
 ] as const;
 
-export const AUTH_SESSION_PURPOSES = ['LOGIN', 'SIGNUP'] as const;
+// LOGIN / SIGNUP are decided when the code is verified; LINK is set at creation (Profile page, signed in)
+export const AUTH_SESSION_PURPOSES = ['LOGIN', 'SIGNUP', 'LINK'] as const;
+export type AuthSessionPurpose = (typeof AUTH_SESSION_PURPOSES)[number];
 
 export type AuthSessionStatus = (typeof AUTH_SESSION_STATUSES)[number];
 
@@ -23,9 +25,11 @@ const authSessionSchema = new Schema(
   {
     sessionIdHash: { type: String, required: true, unique: true },
     nonceHash: { type: String, required: true, unique: true },
-    // Decided when the code is verified: LOGIN for a linked Telegram account, SIGNUP for a new one
+    // LOGIN for a linked Telegram account, SIGNUP for a new one (both set at verification);
+    // LINK from the Profile page, set at creation together with `user`
     purpose: { type: String, enum: AUTH_SESSION_PURPOSES },
     status: { type: String, enum: AUTH_SESSION_STATUSES, default: 'PENDING', required: true },
+    // LOGIN/SIGNUP: who was signed in or created. LINK: the signed-in user who asked to link
     user: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     // Wrong codes for the current code; reset on resend
     attempts: { type: Number, default: 0 },

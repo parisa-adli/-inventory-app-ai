@@ -16,8 +16,12 @@ const userSchema = new Schema(
     },
     emailVerified: { type: Boolean, default: false, required: true },
     telegramChatId: { type: String },
+    // Telegram @handle without the "@", refreshed on every Telegram sign in; shown on the Profile page
+    telegramUsername: { type: String },
     // Set by an admin-issued temporary password; every guarded route is closed until the user changes it
     mustChangePassword: { type: Boolean, default: false, required: true },
+    // Set whenever every session is ended; access tokens issued before it stop working at once
+    sessionsValidAfter: { type: Date },
     // Last admin status change. statusReason is kept only while the account is rejected
     statusReason: { type: String },
     statusChangedAt: { type: Date },

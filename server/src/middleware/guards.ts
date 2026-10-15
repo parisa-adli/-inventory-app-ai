@@ -1,4 +1,4 @@
-import type { RequestHandler } from 'express';
+import type { Request, RequestHandler, Response } from 'express';
 import type { Permission } from '@inventory/shared';
 import { requireActive } from './requireActive.js';
 import { requireAuth } from './requireAuth.js';
@@ -23,3 +23,15 @@ export const can = (...permissions: Permission[]): RequestHandler[] => [
   ...authenticated,
   requirePermission(...permissions),
 ];
+
+/**
+ * Runs a guard chain inside a handler, for a route that is open but has one branch that needs a user
+ * (the LINK branch of /auth/telegram/verify). Throws the first guard's error; sets req.user.
+ */
+export const assertGuards = async (req: Request, guards: RequestHandler[]): Promise<void> => {
+  for (const guard of guards) {
+    await new Promise<void>((resolve, reject) => {
+      Promise.resolve(guard(req, {} as Response, (err?: unknown) => (err ? reject(err) : resolve()))).catch(reject);
+    });
+  }
+};

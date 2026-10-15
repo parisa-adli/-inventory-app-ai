@@ -17,6 +17,7 @@ import ResetPassword from '@/features/auth/pages/ResetPassword';
 import VerifyEmail from '@/features/auth/pages/VerifyEmail';
 import VerifyEmailPending from '@/features/auth/pages/VerifyEmailPending';
 import Dashboard from '@/features/dashboard/pages/Dashboard';
+import Profile from '@/features/profile/pages/Profile';
 import Users from '@/features/users/pages/Users';
 
 // Client middleware only runs on a navigation that has a loader to call, so every guarded route has one
@@ -82,6 +83,7 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <Navigate to={APP_HOME} replace /> },
           { path: 'dashboard', Component: Dashboard },
+          { path: 'profile', Component: Profile },
           {
             middleware: [requirePermission(PERMISSIONS.USERS_MANAGE)],
             loader: runGuards,

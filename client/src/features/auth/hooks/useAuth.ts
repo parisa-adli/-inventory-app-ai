@@ -49,17 +49,25 @@ export const useRegister = () =>
     onError,
   });
 
-export const useLogout = () => {
+/** After the server ended this browser's session (sign out, sign out everywhere). */
+export const useEndedSession = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  return () => {
+    // Nothing from this session may leak to the next user. Mark the browser a guest first, then
+    // go to a plain /login: a ?next= of this page would carry the next person back into it.
+    queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== authKeys.me[0] });
+    queryClient.setQueryData(authKeys.me, null);
+    void navigate('/login', { replace: true });
+  };
+};
+
+export const useLogout = () => {
+  const ended = useEndedSession();
   return useMutation({
     mutationFn: authApi.logout,
     onSuccess: () => {
-      // Nothing from this session may leak to the next user. Mark the browser a guest first, then
-      // go to a plain /login: a ?next= of this page would carry the next person back into it.
-      queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== authKeys.me[0] });
-      queryClient.setQueryData(authKeys.me, null);
-      void navigate('/login', { replace: true });
+      ended();
       toast.success('Logged out');
     },
     onError,

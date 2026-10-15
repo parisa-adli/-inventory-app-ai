@@ -205,7 +205,19 @@ test.describe('client smoke', () => {
   test('an unverified user is sent to /verify-email, can change the email and is rate limited on resend', async ({
     page,
   }) => {
-    let user = { id: '1', name: 'Eve', email: 'typo@x.com', role: 'staff', status: 'pending', emailVerified: false };
+    // A full AuthUser: the change-email response is validated with the shared schema
+    let user = {
+      id: '1',
+      name: 'Eve',
+      email: 'typo@x.com',
+      role: 'staff',
+      status: 'pending',
+      emailVerified: false,
+      mustChangePassword: false,
+      hasPassword: true,
+      telegramLinked: false,
+      telegramUsername: null,
+    };
     await page.route('**/api/auth/me', (route) => route.fulfill({ json: user }));
     await page.route('**/api/auth/email', async (route) => {
       const { email } = route.request().postDataJSON();

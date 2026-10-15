@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ACCOUNT_STATUS } from '../constants/account-status';
 import { USER_ROLES } from '../constants/roles';
-import type { AuthUser, ChangeEmailResponse } from '../types/auth';
+import type { AuthUser, ChangeEmailResponse, DeviceSession, SessionsResponse } from '../types/auth';
 
 export const PASSWORD_MIN_LENGTH = 10;
 /** bcrypt ignores every byte after the 72nd, so longer passwords would be silently truncated. */
@@ -67,6 +67,14 @@ export const changePasswordSchema = z.object({
   newPassword: passwordField,
 });
 
+/** PATCH /api/auth/me: the signed-in user renames themselves (same rule as at sign up). */
+export const updateProfileSchema = registerSchema.pick({ name: true });
+
+/** POST /api/auth/password/set: an account without a password (Telegram-only) adds one. */
+export const setPasswordSchema = z.object({
+  newPassword: passwordField,
+});
+
 /** Shape of the user object the auth endpoints return (see `AuthUser`). */
 export const authUserSchema = z.object({
   id: z.string(),
@@ -76,7 +84,24 @@ export const authUserSchema = z.object({
   status: z.enum([ACCOUNT_STATUS.PENDING, ACCOUNT_STATUS.ACTIVE, ACCOUNT_STATUS.REJECTED]),
   emailVerified: z.boolean(),
   mustChangePassword: z.boolean(),
+  hasPassword: z.boolean(),
+  telegramLinked: z.boolean(),
+  telegramUsername: z.string().nullable(),
 }) satisfies z.ZodType<AuthUser>;
+
+/** One entry of GET /api/auth/sessions. */
+export const deviceSessionSchema = z.object({
+  id: z.string(),
+  device: z.string(),
+  ip: z.string().nullable(),
+  signedInAt: z.string(),
+  lastActiveAt: z.string(),
+  current: z.boolean(),
+}) satisfies z.ZodType<DeviceSession>;
+
+export const sessionsResponseSchema = z.object({
+  items: z.array(deviceSessionSchema),
+}) satisfies z.ZodType<SessionsResponse>;
 
 /** Response of PATCH /api/auth/email; `devMailUrl` only outside production when mail is only logged. */
 export const changeEmailResponseSchema = z.object({
@@ -93,3 +118,5 @@ export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export type ChangeEmailInput = z.infer<typeof changeEmailSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+export type SetPasswordInput = z.infer<typeof setPasswordSchema>;

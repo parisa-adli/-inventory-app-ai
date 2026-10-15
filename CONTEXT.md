@@ -16,8 +16,16 @@ _Avoid_: "confirmed", "activated" (activation is the admin's decision, not the e
 What a `pending` user sees after signing in: they have a session but no access to data until an admin activates them.
 
 **Session**
-A signed-in browser: a short-lived access cookie plus a longer-lived refresh cookie. Signing out, resetting a password or being rejected ends it.
-_Avoid_: "token" for the whole thing (a token is one cookie's value), "logged in".
+One signed-in browser or device, from the moment someone signs in on it until it is signed out: a short-lived access cookie plus a longer-lived refresh cookie that is silently renewed while the browser is used. Renewing never starts a new session; signing in again does. An account can have several sessions at once, and the Profile page lists them with the device, when it signed in and when it was last active. Signing out, **Sign out everywhere**, changing or resetting the password, or being rejected ends it.
+_Avoid_: "token" for the whole thing (a token is one cookie's value), "logged in", "device" alone (one device can hold sessions in two browsers).
+
+**Sign out everywhere**
+Ends every **Session** of the account at once, including the one used to ask for it; other browsers lose access immediately, not when their cookies run out. The account itself and its sign-in methods are unchanged.
+_Avoid_: "log out all", "revoke tokens".
+
+**Sign-in method**
+A way into an account: a password, a **Telegram link**, or both. An account must always keep at least one; the last one cannot be removed, by the user or by an admin.
+_Avoid_: "credential" in user-facing text, "login method".
 
 **Guest**
 A browser with no **Session**. A guest can only sign in, sign up, ask for a password reset, or use an **Emailed link**.
@@ -36,7 +44,9 @@ A single-use, expiring link sent to a user's email address, used to verify the e
 ## Telegram
 
 **Telegram link**
-The association between one account and one Telegram chat. An account has at most one, and a chat belongs to at most one account. It is created by **Telegram signup**
+The association between one account and one Telegram chat. An account has at most one, and a chat belongs to at most one account. It is created by **Telegram signup**, by confirming an **Emailed link**, or from the Profile page by scanning the QR code and entering the **Verification code** while signed in. It is a **Sign-in method**.
+
+**Telegram signup**
 Creating an account from a verified Telegram chat: scan the QR code, press Start in the bot, enter the **Verification code** on the website, then give a username and an email. It always yields a `pending` staff account with no password. If the email already has an account, nothing is created or linked until the owner confirms by **Emailed link**.
 _Avoid_: "Telegram registration", "webhook signup".
 

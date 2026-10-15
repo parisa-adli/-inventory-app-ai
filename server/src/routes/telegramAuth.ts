@@ -1,4 +1,4 @@
-import { Router, type Request } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { telegramCompleteSchema, telegramVerifySchema } from '@inventory/shared';
 import { env } from '../config/env.js';
 import {
@@ -8,6 +8,7 @@ import {
   telegramStatusLimiter,
   telegramVerifyLimiter,
 } from '../middleware/rateLimit.js';
+import { assertGuards, authenticated } from '../middleware/guards.js';
 import { validate } from '../middleware/validate.js';
 import { assertNotRejected } from '../services/authAccount.js';
 import { assertEmailAvailable } from '../services/email.js';
@@ -16,6 +17,7 @@ import { assertTelegramAvailable, telegramDeepLink } from '../services/telegram.
 import {
   completeTelegramSignup,
   createAuthSession,
+  createLinkSession,
   discardAuthSession,
   getAuthSessionStatus,
   resendOtp,
@@ -42,14 +44,31 @@ const telegramCookieOptions = {
 
 const telegramSessionId = (req: Request): string | undefined => req.cookies?.[TELEGRAM_SESSION_COOKIE];
 
-router.post('/start', telegramStartLimiter, async (req, res) => {
-  assertTelegramAvailable();
+/** Hands the browser a fresh attempt: the cookie for it and the deep link for the QR code. */
+const answerNewAttempt = (res: Response, attempt: { sessionId: string; nonce: string; expiresAt: Date }) => {
+  res.cookie(TELEGRAM_SESSION_COOKIE, attempt.sessionId, { ...telegramCookieOptions, maxAge: TELEGRAM_COOKIE_MAX_AGE_MS });
+  res.status(201).json({ deepLink: telegramDeepLink(attempt.nonce), expiresAt: attempt.expiresAt.toISOString() });
+};
+
+/** Drops the attempt this browser held before it asked for a fresh QR code. */
+const discardPrevious = async (req: Request) => {
   const previous = telegramSessionId(req);
   if (previous) await discardAuthSession(previous);
+};
 
-  const { sessionId, nonce, expiresAt } = await createAuthSession();
-  res.cookie(TELEGRAM_SESSION_COOKIE, sessionId, { ...telegramCookieOptions, maxAge: TELEGRAM_COOKIE_MAX_AGE_MS });
-  res.status(201).json({ deepLink: telegramDeepLink(nonce), expiresAt: expiresAt.toISOString() });
+// Sign in / sign up (guests)
+router.post('/start', telegramStartLimiter, async (req, res) => {
+  assertTelegramAvailable();
+  await discardPrevious(req);
+  answerNewAttempt(res, await createAuthSession());
+});
+
+// Profile page: the signed-in user links a Telegram account; /status, /resend and /verify then serve it
+router.post('/link', ...authenticated, telegramStartLimiter, async (req, res) => {
+  assertTelegramAvailable();
+  const attempt = await createLinkSession(req.user!.id);
+  await discardPrevious(req);
+  answerNewAttempt(res, attempt);
 });
 
 router.get('/status', telegramStatusLimiter, async (req, res) => {
@@ -59,7 +78,19 @@ router.get('/status', telegramStatusLimiter, async (req, res) => {
 
 router.post('/verify', telegramVerifyLimiter, validate(telegramVerifySchema), async (req, res) => {
   assertTelegramAvailable();
-  const result = await verifyOtp(telegramSessionId(req), req.body.code);
+  // Only a LINK attempt asks who is signed in, with the same gates as /link (401 when nobody is: the
+  // client refreshes and retries; 403 for a user rejected or put on a temporary password meanwhile)
+  const callerId = async () => {
+    await assertGuards(req, authenticated);
+    return req.user!.id;
+  };
+  const result = await verifyOtp(telegramSessionId(req), req.body.code, callerId);
+  if (result.status === 'LINKED') {
+    // The caller keeps the session they already have
+    res.clearCookie(TELEGRAM_SESSION_COOKIE, telegramCookieOptions);
+    res.json({ status: 'COMPLETED', user: toAuthUser(result.user) });
+    return;
+  }
   if (result.status === 'AWAITING_PROFILE') {
     res.json({ status: 'AWAITING_PROFILE', prefillDisplayName: result.prefillDisplayName });
     return;
@@ -67,7 +98,7 @@ router.post('/verify', telegramVerifyLimiter, validate(telegramVerifySchema), as
 
   assertNotRejected(result.user);
   // Pending users still get a session; the client routes them by /auth/me
-  await issueSession(res, result.user);
+  await issueSession(req, res, result.user);
   res.clearCookie(TELEGRAM_SESSION_COOKIE, telegramCookieOptions);
   res.json({ status: 'COMPLETED', user: toAuthUser(result.user) });
 });
@@ -84,7 +115,7 @@ router.post('/complete', telegramCompleteLimiter, validate(telegramCompleteSchem
 
   res.clearCookie(TELEGRAM_SESSION_COOKIE, telegramCookieOptions);
   if (result.outcome === 'created') {
-    await issueSession(res, result.user);
+    await issueSession(req, res, result.user);
     res.status(201).json({ status: 'COMPLETED', outcome: 'created', user: toAuthUser(result.user) });
     return;
   }

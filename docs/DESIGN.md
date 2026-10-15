@@ -100,6 +100,18 @@ Dark-mode values come from shadcn's neutral `.dark` block in `globals.css`. Do n
   - On the left: "Showing 1–10 of 98" (muted).
   - On the right: outline Previous/Next buttons with chevrons, and "Page 1 of 10" between them.
 
+### Profile page pattern (`docs/design/profile.png`, `set-password-to-profile.png`, `password-and-telegram-linked.png`)
+
+- `/app/profile`, built in `client/src/features/profile`. H1 "Profile", then three `Card`s stacked with `space-y-6` in a `max-w-2xl` column: Account, Sign-in methods, Active sessions.
+- **Account:** the display-name `Input` with a primary "Save" on the same row, disabled until the value changes. Below, "Email" as a label, the address and a `secondary` "Verified" badge (read-only).
+- **Sign-in methods:** `CardDescription` "Both reach this same account." One block per method, separated by `border-t`: a label (`text-sm font-medium`) over an `outline` status badge ("Set" / "Not set", "Linked as @handle" / "Not linked") on the left, actions on the right.
+  - Password not set: a primary "Add password" that opens an inline form (new password + hint, primary submit, ghost "Cancel").
+  - Password set: a ghost "Change password" (inline form: current + new) and an outline "Remove password".
+  - Telegram: an outline "Link Telegram" (opens a `Dialog` running the Telegram QR -> code steps) or "Unlink Telegram".
+  - The only remaining method's remove button is disabled, with `text-xs text-muted-foreground` under it: "Your only way to sign in — add another before removing it."
+- **Active sessions:** one row per session: the device (`text-sm font-medium`) with a default `Badge` "This device" for the current one, and a `text-xs text-muted-foreground` line "IP · Active … · Signed in …". Below the list, a `destructive` "Sign out everywhere".
+- Remove password, Unlink Telegram and Sign out everywhere confirm with `AlertDialog` (destructive action button, outline Cancel).
+
 ## 6. Rules
 
 **DO**

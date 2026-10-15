@@ -4,7 +4,7 @@ import { createApp } from '../app.js';
 import { User } from '../models/User.js';
 import { ACCESS_COOKIE, signAccessToken } from '../services/jwt.js';
 import { hashPassword } from '../services/password.js';
-import { clearTestDb, connectTestDb, disconnectTestDb } from '../test/db.js';
+import { clearTestDb, connectTestDb, cookieHeader, disconnectTestDb } from '../test/db.js';
 
 // PRD §2 permission matrix for every guarded route that exists today. Sessions are minted directly
 // (a rejected user cannot log in), and the guards re-read the user from the DB on every request.
@@ -60,6 +60,21 @@ const selfServiceRoute = (
   body?: object
 ): RouteCase => ({ method, path, body, expect: { anonymous: UNAUTH, ...answers } });
 
+/** Routes behind `authenticated`: every gate in order; `answer` is what staff and admins get (Profile, C13). */
+const accountRoute = (method: Method, path: string, answer: Expected, body?: object): RouteCase => ({
+  method,
+  path,
+  body,
+  expect: {
+    anonymous: UNAUTH,
+    unverified: [403, 'EMAIL_UNVERIFIED'],
+    pending: [403, 'ACCOUNT_PENDING'],
+    rejected: [403, 'ACCOUNT_REJECTED'],
+    staff: answer,
+    admin: answer,
+  },
+});
+
 const sameForAll = (expected: Expected) => ({
   unverified: expected,
   pending: expected,
@@ -80,6 +95,15 @@ const ROUTES: RouteCase[] = [
   ),
   // A wrong current password proves the guard let the request through without changing anything
   selfServiceRoute('post', '/api/auth/password', sameForAll([400, 'INVALID_CREDENTIALS']), WRONG_PASSWORD),
+
+  // Every persona has a password and no Telegram link, so the sign-in-method rules answer
+  accountRoute('patch', '/api/auth/me', 200, { name: 'Renamed' }),
+  accountRoute('post', '/api/auth/password/set', [409, 'PASSWORD_ALREADY_SET'], { newPassword: 'An0ther-Passw0rd' }),
+  accountRoute('delete', '/api/auth/password', [409, 'LAST_SIGN_IN_METHOD']),
+  accountRoute('delete', '/api/auth/telegram', 200),
+  accountRoute('get', '/api/auth/sessions', 200),
+  accountRoute('delete', '/api/auth/sessions', 204),
+  accountRoute('post', '/api/auth/telegram/link', 201),
 
   adminRoute('get', '/api/users', 200),
   adminRoute('patch', '/api/users/:id', 200, { role: 'staff' }),
@@ -152,7 +176,9 @@ describe('gates on a live session', () => {
     });
     expectAnswer(changed, 200);
     expect(changed.body.user.mustChangePassword).toBe(false);
-    expectAnswer(await send('get', '/api/users', cookie), 200);
+    // Changing the password ends every session; this browser continues on the fresh one it was given
+    expectAnswer(await send('get', '/api/users', cookie), [401, 'UNAUTHORIZED']);
+    expectAnswer(await send('get', '/api/users', cookieHeader(changed.headers['set-cookie'])), 200);
   });
 
   // Item 2: the 15-minute access token carries no rights of its own; the guards read the DB

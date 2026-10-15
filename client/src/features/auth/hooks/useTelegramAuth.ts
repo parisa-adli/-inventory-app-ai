@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { getApiError } from '@/lib/apiError';
+import type { AuthUser } from '@inventory/shared';
 import * as authApi from '../api/authApi';
 import { authKeys } from './useAuth';
 
@@ -35,12 +36,20 @@ const useSecondsUntil = (iso: string | null | undefined): number => {
 
 const POLL_INTERVAL_MS = 2000;
 
+interface TelegramAuthOptions {
+  /** Creates the attempt. Default: sign in / sign up; the Profile page passes the link start. */
+  start?: () => Promise<authApi.TelegramAuthSession>;
+  /** A verified code finished the attempt. Default: sign the user in (the route guards redirect). */
+  onCompleted?: (user: AuthUser) => void;
+}
+
 /**
  * Drives Telegram sign in and sign up (one flow, the server decides which): QR code -> code from the bot ->
  * code on the website -> (new Telegram accounts only) username + email. Polling stops once the bot has sent
- * the code, on expiry and on unmount.
+ * the code, on expiry and on unmount. Linking from the Profile page runs the same steps with its own
+ * `start` and `onCompleted`.
  */
-export const useTelegramAuth = () => {
+export const useTelegramAuth = ({ start: startAttempt = authApi.startTelegramAuth, onCompleted }: TelegramAuthOptions = {}) => {
   const queryClient = useQueryClient();
   const [session, setSession] = useState<authApi.TelegramAuthSession | null>(null);
   // Phases after the QR step; while null the phase is derived from the polled status
@@ -51,7 +60,7 @@ export const useTelegramAuth = () => {
   const [error, setError] = useState<string | null>(null);
 
   const start = useMutation({
-    mutationFn: authApi.startTelegramAuth,
+    mutationFn: startAttempt,
     onSuccess: setSession,
     onError: (err) => toast.error(getApiError(err).message),
   });
@@ -98,7 +107,8 @@ export const useTelegramAuth = () => {
     onSuccess: (result) => {
       setError(null);
       if (result.status === 'COMPLETED') {
-        signedIn(result.user, result.user.name, 'Welcome back');
+        if (onCompleted) onCompleted(result.user);
+        else signedIn(result.user, result.user.name, 'Welcome back');
         return;
       }
       setPrefill(result.prefillDisplayName ?? '');

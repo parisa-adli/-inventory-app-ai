@@ -6,8 +6,10 @@ import {
   loginSchema,
   registerSchema,
   resetPasswordSchema,
+  setPasswordSchema,
+  updateProfileSchema,
 } from '@inventory/shared';
-import { signedIn } from '../middleware/guards.js';
+import { authenticated, signedIn } from '../middleware/guards.js';
 import {
   changePasswordLimiter,
   forgotPasswordEmailLimiter,
@@ -28,13 +30,17 @@ import {
   registerUser,
   resendVerification,
   resetPassword,
+  updateName,
 } from '../services/authAccount.js';
 import { assertEmailAvailable, type DeliveryResult } from '../services/email.js';
+import { listDeviceSessions } from '../services/deviceSessions.js';
+import { removePassword, setPassword, unlinkTelegram } from '../services/signInMethods.js';
 import {
   REFRESH_COOKIE,
   clearAuthCookies,
   issueSession,
   revokeRefreshToken,
+  endAllSessions,
   rotateRefreshToken,
 } from '../services/jwt.js';
 import { toAuthUser } from '../utils/authUser.js';
@@ -73,7 +79,7 @@ router.get('/verify-email/:token', async (req, res) => {
 router.post('/login', loginLimiter, validate(loginSchema), async (req, res) => {
   const user = await authenticate(req.body.email, req.body.password);
   // Pending users still get a session; the client routes them by /auth/me
-  await issueSession(res, user);
+  await issueSession(req, res, user);
   res.json({ user: toAuthUser(user) });
 });
 
@@ -82,7 +88,7 @@ router.post('/refresh', async (req, res) => {
   if (!raw) throw new UnauthorizedError('Refresh token missing');
 
   try {
-    const user = await rotateRefreshToken(raw, res);
+    const user = await rotateRefreshToken(raw, req, res);
     res.json({ user: toAuthUser(user) });
   } catch (err) {
     clearAuthCookies(res);
@@ -100,6 +106,11 @@ router.post('/logout', async (req, res) => {
 
 router.get('/me', ...signedIn, async (req, res) => {
   res.json(toAuthUser(await currentUser(req)));
+});
+
+// Profile page (C13). `authenticated`: gated users never reach it; a temporary-password user uses POST /password.
+router.patch('/me', ...authenticated, validate(updateProfileSchema), async (req, res) => {
+  res.json({ user: toAuthUser(await updateName(req.user!.id, req.body.name)) });
 });
 
 // Resend and change-email share one budget (3 per user per hour)
@@ -144,8 +155,33 @@ router.post('/password', ...signedIn, changePasswordLimiter, validate(changePass
   const user = await currentUser(req);
   await changePassword(user, req.body.currentPassword, req.body.newPassword);
   // Every other device was signed out; this one gets a fresh session
-  await issueSession(res, user);
+  await issueSession(req, res, user);
   res.json({ user: toAuthUser(user) });
+});
+
+// Sign-in methods (services/signInMethods.ts): adding or removing one keeps every other session
+router.post('/password/set', ...authenticated, changePasswordLimiter, validate(setPasswordSchema), async (req, res) => {
+  res.json({ user: toAuthUser(await setPassword(req.user!.id, req.body.newPassword)) });
+});
+
+router.delete('/password', ...authenticated, changePasswordLimiter, async (req, res) => {
+  res.json({ user: toAuthUser(await removePassword(req.user!.id)) });
+});
+
+router.delete('/telegram', ...authenticated, async (req, res) => {
+  res.json({ user: toAuthUser(await unlinkTelegram(req.user!.id)) });
+});
+
+// Sessions (CONTEXT.md): one per signed-in browser. The refresh cookie (path /api/auth) tells which is this one.
+router.get('/sessions', ...authenticated, async (req, res) => {
+  res.json({ items: await listDeviceSessions(req.user!.id, req.cookies?.[REFRESH_COOKIE]) });
+});
+
+// Sign out everywhere: this browser included
+router.delete('/sessions', ...authenticated, async (req, res) => {
+  await endAllSessions(req.user!.id);
+  clearAuthCookies(res);
+  res.status(204).end();
 });
 
 export default router;

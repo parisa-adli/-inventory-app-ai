@@ -10,10 +10,10 @@ import {
   listUsers,
   resendVerificationFor,
   toAdminUser,
-  unlinkTelegram,
   updateUser,
   verifyEmailManually,
 } from '../services/userAdmin.js';
+import { unlinkTelegram } from '../services/signInMethods.js';
 import { AppError, NotFoundError, ValidationError } from '../utils/errors.js';
 
 const router = Router();
@@ -55,6 +55,7 @@ router.post('/:id/email/verify/resend', async (req, res) => {
   res.json(sent.devMailUrl ? { devMailUrl: sent.devMailUrl } : {});
 });
 
+// 409 LAST_SIGN_IN_METHOD for a user without a password: issue a temporary password first
 router.delete('/:id/credentials/telegram', async (req, res) => {
   res.json(toAdminUser(await unlinkTelegram(parseId(String(req.params.id)))));
 });

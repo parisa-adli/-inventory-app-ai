@@ -5,7 +5,7 @@ import { User } from '../models/User.js';
 import { sendTracked } from './accountMail.js';
 import { assertEmailAvailable, sendVerificationEmail, type DeliveryResult } from './email.js';
 import { createEmailToken, discardPendingTokens } from './emailToken.js';
-import { revokeAllUserTokens } from './jwt.js';
+import { endAllSessions, revokeAllUserTokens } from './jwt.js';
 import { hashPassword } from './password.js';
 import { randomPassword } from '../utils/crypto.js';
 import { AppError, ConflictError, ForbiddenError, NotFoundError } from '../utils/errors.js';
@@ -155,8 +155,9 @@ export const updateUser = async (actorId: string, targetId: string, patch: Updat
     throw lastAdminError();
   }
 
-  // Their access token already stops working on the next request (requireAuth re-reads the status);
-  // revoking the refresh tokens stops the session from being renewed.
+  // Their access token already stops working on data routes on the next request (requireAuth re-reads the
+  // status) but still reaches /me, so the browser shows the rejected screen; revoking the refresh tokens
+  // stops the session from being renewed. Hence revokeAllUserTokens here, not endAllSessions.
   if (rejects) await revokeAllUserTokens(targetId);
   return updated;
 };
@@ -173,7 +174,7 @@ export const issueTemporaryPassword = async (targetId: string): Promise<string> 
     { passwordHash: await hashPassword(temporaryPassword), mustChangePassword: true }
   );
   // Whoever held the old password (or a session from it) is signed out
-  await revokeAllUserTokens(targetId);
+  await endAllSessions(targetId);
   return temporaryPassword;
 };
 
@@ -194,16 +195,4 @@ export const resendVerificationFor = async (targetId: string): Promise<DeliveryR
   await discardPendingTokens(user._id, 'verify-email');
   const token = await createEmailToken(user._id, 'verify-email');
   return sendTracked(user._id, 'verify-email', () => sendVerificationEmail(user.email, user.name, token));
-};
-
-/** DELETE /api/users/:id/credentials/telegram. Idempotent; a pending link-telegram confirmation dies too. */
-export const unlinkTelegram = async (targetId: string) => {
-  const user = await User.findByIdAndUpdate(
-    targetId,
-    { $unset: { telegramChatId: 1 } },
-    { returnDocument: 'after' }
-  );
-  if (!user) throw new NotFoundError('User not found');
-  await discardPendingTokens(user._id, 'link-telegram');
-  return user;
 };

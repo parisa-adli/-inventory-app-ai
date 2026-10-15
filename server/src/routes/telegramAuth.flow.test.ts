@@ -386,11 +386,12 @@ describe('Database state of a Telegram sign up / sign in', () => {
     expect((await EmailToken.findOne({ user: user._id }))!.consumed).toBe(true);
   });
 
-  it('a later sign in writes nothing to the user, only to the attempt', async () => {
+  it('a later sign in writes nothing to the user but a changed @handle, only to the attempt', async () => {
     const user = await User.create({
       name: 'Tele',
       email: 'tele@inventory.local',
       telegramChatId: String(TG.id),
+      telegramUsername: TG.username, // unchanged since signup, so not even the handle is written
       status: 'pending',
       emailVerified: true,
     });

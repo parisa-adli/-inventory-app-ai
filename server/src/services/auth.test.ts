@@ -16,7 +16,7 @@ describe('password service', () => {
 
 describe('access tokens', () => {
   it('round-trips the user id', () => {
-    expect(verifyAccessToken(signAccessToken('user-1'))).toBe('user-1');
+    expect(verifyAccessToken(signAccessToken('user-1')).userId).toBe('user-1');
   });
 
   it('rejects a token signed with another secret', () => {

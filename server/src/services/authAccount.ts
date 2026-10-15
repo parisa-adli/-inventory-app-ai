@@ -3,11 +3,11 @@ import { ACCOUNT_STATUS } from '@inventory/shared';
 import { EmailToken } from '../models/EmailToken.js';
 import { User, type UserDoc } from '../models/User.js';
 import { randomToken } from '../utils/crypto.js';
-import { AppError, ForbiddenError, isDuplicateKeyError } from '../utils/errors.js';
+import { AppError, ForbiddenError, UnauthorizedError, isDuplicateKeyError } from '../utils/errors.js';
 import { notifyAdminsAwaitingApproval, sendTracked } from './accountMail.js';
 import { sendPasswordResetEmail, sendVerificationEmail, type DeliveryResult } from './email.js';
 import { consumeEmailToken, createEmailToken, discardPendingTokens, invalidTokenError } from './emailToken.js';
-import { revokeAllUserTokens } from './jwt.js';
+import { endAllSessions } from './jwt.js';
 import { hashPassword, verifyPassword } from './password.js';
 
 type UserDocument = HydratedDocument<UserDoc>;
@@ -161,7 +161,14 @@ export const resetPassword = async (rawToken: string, password: string) => {
   // A password the user chose themselves also ends an admin-issued temporary one
   const user = await User.findByIdAndUpdate(token.user, { passwordHash, mustChangePassword: false });
   if (!user) throw invalidTokenError();
-  await revokeAllUserTokens(String(user._id));
+  await endAllSessions(String(user._id));
+};
+
+/** PATCH /auth/me: the Profile page's display name. */
+export const updateName = async (userId: string, name: string) => {
+  const user = await User.findByIdAndUpdate(userId, { name }, { returnDocument: 'after' });
+  if (!user) throw new UnauthorizedError('User no longer exists');
+  return user;
 };
 
 /**
@@ -178,5 +185,5 @@ export const changePassword = async (user: UserDocument, currentPassword: string
   await user.save();
 
   // Sign out every other device (they may hold the temporary password's sessions); the caller keeps this one
-  await revokeAllUserTokens(String(user._id));
+  await endAllSessions(String(user._id));
 };

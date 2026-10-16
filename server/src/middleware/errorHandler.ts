@@ -13,7 +13,8 @@ export const errorHandler = (
   if (!(err instanceof AppError) || err.statusCode >= 500) console.error('Error:', err);
 
   if (err instanceof AppError) {
-    const details = err instanceof RateLimitedError && err.retryAfter ? { retryAfter: err.retryAfter } : undefined;
+    const details =
+      err instanceof RateLimitedError && err.retryAfter ? { retryAfter: err.retryAfter } : err.details;
     return res.status(err.statusCode).json({
       error: {
         code: err.code,

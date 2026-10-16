@@ -2,7 +2,9 @@ export class AppError extends Error {
   constructor(
     public statusCode: number,
     public code: string,
-    message: string
+    message: string,
+    /** Extra machine-readable fields sent as `error.details`. */
+    public details?: Record<string, unknown>
   ) {
     super(message);
     this.name = this.constructor.name;

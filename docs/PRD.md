@@ -283,8 +283,11 @@ PATCH /api/users/:id/reject             (pending or active -> rejected; revokes 
 PATCH /api/users/:id/reactivate         (rejected -> active; blocked if !emailVerified)
 
 Categories / Suppliers
-GET/POST/PUT/DELETE /api/categories     (mutations admin only)
-GET/POST/PUT/DELETE /api/suppliers      (mutations admin only)
+GET    /api/categories   (search, sort, order, page, limit; items carry productCount)
+POST   /api/categories   (admin)
+PATCH  /api/categories/:id   (admin; null clears an optional field)
+DELETE /api/categories/:id   (admin; 409 while any product uses it, archived included)
+GET/POST/PATCH/DELETE /api/suppliers   (same pattern; see CONTRACT-CHANGES.md C14)
 
 Products
 GET    /api/products   (search, category, supplier, status, stockStatus, sort, page)

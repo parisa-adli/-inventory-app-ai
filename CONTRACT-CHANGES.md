@@ -141,6 +141,26 @@ Self-service for the signed-in user: display name, sign-in methods (add / change
 
 **Shared:** `updateProfileSchema`, `setPasswordSchema`, `deviceSessionSchema` / `DeviceSession`, `SessionsResponse`; `AuthUser` + the three fields above.
 
+## C14. Categories & suppliers (Phase 2, 2026-10-16; approved by the user)
+
+Designed in a grilling session. PRD §4 fields are unchanged; the endpoints in PRD §5 change as follows. Both entities follow one pattern (`services/catalog.ts`); `name` below means `title` on categories.
+
+**Endpoints.** `GET /api/categories` and `GET /api/suppliers` are `can(INVENTORY_VIEW)`. `POST /`, `PATCH /:id` and `DELETE /:id` are `can(CATEGORIES_MANAGE)` / `can(SUPPLIERS_MANAGE)` (admin).
+- **`PATCH /:id` replaces `PUT /:id`.** Partial body: an absent field is unchanged, `null` clears an optional field (it is stored as absent). Title/name cannot be cleared. An empty body is 400. `POST` leaves empty optional fields out; an empty string is 400 on both.
+- **List query** (`catalogListQuerySchema`): `search` (case-insensitive substring, regex characters literal; categories: title + description, suppliers: name + contact person + email), `page` (default 1), `limit` (1–100, default 12), `sort` = `name | createdAt | productCount` (default `name`), `order` = `asc | desc` (default asc for name, desc otherwise). Ties sort by name A→Z; names compare case-insensitively.
+- **List response** `{ items, page, limit, total, totalPages }` (`Paginated<T>` / `PageMeta`, same shape as `GET /api/users`). Items carry **`productCount`**, archived products included, so "0 products" means it can be deleted. `POST` (201) and `PATCH` (200) answer the record without a count. `DELETE` answers 204.
+- **Errors:** 409 `CATEGORY_IN_USE` / `SUPPLIER_IN_USE` while any product (archived included) references the record, with `error.details = { productCount, archivedCount }` (new: `AppError` can carry `details`). 409 `DUPLICATE_CATEGORY` / `DUPLICATE_SUPPLIER` when the normalized name (trim, collapse spaces, lowercase) is taken. 404 `NOT_FOUND` for an unknown or malformed id.
+
+**Field rules** (trimmed): category title 1–80, description ≤500; supplier name 1–100, contactPerson ≤100, phone ≤30 (`^[+\d][\d\s()\-.]*$`), email (lowercased), address ≤300, notes ≤1000.
+
+**Models (no wire change).** `Category.titleKey` / `Supplier.nameKey` (unique, set in a pre-validate hook, never sent). `timestamps: true`, so records also answer `updatedAt`.
+
+**Until P3:** the delete guard and `productCount` read the raw `products` collection (`services/productRefs.ts`); P3.1 swaps them to the Product model.
+
+**Seed:** categories and suppliers are upserted by normalized name instead of wiped, so their ids survive a re-seed.
+
+**Shared:** `catalogListQuerySchema`, `create/update/…FormSchema` for both entities, `Category`, `Supplier`, `CategoryListItem`, `SupplierListItem`, `PageMeta`, `Paginated`, `InUseDetails`.
+
 ## Not applicable (nothing to change)
 
 - Stale JWT: the access token carries only `sub`; `/me` and `requireAuth` read the DB.

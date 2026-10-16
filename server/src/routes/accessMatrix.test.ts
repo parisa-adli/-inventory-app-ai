@@ -37,7 +37,7 @@ interface RouteCase {
 
 const UNAUTH: Expected = [401, 'UNAUTHORIZED'];
 
-/** Routes behind `can(USERS_MANAGE)`: every gate in order, then the permission. `admin` is what the handler answers. */
+/** Routes behind an admin-only permission (`can(USERS_MANAGE)`, `can(CATEGORIES_MANAGE)`, ...): every gate in order, then the permission. `admin` is what the handler answers. */
 const adminRoute = (method: Method, path: string, admin: Expected, body?: object): RouteCase => ({
   method,
   path,
@@ -104,6 +104,16 @@ const ROUTES: RouteCase[] = [
   accountRoute('get', '/api/auth/sessions', 200),
   accountRoute('delete', '/api/auth/sessions', 204),
   accountRoute('post', '/api/auth/telegram/link', 201),
+
+  // Phase 2 catalog: reads for every active user, mutations admin only. `:id` is a user id, so not found
+  accountRoute('get', '/api/categories', 200),
+  adminRoute('post', '/api/categories', 201, { title: 'Snacks' }),
+  adminRoute('patch', '/api/categories/:id', [404, 'NOT_FOUND'], { title: 'Snacks' }),
+  adminRoute('delete', '/api/categories/:id', [404, 'NOT_FOUND']),
+  accountRoute('get', '/api/suppliers', 200),
+  adminRoute('post', '/api/suppliers', 201, { name: 'Acme' }),
+  adminRoute('patch', '/api/suppliers/:id', [404, 'NOT_FOUND'], { name: 'Acme' }),
+  adminRoute('delete', '/api/suppliers/:id', [404, 'NOT_FOUND']),
 
   adminRoute('get', '/api/users', 200),
   adminRoute('patch', '/api/users/:id', 200, { role: 'staff' }),

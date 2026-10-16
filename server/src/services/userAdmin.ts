@@ -8,6 +8,7 @@ import { createEmailToken, discardPendingTokens } from './emailToken.js';
 import { endAllSessions, revokeAllUserTokens } from './jwt.js';
 import { hashPassword } from './password.js';
 import { randomPassword } from '../utils/crypto.js';
+import { escapeRegex } from '../utils/text.js';
 import { AppError, ConflictError, ForbiddenError, NotFoundError } from '../utils/errors.js';
 
 /** A User document or an aggregate row: the fields the admin view needs. */
@@ -53,8 +54,6 @@ export const emailNotVerifiedError = () =>
 // Contract has no specific codes for these yet; proposed CANNOT_MODIFY_SELF and LAST_ADMIN (CONTRACT-CHANGES C11)
 const selfActionError = () => new ForbiddenError('You cannot reject or demote your own account.');
 const lastAdminError = () => new ForbiddenError('At least one active admin must remain.');
-
-const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** GET /api/users: filters, pending first, then newest first. */
 export const listUsers = async (query: ListUsersQuery): Promise<UsersPage> => {

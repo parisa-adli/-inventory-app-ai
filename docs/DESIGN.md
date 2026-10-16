@@ -38,7 +38,7 @@ Dark-mode values come from shadcn's neutral `.dark` block in `globals.css`. Do n
 
 - **Low stock:** a soft amber badge, e.g. `bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400`.
 - **Out of stock:** an `outline` badge with `text-muted-foreground`, not red.
-- **Error / destructive:** the `destructive` token.
+- **Error / destructive:** the `destructive` token. The `destructive` Button and Badge variants are a soft tint (`bg-destructive/10 text-destructive`, as in shadcn's Base UI registry), never solid red with white text.
 - If you need a new status color, define it once as a Badge variant. Do not scatter it across pages.
 
 ## 3. Typography

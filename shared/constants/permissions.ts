@@ -14,10 +14,12 @@ export const PERMISSIONS = {
   STOCK_ADJUST: 'stock.adjust',
   PRODUCTS_ARCHIVE: 'products.archive',
   PRODUCTS_DELETE: 'products.delete',
-  /** Create, edit and delete categories. */
-  CATEGORIES_MANAGE: 'categories.manage',
-  /** Create, edit and delete suppliers. */
-  SUPPLIERS_MANAGE: 'suppliers.manage',
+  /** Create and edit categories. */
+  CATEGORIES_WRITE: 'categories.write',
+  CATEGORIES_DELETE: 'categories.delete',
+  /** Create and edit suppliers. */
+  SUPPLIERS_WRITE: 'suppliers.write',
+  SUPPLIERS_DELETE: 'suppliers.delete',
   /** Activate, reject, revoke and reinstate users, change roles, temporary passwords, credentials. */
   USERS_MANAGE: 'users.manage',
 } as const;
@@ -28,6 +30,8 @@ const STAFF_PERMISSIONS: readonly Permission[] = [
   PERMISSIONS.INVENTORY_VIEW,
   PERMISSIONS.PRODUCTS_WRITE,
   PERMISSIONS.STOCK_ADJUST,
+  PERMISSIONS.CATEGORIES_WRITE,
+  PERMISSIONS.SUPPLIERS_WRITE,
 ];
 
 /** Fixed in code (not stored in the DB): typed by role, so a new role cannot be added without its list. */

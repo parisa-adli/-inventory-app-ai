@@ -7,30 +7,38 @@ import type { createCatalogService } from '../services/catalog.js';
 
 interface CatalogRouterConfig {
   service: ReturnType<typeof createCatalogService<never, unknown>>;
-  /** Create, edit and delete (PRD §2: admin only). Reads need INVENTORY_VIEW. */
-  managePermission: Permission;
+  /** Create and edit (PRD §2: staff and admins). Reads need INVENTORY_VIEW. */
+  writePermission: Permission;
+  /** Delete (PRD §2: admin only). */
+  deletePermission: Permission;
   createSchema: ZodTypeAny;
   updateSchema: ZodTypeAny;
 }
 
 /** GET (paginated), POST, PATCH /:id and DELETE /:id for a catalog record (categories, suppliers). */
-export const catalogRouter = ({ service, managePermission, createSchema, updateSchema }: CatalogRouterConfig) => {
+export const catalogRouter = ({
+  service,
+  writePermission,
+  deletePermission,
+  createSchema,
+  updateSchema,
+}: CatalogRouterConfig) => {
   const router = Router();
-  const manage = can(managePermission);
+  const write = can(writePermission);
 
   router.get('/', ...can(PERMISSIONS.INVENTORY_VIEW), async (req, res) => {
     res.json(await service.list(catalogListQuerySchema.parse(req.query)));
   });
 
-  router.post('/', ...manage, validate(createSchema), async (req, res) => {
+  router.post('/', ...write, validate(createSchema), async (req, res) => {
     res.status(201).json(await service.create(req.body));
   });
 
-  router.patch('/:id', ...manage, validate(updateSchema), async (req, res) => {
+  router.patch('/:id', ...write, validate(updateSchema), async (req, res) => {
     res.json(await service.update(String(req.params.id), req.body));
   });
 
-  router.delete('/:id', ...manage, async (req, res) => {
+  router.delete('/:id', ...can(deletePermission), async (req, res) => {
     await service.remove(String(req.params.id));
     res.status(204).end();
   });

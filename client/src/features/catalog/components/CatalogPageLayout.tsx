@@ -15,7 +15,8 @@ interface CatalogPageLayoutProps<T> {
   /** e.g. "categories": used in the empty and error messages. */
   plural: string;
   searchPlaceholder: string;
-  managePermission: Permission;
+  /** Shows the "Add …" button. */
+  writePermission: Permission;
   createLabel: string;
   onCreate: () => void;
   list: ReturnType<typeof useCatalogSearchParams>;
@@ -31,7 +32,7 @@ export function CatalogPageLayout<T>({
   subtitle,
   plural,
   searchPlaceholder,
-  managePermission,
+  writePermission,
   createLabel,
   onCreate,
   list,
@@ -54,7 +55,7 @@ export function CatalogPageLayout<T>({
           <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
           <p className="text-sm text-muted-foreground">{subtitle}</p>
         </div>
-        <Can permission={managePermission}>
+        <Can permission={writePermission}>
           <Button onClick={onCreate}>
             <Plus className="size-4" />
             {createLabel}

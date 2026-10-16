@@ -17,7 +17,7 @@ function Detail({ icon: Icon, children }: { icon: typeof Mail; children: ReactNo
   );
 }
 
-/** Everyone sees the cards; admins (SUPPLIERS_MANAGE) also create, edit and delete. */
+/** Everyone sees the cards; staff and admins create and edit (SUPPLIERS_WRITE); admins also delete (SUPPLIERS_DELETE). */
 export default function Suppliers() {
   const list = useCatalogSearchParams();
   const query = useSuppliers(list.params);
@@ -32,7 +32,7 @@ export default function Suppliers() {
       subtitle="Who you buy from. A supplier in use cannot be deleted."
       plural="suppliers"
       searchPlaceholder="Search name, contact person or email…"
-      managePermission={PERMISSIONS.SUPPLIERS_MANAGE}
+      writePermission={PERMISSIONS.SUPPLIERS_WRITE}
       createLabel="Add supplier"
       onCreate={() => setEditing(null)}
       list={list}
@@ -43,7 +43,8 @@ export default function Suppliers() {
           title={supplier.name}
           createdAt={supplier.createdAt}
           productCount={supplier.productCount}
-          managePermission={PERMISSIONS.SUPPLIERS_MANAGE}
+          writePermission={PERMISSIONS.SUPPLIERS_WRITE}
+          deletePermission={PERMISSIONS.SUPPLIERS_DELETE}
           onEdit={() => setEditing(supplier)}
           onDelete={() => setToDelete(supplier)}
         >

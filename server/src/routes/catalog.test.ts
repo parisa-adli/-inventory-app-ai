@@ -64,6 +64,21 @@ describe.each(ENTITIES)('$path', ({ path, nameField, model, duplicate, inUse, re
     expect(list.body.items[0]).not.toHaveProperty(`${nameField}Key`);
   });
 
+  it('lets staff create and edit, but not delete (PRD §2)', async () => {
+    const staff = await sessionAs('staff');
+    const created = await request(app).post(path).set('Cookie', staff).send({ [nameField]: 'Snacks' });
+    expect(created.status).toBe(201);
+
+    const renamed = await request(app).patch(`${path}/${created.body.id}`).set('Cookie', staff).send({ [nameField]: 'Treats' });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body[nameField]).toBe('Treats');
+
+    const del = await request(app).delete(`${path}/${created.body.id}`).set('Cookie', staff);
+    expect(del.status).toBe(403);
+    expect(del.body.error.code).toBe('FORBIDDEN');
+    expect(await model.countDocuments()).toBe(1);
+  });
+
   it('rejects a name that differs only in case or spacing (409)', async () => {
     await create('  snack   food ');
     const res = await create('Snack Food');

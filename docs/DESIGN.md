@@ -102,9 +102,9 @@ Dark-mode values come from shadcn's neutral `.dark` block in `globals.css`. Do n
 
 ### Card grid pattern (Categories, Suppliers; `client/src/features/catalog`)
 
-- Page header (H1 + muted subtitle, primary "Add …" on the right for admins), then one row with the search `Input` (`flex-1`, leading `Search` icon) and a "Sort by" `Select` (`sm:w-48`).
+- Page header (H1 + muted subtitle, primary "Add …" on the right for staff and admins), then one row with the search `Input` (`flex-1`, leading `Search` icon) and a "Sort by" `Select` (`sm:w-48`).
 - Grid: `grid gap-4 sm:grid-cols-2 lg:grid-cols-3`, 12 cards a page, the table's pagination row below it.
-- Card: `CardTitle` with a ghost `MoreHorizontal` icon button in `CardAction` (admin only) opening a `DropdownMenu` (Edit, Delete in `text-destructive`). Body `text-sm`; long text `line-clamp-3 text-muted-foreground`; supplier details as lines with a muted `size-4` lucide icon. Footer `text-xs text-muted-foreground`: "Created Oct 16, 2026" on the left, "N products" on the right.
+- Card: `CardTitle` with ghost icon buttons in `CardAction` (no menu): `Pencil` Edit for staff and admins, `Trash2` Delete (`text-destructive`) for admins only. Each has an `aria-label` with the record name ("Edit Electronics"). Body `text-sm`; long text `line-clamp-3 text-muted-foreground`; supplier details as lines with a muted `size-4` lucide icon. Footer `text-xs text-muted-foreground`: "Created Oct 16, 2026" on the left, "N products" on the right.
 - Loading: six `Skeleton h-40 rounded-xl` in the grid. Empty and error: muted text centered in a `rounded-xl border p-8` box.
 - Delete confirms in an `AlertDialog`; when the server refuses (in use), the same dialog switches to "Used by products" with the reason and a link, and only a "Close" button.
 

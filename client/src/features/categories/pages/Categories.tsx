@@ -7,7 +7,7 @@ import { useCatalogSearchParams } from '@/features/catalog/hooks/useCatalogSearc
 import { CategoryFormDialog } from '../components/CategoryFormDialog';
 import { useCategories, useDeleteCategory } from '../hooks/useCategories';
 
-/** Everyone sees the cards; admins (CATEGORIES_MANAGE) also create, edit and delete. */
+/** Everyone sees the cards; staff and admins create and edit (CATEGORIES_WRITE); admins also delete (CATEGORIES_DELETE). */
 export default function Categories() {
   const list = useCatalogSearchParams();
   const query = useCategories(list.params);
@@ -22,7 +22,7 @@ export default function Categories() {
       subtitle="Group products by category. A category in use cannot be deleted."
       plural="categories"
       searchPlaceholder="Search title or description…"
-      managePermission={PERMISSIONS.CATEGORIES_MANAGE}
+      writePermission={PERMISSIONS.CATEGORIES_WRITE}
       createLabel="Add category"
       onCreate={() => setEditing(null)}
       list={list}
@@ -33,7 +33,8 @@ export default function Categories() {
           title={category.title}
           createdAt={category.createdAt}
           productCount={category.productCount}
-          managePermission={PERMISSIONS.CATEGORIES_MANAGE}
+          writePermission={PERMISSIONS.CATEGORIES_WRITE}
+          deletePermission={PERMISSIONS.CATEGORIES_DELETE}
           onEdit={() => setEditing(category)}
           onDelete={() => setToDelete(category)}
         >

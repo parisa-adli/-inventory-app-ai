@@ -110,7 +110,7 @@ Server half only; the client moves over in its own session. `/shared` was unfroz
 
 ## C12. RBAC permission map (no wire change)
 
-- `shared/constants/permissions.ts`: `PERMISSIONS` (`inventory.view`, `products.write`, `stock.adjust`, `products.archive`, `products.delete`, `categories.manage`, `suppliers.manage`, `users.manage`), `ROLE_PERMISSIONS` (staff: the first three; admin: all) and `hasPermission(role, permission)`. Taken from PRD §2; fixed in code, not stored in the DB. `ROLE_HIERARCHY` (unused) removed.
+- `shared/constants/permissions.ts`: `PERMISSIONS` (`inventory.view`, `products.write`, `stock.adjust`, `products.archive`, `products.delete`, `categories.manage`, `suppliers.manage`, `users.manage`), `ROLE_PERMISSIONS` (staff: the first three; admin: all; *the two manage permissions were split in C15*) and `hasPermission(role, permission)`. Taken from PRD §2; fixed in code, not stored in the DB. `ROLE_HIERARCHY` (unused) removed.
 - Server: `requirePermission(...)` replaces `requireRole`; `can(...)` replaces `adminOnly` / `withRole` (C11's `adminOnly` routes are now `can(USERS_MANAGE)`). Same status codes (403 `FORBIDDEN`).
 - Client works out permissions from `AuthUser.role` with the shared map, so `/me` is unchanged.
 
@@ -145,7 +145,7 @@ Self-service for the signed-in user: display name, sign-in methods (add / change
 
 Designed in a grilling session. PRD §4 fields are unchanged; the endpoints in PRD §5 change as follows. Both entities follow one pattern (`services/catalog.ts`); `name` below means `title` on categories.
 
-**Endpoints.** `GET /api/categories` and `GET /api/suppliers` are `can(INVENTORY_VIEW)`. `POST /`, `PATCH /:id` and `DELETE /:id` are `can(CATEGORIES_MANAGE)` / `can(SUPPLIERS_MANAGE)` (admin).
+**Endpoints.** `GET /api/categories` and `GET /api/suppliers` are `can(INVENTORY_VIEW)`. `POST /`, `PATCH /:id` and `DELETE /:id` were `can(CATEGORIES_MANAGE)` / `can(SUPPLIERS_MANAGE)` (admin); **superseded by C15** (staff create/edit, admin delete).
 - **`PATCH /:id` replaces `PUT /:id`.** Partial body: an absent field is unchanged, `null` clears an optional field (it is stored as absent). Title/name cannot be cleared. An empty body is 400. `POST` leaves empty optional fields out; an empty string is 400 on both.
 - **List query** (`catalogListQuerySchema`): `search` (case-insensitive substring, regex characters literal; categories: title + description, suppliers: name + contact person + email), `page` (default 1), `limit` (1–100, default 12), `sort` = `name | createdAt | productCount` (default `name`), `order` = `asc | desc` (default asc for name, desc otherwise). Ties sort by name A→Z; names compare case-insensitively.
 - **List response** `{ items, page, limit, total, totalPages }` (`Paginated<T>` / `PageMeta`, same shape as `GET /api/users`). Items carry **`productCount`**, archived products included, so "0 products" means it can be deleted. `POST` (201) and `PATCH` (200) answer the record without a count. `DELETE` answers 204.
@@ -160,6 +160,13 @@ Designed in a grilling session. PRD §4 fields are unchanged; the endpoints in P
 **Seed:** categories and suppliers are upserted by normalized name instead of wiped, so their ids survive a re-seed.
 
 **Shared:** `catalogListQuerySchema`, `create/update/…FormSchema` for both entities, `Category`, `Supplier`, `CategoryListItem`, `SupplierListItem`, `PageMeta`, `Paginated`, `InUseDetails`.
+
+## C15. Staff create and edit categories & suppliers (2026-10-16; requested by the user)
+
+PRD §2 changed: staff may create and edit categories and suppliers; delete stays admin only (the same split as products).
+- **Permissions** (`shared/constants/permissions.ts`): `categories.manage` / `suppliers.manage` are replaced by `categories.write` + `categories.delete` and `suppliers.write` + `suppliers.delete`. Staff get both `*.write`.
+- **Endpoints:** `POST` and `PATCH /:id` on `/api/categories` and `/api/suppliers` are `can(CATEGORIES_WRITE)` / `can(SUPPLIERS_WRITE)`, so staff now get 201 / 200 instead of 403. `DELETE /:id` is `can(CATEGORIES_DELETE)` / `can(SUPPLIERS_DELETE)`, unchanged for staff (403 `FORBIDDEN`). Everything else in C14 stands.
+- **Client:** staff see "Add …" and the card's Edit; Delete is admin only. The P3 product form's "+ New category / supplier" follows `*_WRITE`, so staff get it too.
 
 ## Not applicable (nothing to change)
 

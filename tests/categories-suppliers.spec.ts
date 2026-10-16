@@ -51,7 +51,7 @@ const stubList = async (page: Page, resource: string, body: (url: URL) => unknow
 };
 
 test.describe('categories and suppliers (stubbed API)', () => {
-  test('staff sees the cards but no create, edit or delete controls', async ({ page }) => {
+  test('staff can add and edit, but sees no delete control', async ({ page }) => {
     await signInAs(page, staff);
     await stubList(page, 'categories', () => pageOf([category('c1', 'Electronics', { description: 'Devices', productCount: 3 })]));
 
@@ -60,14 +60,16 @@ test.describe('categories and suppliers (stubbed API)', () => {
     await expect(page.getByRole('heading', { name: 'Categories' })).toBeVisible();
     await expect(page.getByText('Electronics')).toBeVisible();
     await expect(page.getByText('3 products')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Add category' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /Actions for/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Add category' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Edit Electronics' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Delete Electronics' })).toHaveCount(0);
 
     await stubList(page, 'suppliers', () => pageOf([supplier('p1', 'TechSupply Co.')]));
     await page.goto('/app/suppliers');
     await expect(page.getByText('TechSupply Co.')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Add supplier' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /Actions for/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Add supplier' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Edit TechSupply Co.' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Delete TechSupply Co.' })).toHaveCount(0);
   });
 
   test('admin creates a category; empty optional fields are left out and a duplicate shows on the field', async ({ page }) => {
@@ -108,8 +110,7 @@ test.describe('categories and suppliers (stubbed API)', () => {
 
     await page.goto('/app/suppliers');
     await expect(page.getByRole('link', { name: 'sales@acme.test' })).toHaveAttribute('href', 'mailto:sales@acme.test');
-    await page.getByRole('button', { name: 'Actions for Acme' }).click();
-    await page.getByRole('menuitem', { name: 'Edit' }).click();
+    await page.getByRole('button', { name: 'Edit Acme' }).click();
     await page.getByLabel('Email').fill('');
     await page.getByRole('button', { name: 'Save' }).click();
 
@@ -142,8 +143,8 @@ test.describe('categories and suppliers (stubbed API)', () => {
     );
 
     await page.goto('/app/categories');
-    await page.getByRole('button', { name: 'Actions for Electronics' }).click();
-    await page.getByRole('menuitem', { name: 'Delete' }).click();
+    await expect(page.getByRole('button', { name: 'Edit Electronics' })).toBeVisible();
+    await page.getByRole('button', { name: 'Delete Electronics' }).click();
     await expect(page.getByRole('alertdialog').getByText('Delete Electronics?')).toBeVisible();
     await page.getByRole('button', { name: 'Delete category' }).click();
 

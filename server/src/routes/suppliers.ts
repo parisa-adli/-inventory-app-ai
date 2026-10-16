@@ -4,7 +4,8 @@ import { catalogRouter } from './catalogRouter.js';
 
 export default catalogRouter({
   service: suppliers,
-  managePermission: PERMISSIONS.SUPPLIERS_MANAGE,
+  writePermission: PERMISSIONS.SUPPLIERS_WRITE,
+  deletePermission: PERMISSIONS.SUPPLIERS_DELETE,
   createSchema: createSupplierSchema,
   updateSchema: updateSupplierSchema,
 });

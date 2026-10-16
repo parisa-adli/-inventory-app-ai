@@ -25,8 +25,10 @@ A web-based inventory management tool tracking products, categories, suppliers, 
 | Adjust stock — receive / ship / manual adjustment            | ✅    | ✅    |
 | Archive/unarchive products                                   | ❌    | ✅    |
 | Delete products                                              | ❌    | ✅    |
-| Create/edit/delete categories                                | ❌    | ✅    |
-| Create/edit/delete suppliers                                 | ❌    | ✅    |
+| Create/edit categories                                       | ✅    | ✅    |
+| Delete categories                                            | ❌    | ✅    |
+| Create/edit suppliers                                        | ✅    | ✅    |
+| Delete suppliers                                             | ❌    | ✅    |
 | Activate / reject / revoke users                             | ❌    | ✅    |
 
 - Public self-signup (email+password or Telegram) always creates a `staff` account. The first Admin is created via a seed script; further promotions to `admin` are a manual DB/admin action (no self-serve path).
@@ -197,7 +199,7 @@ Deletion blocked (409) if any product references it.
 - **Manual adjustment** requires a `note` (reason) and can move quantity up or down directly (e.g. correcting a miscount, damage write-off).
 - Category/Supplier deletion blocked (409) while any product references them.
 - Categories cannot be archived (only products can).
-- **Supplier is optional on a product.** Products with no supplier show as "Unassigned" in the table and are filterable that way. Staff or Admin can assign/change a product's supplier at any time via the product edit form (assigning ≠ managing supplier records, which stays admin-only).
+- **Supplier is optional on a product.** Products with no supplier show as "Unassigned" in the table and are filterable that way. Staff or Admin can assign/change a product's supplier at any time via the product edit form (staff may also create and edit supplier records; deleting one stays admin-only).
 - Archive/unarchive: admin-only, reversible, doesn't touch movement history; archived products excluded from default list, visible under an "Archived" tab.
 
 ## 6. Pages & Features
@@ -217,11 +219,11 @@ Deletion blocked (409) if any product references it.
 
 ### 6.3 Categories
 
-Cards (title, description, created date, product count). Full CRUD, admin only. Delete blocked if products assigned. Cannot be archived.
+Cards (title, description, created date, product count). Staff and admins create and edit; delete is admin only. Delete blocked if products assigned. Cannot be archived.
 
 ### 6.4 Suppliers
 
-Same card pattern (name, contact person, phone, email, address, notes). Full CRUD, admin only. Delete blocked if products assigned.
+Same card pattern (name, contact person, phone, email, address, notes). Staff and admins create and edit; delete is admin only. Delete blocked if products assigned.
 
 ### 6.5 Stock Movements
 
@@ -284,8 +286,8 @@ PATCH /api/users/:id/reactivate         (rejected -> active; blocked if !emailVe
 
 Categories / Suppliers
 GET    /api/categories   (search, sort, order, page, limit; items carry productCount)
-POST   /api/categories   (admin)
-PATCH  /api/categories/:id   (admin; null clears an optional field)
+POST   /api/categories   (staff + admin)
+PATCH  /api/categories/:id   (staff + admin; null clears an optional field)
 DELETE /api/categories/:id   (admin; 409 while any product uses it, archived included)
 GET/POST/PATCH/DELETE /api/suppliers   (same pattern; see CONTRACT-CHANGES.md C14)
 

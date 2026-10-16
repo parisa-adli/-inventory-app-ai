@@ -1,35 +1,31 @@
 import type { ReactNode } from 'react';
-import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import type { Permission } from '@inventory/shared';
 import { Can } from '@/features/auth/components/Can';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { formatDate, productCountLabel } from '../format';
-
 
 interface CatalogCardProps {
   title: string;
   createdAt: string;
   productCount: number;
-  /** Edit and Delete are shown only with this permission. */
-  managePermission: Permission;
+  /** The Edit icon button (staff and admins). */
+  writePermission: Permission;
+  /** The Delete icon button (admins). */
+  deletePermission: Permission;
   onEdit: () => void;
   onDelete: () => void;
   children?: ReactNode;
 }
 
-/** One category or supplier: title, a ⋯ menu for admins, details, then created date and product count. */
+/** One category or supplier: title with Edit (and, for admins, Delete) icon buttons, details, then created date and product count. */
 export function CatalogCard({
   title,
   createdAt,
   productCount,
-  managePermission,
+  writePermission,
+  deletePermission,
   onEdit,
   onDelete,
   children,
@@ -38,27 +34,24 @@ export function CatalogCard({
     <Card className="gap-4">
       <CardHeader>
         <CardTitle className="break-words">{title}</CardTitle>
-        <Can permission={managePermission}>
-          <CardAction>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="-mt-2 -mr-2" aria-label={`Actions for ${title}`}>
-                  <MoreHorizontal className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={onEdit}>
-                  <Pencil className="size-4" />
-                  Edit
-                </DropdownMenuItem>
-                <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
-                  <Trash2 className="size-4" />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </CardAction>
-        </Can>
+        <CardAction className="-mt-2 -mr-2 flex gap-1">
+          <Can permission={writePermission}>
+            <Button variant="ghost" size="icon" aria-label={`Edit ${title}`} onClick={onEdit}>
+              <Pencil className="size-4" />
+            </Button>
+          </Can>
+          <Can permission={deletePermission}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-destructive hover:text-destructive"
+              aria-label={`Delete ${title}`}
+              onClick={onDelete}
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </Can>
+        </CardAction>
       </CardHeader>
       <CardContent className="flex-1 space-y-1 text-sm">{children}</CardContent>
       <CardFooter className="justify-between text-xs text-muted-foreground">

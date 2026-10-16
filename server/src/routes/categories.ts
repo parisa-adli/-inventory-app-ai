@@ -4,7 +4,8 @@ import { catalogRouter } from './catalogRouter.js';
 
 export default catalogRouter({
   service: categories,
-  managePermission: PERMISSIONS.CATEGORIES_MANAGE,
+  writePermission: PERMISSIONS.CATEGORIES_WRITE,
+  deletePermission: PERMISSIONS.CATEGORIES_DELETE,
   createSchema: createCategorySchema,
   updateSchema: updateCategorySchema,
 });

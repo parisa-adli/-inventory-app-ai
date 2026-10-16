@@ -8,8 +8,10 @@ const MATRIX: [Permission, { staff: boolean; admin: boolean }][] = [
   [PERMISSIONS.STOCK_ADJUST, { staff: true, admin: true }],
   [PERMISSIONS.PRODUCTS_ARCHIVE, { staff: false, admin: true }],
   [PERMISSIONS.PRODUCTS_DELETE, { staff: false, admin: true }],
-  [PERMISSIONS.CATEGORIES_MANAGE, { staff: false, admin: true }],
-  [PERMISSIONS.SUPPLIERS_MANAGE, { staff: false, admin: true }],
+  [PERMISSIONS.CATEGORIES_WRITE, { staff: true, admin: true }],
+  [PERMISSIONS.CATEGORIES_DELETE, { staff: false, admin: true }],
+  [PERMISSIONS.SUPPLIERS_WRITE, { staff: true, admin: true }],
+  [PERMISSIONS.SUPPLIERS_DELETE, { staff: false, admin: true }],
   [PERMISSIONS.USERS_MANAGE, { staff: false, admin: true }],
 ];
 

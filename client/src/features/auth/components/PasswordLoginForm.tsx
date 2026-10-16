@@ -5,7 +5,7 @@ import { loginSchema, type LoginInput } from '@inventory/shared';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { useLogin } from '../hooks/useAuth';
-import { TextField } from './TextField';
+import { TextField } from '@/components/TextField';
 
 export function PasswordLoginForm() {
   const login = useLogin();

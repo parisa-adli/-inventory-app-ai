@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { forgotPasswordSchema, type ForgotPasswordInput } from '@inventory/shared';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
-import { TextField } from '../components/TextField';
+import { TextField } from '@/components/TextField';
 import { useForgotPassword } from '../hooks/useAuth';
 
 export default function ForgotPassword() {

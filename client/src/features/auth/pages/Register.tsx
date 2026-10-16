@@ -7,7 +7,7 @@ import { Form } from '@/components/ui/form';
 import { getApiError } from '@/lib/apiError';
 import { AuthMethodTabs } from '../components/AuthMethodTabs';
 import { TelegramAuthPanel } from '../components/TelegramAuthPanel';
-import { TextField } from '../components/TextField';
+import { TextField } from '@/components/TextField';
 import { useRegister } from '../hooks/useAuth';
 
 function EmailSignupForm() {

@@ -5,7 +5,7 @@ import { PASSWORD_HINT, resetPasswordSchema, type ResetPasswordInput } from '@in
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { getLinkErrorKind } from '@/lib/apiError';
-import { TextField } from '../components/TextField';
+import { TextField } from '@/components/TextField';
 import { useResetPassword } from '../hooks/useAuth';
 
 export default function ResetPassword() {

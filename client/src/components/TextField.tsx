@@ -10,12 +10,15 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 
 interface TextFieldProps<T extends FieldValues> {
   control: Control<T>;
   name: FieldPath<T>;
   label: string;
-  type?: 'text' | 'email' | 'password';
+  type?: 'text' | 'email' | 'password' | 'tel';
+  /** A Textarea instead of an Input. */
+  multiline?: boolean;
   autoComplete?: string;
   /** Helper text under the input. */
   hint?: string;
@@ -28,6 +31,7 @@ export function TextField<T extends FieldValues>({
   name,
   label,
   type = 'text',
+  multiline = false,
   autoComplete,
   hint,
   labelAction,
@@ -67,7 +71,11 @@ export function TextField<T extends FieldValues>({
             </div>
           ) : (
             <FormControl>
-              <Input type={type} autoComplete={autoComplete} {...field} />
+              {multiline ? (
+                <Textarea autoComplete={autoComplete} rows={3} {...field} />
+              ) : (
+                <Input type={type} autoComplete={autoComplete} {...field} />
+              )}
             </FormControl>
           )}
           {hint && <FormDescription>{hint}</FormDescription>}

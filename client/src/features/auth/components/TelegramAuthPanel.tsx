@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { useTelegramAuth } from '../hooks/useTelegramAuth';
 import { Caption, TelegramCodeStep, TelegramQrStep, TelegramStartingStep, TelegramStoppedStep } from './TelegramSteps';
-import { TextField } from './TextField';
+import { TextField } from '@/components/TextField';
 
 function ProfileForm({
   defaultName,

@@ -5,7 +5,7 @@ import { changeEmailSchema, type ChangeEmailInput } from '@inventory/shared';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { formatWait, getApiError } from '@/lib/apiError';
-import { TextField } from '../components/TextField';
+import { TextField } from '@/components/TextField';
 import { useAuthUser, useChangeEmail, useLogout, useResendVerification } from '../hooks/useAuth';
 import { useCooldown } from '../hooks/useCooldown';
 

@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form } from '@/components/ui/form';
-import { TextField } from '@/features/auth/components/TextField';
+import { TextField } from '@/components/TextField';
 import {
   useChangePassword,
   useRemovePassword,

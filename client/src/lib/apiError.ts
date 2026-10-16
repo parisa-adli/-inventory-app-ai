@@ -5,6 +5,8 @@ export interface ApiError {
   message: string;
   /** Seconds until a RATE_LIMITED call may be retried. */
   retryAfter?: number;
+  /** The server's `error.details`, e.g. the product counts of a 409 CATEGORY_IN_USE. */
+  details?: Record<string, unknown>;
 }
 
 /** "45 seconds", "1 minute", "12 minutes". */
@@ -35,7 +37,7 @@ export const getApiError = (err: unknown): ApiError => {
           retryAfter,
         };
       }
-      return { code: body.code, message: body.message };
+      return { code: body.code, message: body.message, ...(body.details && { details: body.details }) };
     }
   }
   return { code: 'UNKNOWN', message: 'Something went wrong. Please try again.' };

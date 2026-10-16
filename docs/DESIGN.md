@@ -100,6 +100,14 @@ Dark-mode values come from shadcn's neutral `.dark` block in `globals.css`. Do n
   - On the left: "Showing 1–10 of 98" (muted).
   - On the right: outline Previous/Next buttons with chevrons, and "Page 1 of 10" between them.
 
+### Card grid pattern (Categories, Suppliers; `client/src/features/catalog`)
+
+- Page header (H1 + muted subtitle, primary "Add …" on the right for admins), then one row with the search `Input` (`flex-1`, leading `Search` icon) and a "Sort by" `Select` (`sm:w-48`).
+- Grid: `grid gap-4 sm:grid-cols-2 lg:grid-cols-3`, 12 cards a page, the table's pagination row below it.
+- Card: `CardTitle` with a ghost `MoreHorizontal` icon button in `CardAction` (admin only) opening a `DropdownMenu` (Edit, Delete in `text-destructive`). Body `text-sm`; long text `line-clamp-3 text-muted-foreground`; supplier details as lines with a muted `size-4` lucide icon. Footer `text-xs text-muted-foreground`: "Created Oct 16, 2026" on the left, "N products" on the right.
+- Loading: six `Skeleton h-40 rounded-xl` in the grid. Empty and error: muted text centered in a `rounded-xl border p-8` box.
+- Delete confirms in an `AlertDialog`; when the server refuses (in use), the same dialog switches to "Used by products" with the reason and a link, and only a "Close" button.
+
 ### Profile page pattern (`docs/design/profile.png`, `set-password-to-profile.png`, `password-and-telegram-linked.png`)
 
 - `/app/profile`, built in `client/src/features/profile`. H1 "Profile", then three `Card`s stacked with `space-y-6` in a `max-w-2xl` column: Account, Sign-in methods, Active sessions.

@@ -16,8 +16,10 @@ import Rejected from '@/features/auth/pages/Rejected';
 import ResetPassword from '@/features/auth/pages/ResetPassword';
 import VerifyEmail from '@/features/auth/pages/VerifyEmail';
 import VerifyEmailPending from '@/features/auth/pages/VerifyEmailPending';
+import Categories from '@/features/categories/pages/Categories';
 import Dashboard from '@/features/dashboard/pages/Dashboard';
 import Profile from '@/features/profile/pages/Profile';
+import Suppliers from '@/features/suppliers/pages/Suppliers';
 import Users from '@/features/users/pages/Users';
 
 // Client middleware only runs on a navigation that has a loader to call, so every guarded route has one
@@ -84,6 +86,15 @@ export const router = createBrowserRouter([
           { index: true, element: <Navigate to={APP_HOME} replace /> },
           { path: 'dashboard', Component: Dashboard },
           { path: 'profile', Component: Profile },
+          {
+            middleware: [requirePermission(PERMISSIONS.INVENTORY_VIEW)],
+            loader: runGuards,
+            ErrorBoundary: NoAccessBoundary,
+            children: [
+              { path: 'categories', Component: Categories },
+              { path: 'suppliers', Component: Suppliers },
+            ],
+          },
           {
             middleware: [requirePermission(PERMISSIONS.USERS_MANAGE)],
             loader: runGuards,

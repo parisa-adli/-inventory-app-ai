@@ -147,7 +147,7 @@ describe.each(ENTITIES)('$path', ({ path, nameField, model, duplicate, inUse, re
 
   it('pages with prev/next metadata', async () => {
     for (let i = 1; i <= 5; i++) await create(`Item ${i}`);
-    const res = await request(app).get(`${path}?limit=2&page=3`).set('Cookie', admin);
+    const res = await request(app).get(`${path}?sort=name&limit=2&page=3`).set('Cookie', admin);
     expect(res.body).toMatchObject({ page: 3, limit: 2, total: 5, totalPages: 3 });
     expect(res.body.items.map((item: Record<string, string>) => item[nameField])).toEqual(['Item 5']);
 
@@ -155,7 +155,7 @@ describe.each(ENTITIES)('$path', ({ path, nameField, model, duplicate, inUse, re
     expect(tooBig.status).toBe(400);
   });
 
-  it('sorts by name (case-insensitive) asc by default, newest first, and most products first', async () => {
+  it('sorts newest first by default, by name case-insensitively, and most products first', async () => {
     const banana = await create('banana');
     await create('Apple');
     const cherry = await create('Cherry');
@@ -171,9 +171,10 @@ describe.each(ENTITIES)('$path', ({ path, nameField, model, duplicate, inUse, re
         (item: Record<string, string>) => item[nameField]
       );
 
-    expect(await names('')).toEqual(['Apple', 'banana', 'Cherry']);
+    expect((await names(''))[0]).toBe('banana');
+    expect(await names('?sort=createdAt')).toEqual(await names(''));
+    expect(await names('?sort=name')).toEqual(['Apple', 'banana', 'Cherry']);
     expect(await names('?sort=name&order=desc')).toEqual(['Cherry', 'banana', 'Apple']);
-    expect((await names('?sort=createdAt'))[0]).toBe('banana');
     // Ties (0 products) fall back to name A→Z
     expect(await names('?sort=productCount')).toEqual(['Cherry', 'Apple', 'banana']);
   });

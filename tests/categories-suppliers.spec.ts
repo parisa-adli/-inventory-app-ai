@@ -174,8 +174,8 @@ test.describe('categories and suppliers (stubbed API)', () => {
     await expect(page.getByText('Item on page 2')).toBeVisible();
 
     await page.getByRole('combobox', { name: 'Sort by' }).click();
-    await page.getByRole('option', { name: 'Newest' }).click();
-    await expect(page).toHaveURL(/sort=createdAt&order=desc/);
+    await page.getByRole('option', { name: 'Name A→Z' }).click();
+    await expect(page).toHaveURL(/sort=name&order=asc/);
     await expect(page).not.toHaveURL(/page=/);
 
     await page.getByLabel('Search').fill('elec');
@@ -183,9 +183,9 @@ test.describe('categories and suppliers (stubbed API)', () => {
 
     await page.reload();
     await expect(page.getByLabel('Search')).toHaveValue('elec');
-    await expect(page.getByRole('combobox', { name: 'Sort by' })).toHaveText('Newest');
+    await expect(page.getByRole('combobox', { name: 'Sort by' })).toHaveText('Name A→Z');
     const last = queries.at(-1)!;
-    expect(Object.fromEntries(last)).toMatchObject({ search: 'elec', sort: 'createdAt', order: 'desc', page: '1', limit: '12' });
+    expect(Object.fromEntries(last)).toMatchObject({ search: 'elec', sort: 'name', order: 'asc', page: '1', limit: '12' });
   });
 
   test('a page past the end is replaced by the last page', async ({ page }) => {

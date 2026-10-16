@@ -21,7 +21,8 @@ export const catalogListQuerySchema = z.object({
   search: z.string().trim().max(CATALOG_SEARCH_MAX).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(CATALOG_PAGE_SIZE_MAX).default(CATALOG_PAGE_SIZE_DEFAULT),
-  sort: z.enum(CATALOG_SORTS).default('name'),
+  /** Newest first by default. */
+  sort: z.enum(CATALOG_SORTS).default('createdAt'),
   /** Defaults to `defaultSortOrder(sort)`. */
   order: z.enum(SORT_ORDERS).optional(),
 });

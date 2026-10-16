@@ -10,12 +10,12 @@ import {
   type SortOrder,
 } from '@inventory/shared';
 
-/** The "Sort by" presets; each writes ?sort=&order= (the default, Name A→Z, writes neither). */
+/** The "Sort by" presets; each writes ?sort=&order= (the default, Newest, writes neither). */
 export const SORT_PRESETS = [
-  { value: 'name-asc', label: 'Name A→Z', sort: 'name', order: 'asc' },
-  { value: 'name-desc', label: 'Name Z→A', sort: 'name', order: 'desc' },
   { value: 'createdAt-desc', label: 'Newest', sort: 'createdAt', order: 'desc' },
   { value: 'createdAt-asc', label: 'Oldest', sort: 'createdAt', order: 'asc' },
+  { value: 'name-asc', label: 'Name A→Z', sort: 'name', order: 'asc' },
+  { value: 'name-desc', label: 'Name Z→A', sort: 'name', order: 'desc' },
   { value: 'productCount-desc', label: 'Most products', sort: 'productCount', order: 'desc' },
 ] as const satisfies { value: string; label: string; sort: CatalogSort; order: SortOrder }[];
 
@@ -31,7 +31,7 @@ export const useCatalogSearchParams = () => {
 
   const search = searchParams.get('search') ?? '';
   const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1);
-  const sort = pick(searchParams.get('sort'), CATALOG_SORTS) ?? 'name';
+  const sort = pick(searchParams.get('sort'), CATALOG_SORTS) ?? 'createdAt';
   const order = pick(searchParams.get('order'), SORT_ORDERS) ?? defaultSortOrder(sort);
 
   const params = useMemo<CatalogListParams>(

@@ -476,6 +476,7 @@ Source: `docs/PRDs/06-polish-qa.md`, `docs/seed-data-strategy/`. Deps: **P0–P5
 - [ ] **P6.8 Playwright e2e** (infra exists in `tests/`): extend `tests/smoke.spec.ts` (the stock `example.spec.ts` is already gone) with flows — login (admin/staff), staff restrictions, stock adjust → history → dashboard update, pending/rejected screens.
 - [ ] **P6.9 README**: install, env vars, dev commands (client + server), `npm run seed` and test accounts, how to test the Telegram flow locally (polling + test bot token), email in dev (Brevo or log-the-link fallback).
 - [ ] **P6.10 PRD diff**: re-read `docs/PRD.md` end to end against what was built; list deviations in a `docs/` note rather than leaving them silent.
+- [ ] **P6.11 [X] Consolidate list-sort helpers** (deferred from the P1.29 #22 review, 2026-10-17; kept duplicated on purpose so that slice didn't touch the catalog code). (1) Move `SORT_ORDERS` / `SortOrder` out of `shared/schemas/catalog.ts` into a neutral shared module, so `shared/schemas/users.ts` no longer imports from the catalog schema. (2) Merge `defaultUserSortOrder` (`schemas/users.ts`) and `defaultSortOrder` (`schemas/catalog.ts`): same rule, name → asc, otherwise desc. (3) Share `NAME_COLLATION` between `server/src/services/catalog.ts` and `services/userAdmin.ts`. No wire change. `useUserListParams` and `useCatalogSearchParams` stay separate hooks (P1.29 decision). Catalog and users server tests and e2e must still pass.
 
 ### Acceptance
 - [ ] Fresh DB → `npm run seed` → whole app usable with realistic data.

@@ -29,6 +29,8 @@ const userSchema = new Schema(
     // Set when the last mail to this user failed to send, cleared by the next successful send
     lastEmailFailedAt: { type: Date },
     lastEmailFailedType: { type: String, enum: EMAIL_TOKEN_TYPES },
+    // Set whenever a new Session starts (any sign in, or the fresh session after a password change); not on refresh
+    lastLoginAt: { type: Date },
   },
   { timestamps: { createdAt: true, updatedAt: false } }
 );
@@ -36,6 +38,8 @@ const userSchema = new Schema(
 userSchema.index({ telegramChatId: 1 }, { unique: true, sparse: true });
 // Admin Users list: filter by status, newest first
 userSchema.index({ status: 1, createdAt: -1, _id: -1 });
+// Admin Users list: "Recently active" sort
+userSchema.index({ lastLoginAt: -1, _id: -1 });
 // Last-active-admin check
 userSchema.index({ role: 1, status: 1 });
 

@@ -8,7 +8,7 @@ import { createEmailToken } from '../services/emailToken.js';
 import { ACCESS_COOKIE, signAccessToken } from '../services/jwt.js';
 import { hashPassword } from '../services/password.js';
 import { updateUser } from '../services/userAdmin.js';
-import { clearTestDb, connectTestDb, disconnectTestDb } from '../test/db.js';
+import { clearTestDb, connectTestDb, cookieHeader, disconnectTestDb } from '../test/db.js';
 
 // PATCH /api/users/:id and the other admin endpoints added with the guard chain.
 // One test per business rule first, then the endpoints' own behaviour.
@@ -221,6 +221,50 @@ describe('GET /api/users filters', () => {
   });
 });
 
+describe('last sign-in', () => {
+  const lastLoginOf = async (admin: { _id: unknown }, email: string) => {
+    const res = await request(app).get('/api/users?status=active').set('Cookie', cookieFor(admin._id));
+    return res.body.items.find((u: { email: string }) => u.email === email).lastLoginAt;
+  };
+
+  it('is null until the first sign-in, then set by a password sign-in', async () => {
+    const admin = await makeAdmin();
+    const user = await makeUser({ status: 'active', emailVerified: true });
+    expect(await lastLoginOf(admin, user.email)).toBeNull();
+
+    const before = Date.now();
+    expect((await login(user.email)).status).toBe(200);
+    const lastLoginAt = await lastLoginOf(admin, user.email);
+    expect(typeof lastLoginAt).toBe('string');
+    expect(new Date(lastLoginAt).getTime()).toBeGreaterThanOrEqual(before);
+  });
+
+  it('is not changed when the session refreshes', async () => {
+    const admin = await makeAdmin();
+    const user = await makeUser({ status: 'active', emailVerified: true });
+    const cookies = cookieHeader((await login(user.email)).headers['set-cookie']);
+    const earlier = new Date('2026-01-01T00:00:00.000Z');
+    await User.updateOne({ _id: user._id }, { lastLoginAt: earlier });
+
+    expect((await request(app).post('/api/auth/refresh').set('Cookie', cookies)).status).toBe(200);
+    expect(await lastLoginOf(admin, user.email)).toBe(earlier.toISOString());
+  });
+
+  it('is set by a password change (a fresh session)', async () => {
+    const admin = await makeAdmin();
+    const user = await makeUser({ status: 'active', emailVerified: true });
+    const cookies = cookieHeader((await login(user.email)).headers['set-cookie']);
+    await User.updateOne({ _id: user._id }, { lastLoginAt: new Date('2026-01-01') });
+
+    const res = await request(app)
+      .post('/api/auth/password')
+      .set('Cookie', cookies)
+      .send({ currentPassword: PASSWORD, newPassword: 'An0ther-Passw0rd!' });
+    expect(res.status).toBe(200);
+    expect(new Date(await lastLoginOf(admin, user.email)).getTime()).toBeGreaterThan(new Date('2026-01-02').getTime());
+  });
+});
+
 describe('GET /api/users sorting', () => {
   // createdAt is immutable once timestamps set it, so it is given at creation
   const seedSortable = async () => {
@@ -295,6 +339,46 @@ describe('GET /api/users sorting', () => {
     const res = await request(app).get('/api/users').set('Cookie', cookieFor(admin._id));
     expect(res.body).toMatchObject({ page: 1, limit: 20, total: 22, totalPages: 2 });
     expect(res.body.items).toHaveLength(20);
+  });
+
+  describe('sort=lastLoginAt', () => {
+    const seedSignIns = async () => {
+      const admin = await makeAdmin(); // never signed in
+      await makeUser({ name: 'never', status: 'active', emailVerified: true });
+      await makeUser({ name: 'old', status: 'active', emailVerified: true, lastLoginAt: new Date('2026-01-01') });
+      await makeUser({ name: 'recent', status: 'active', emailVerified: true, lastLoginAt: new Date('2026-06-01') });
+      await makeUser({ name: 'middle', status: 'active', emailVerified: true, lastLoginAt: new Date('2026-03-01') });
+      return admin;
+    };
+    const signedIn = (list: string[]) => list.filter((name) => name !== 'never' && name !== 'Admin');
+
+    it.each([
+      ['sort=lastLoginAt', ['recent', 'middle', 'old']],
+      ['sort=lastLoginAt&order=desc', ['recent', 'middle', 'old']],
+      ['sort=lastLoginAt&order=asc', ['old', 'middle', 'recent']],
+    ])('%s orders by last sign-in with never-signed-in accounts last', async (query, expected) => {
+      const admin = await seedSignIns();
+      const list = await names(admin, `status=active&${query}`);
+      expect(signedIn(list)).toEqual(expected);
+      expect(list.slice(3).sort()).toEqual(['Admin', 'never']);
+    });
+
+    it('breaks ties by _id so paging never repeats or skips a user', async () => {
+      const admin = await makeAdmin();
+      for (let i = 0; i < 3; i++) await makeUser({ name: 'Same', lastLoginAt: new Date('2026-01-01') });
+      for (let i = 0; i < 2; i++) await makeUser({ name: 'Never' });
+      const ids = async (query: string) =>
+        (await request(app).get(`/api/users?status=pending&${query}`).set('Cookie', cookieFor(admin._id))).body.items.map(
+          (u: { id: string }) => u.id
+        );
+
+      for (const order of ['asc', 'desc']) {
+        const sort = `sort=lastLoginAt&order=${order}`;
+        const pages = [...(await ids(`${sort}&limit=2&page=1`)), ...(await ids(`${sort}&limit=2&page=2`)), ...(await ids(`${sort}&limit=2&page=3`))];
+        expect(new Set(pages).size).toBe(5);
+        expect(pages).toEqual(await ids(`${sort}&limit=5`));
+      }
+    });
   });
 
   it.each(['sort=email', 'sort=pendingRank', 'order=up', 'sort=name&order=DESC'])(

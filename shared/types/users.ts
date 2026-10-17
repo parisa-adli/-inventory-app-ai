@@ -18,6 +18,8 @@ export interface AdminUser {
   /** When and by which admin (user id) the status last changed; null if never changed by an admin. */
   statusChangedAt: string | null;
   statusChangedBy: string | null;
+  /** When the user last started a Session (signed in); null if they never have. */
+  lastLoginAt: string | null;
   createdAt: string;
 }
 

@@ -107,6 +107,9 @@ export const issueSession = async (
     ip: req.ip ?? family?.ip ?? undefined,
   });
 
+  // A new Session is a sign in; rotating an existing one is not
+  if (!family) await User.updateOne({ _id: userId }, { lastLoginAt: now });
+
   res.cookie(ACCESS_COOKIE, signAccessToken(userId), cookieOptions(durationToMs(env.ACCESS_TOKEN_TTL)));
   res.cookie(REFRESH_COOKIE, refreshToken, cookieOptions(refreshMs, REFRESH_COOKIE_PATH));
   return refreshToken;

@@ -118,6 +118,7 @@ export default function Users() {
                   <TableHead>Role</TableHead>
                   <TableHead>Email status</TableHead>
                   <TableHead>Signed up</TableHead>
+                  <TableHead>Last sign-in</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -137,6 +138,9 @@ export default function Users() {
                       )}
                     </TableCell>
                     <TableCell>{formatDate(user.createdAt)}</TableCell>
+                    <TableCell className={user.lastLoginAt ? undefined : 'text-muted-foreground'}>
+                      {user.lastLoginAt ? formatDate(user.lastLoginAt) : 'Never'}
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         {user.status === ACCOUNT_STATUS.ACTIVE && user.id !== me?.id && (

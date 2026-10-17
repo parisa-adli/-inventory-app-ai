@@ -15,6 +15,7 @@ const pendingUser = (overrides: Record<string, unknown>) => ({
   status: 'pending',
   telegramLinked: false,
   createdAt: '2026-03-01T10:00:00.000Z',
+  lastLoginAt: null,
   ...overrides,
 });
 
@@ -364,5 +365,34 @@ test.describe('users list filters, sort and URL state (stubbed API)', () => {
 
     await expect(page.getByRole('row', { name: /Vera Verified/ }).getByRole('cell', { name: 'Staff' })).toBeVisible();
     await expect(page.getByRole('row', { name: /Uli Unverified/ }).getByRole('cell', { name: 'Admin' })).toBeVisible();
+  });
+});
+
+test.describe('last sign-in (stubbed API)', () => {
+  test.use({ locale: 'en-US', timezoneId: 'UTC' });
+
+  test('the Recently active preset writes the URL and sends sort=lastLoginAt', async ({ page }) => {
+    await signInAs(page, admin);
+    const queries = await stubUsers(page);
+
+    await page.goto('/app/users');
+    await expect(page.getByRole('row', { name: /Vera Verified/ })).toBeVisible();
+    await choose(page, 'Sort by', 'Recently active');
+
+    await expect(page).toHaveURL(/sort=lastLoginAt&order=desc/);
+    await expect.poll(() => queries.at(-1)).toMatchObject({ sort: 'lastLoginAt', order: 'desc' });
+    await page.reload();
+    await expect(page.getByRole('combobox', { name: 'Sort by' })).toHaveText('Recently active');
+  });
+
+  test('the Last sign-in column shows the date, or "Never"', async ({ page }) => {
+    await signInAs(page, admin);
+    await stubUsers(page, () => page1([{ ...verified, lastLoginAt: '2026-06-15T12:00:00.000Z' }, unverified]));
+
+    await page.goto('/app/users');
+
+    await expect(page.getByRole('columnheader', { name: 'Last sign-in' })).toBeVisible();
+    await expect(page.getByRole('row', { name: /Vera Verified/ }).getByRole('cell', { name: 'Jun 15, 2026' })).toBeVisible();
+    await expect(page.getByRole('row', { name: /Uli Unverified/ }).getByRole('cell', { name: 'Never' })).toBeVisible();
   });
 });

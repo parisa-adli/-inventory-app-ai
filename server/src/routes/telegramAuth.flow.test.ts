@@ -6,6 +6,7 @@ import { AuthSession } from '../models/AuthSession.js';
 import { EmailToken } from '../models/EmailToken.js';
 import { User } from '../models/User.js';
 import { sendTelegramLinkEmail, sendVerificationEmail } from '../services/email.js';
+import { ACCESS_COOKIE, signAccessToken } from '../services/jwt.js';
 import { sendTelegramMessage } from '../services/telegram.js';
 import { createAuthSession, startFromBot } from '../services/telegramAuth.js';
 import { sha256 } from '../utils/crypto.js';
@@ -133,6 +134,11 @@ describe('Telegram sign in (account already linked)', () => {
     const set = res.headers['set-cookie'] as unknown as string[];
     expect(set.some((c) => c.startsWith('access_token=') && !c.startsWith('access_token=;'))).toBe(true);
     expect(set.some((c) => c.startsWith('refresh_token='))).toBe(true);
+    // A new Session: the admin Users list shows when they last signed in
+    const admin = await User.create({ name: 'Admin', email: 'admin@inventory.local', role: 'admin', status: 'active', emailVerified: true });
+    const list = await request(app).get('/api/users?status=active').set('Cookie', [`${ACCESS_COOKIE}=${signAccessToken(String(admin._id))}`]);
+    const listed = list.body.items.find((u: { id: string }) => u.id === String(user._id));
+    expect(Date.now() - new Date(listed.lastLoginAt).getTime()).toBeLessThan(60_000);
 
     // single use: the same code cannot be replayed (the attempt is already COMPLETED)
     const replay = await verify(cookies, code);
@@ -386,7 +392,7 @@ describe('Database state of a Telegram sign up / sign in', () => {
     expect((await EmailToken.findOne({ user: user._id }))!.consumed).toBe(true);
   });
 
-  it('a later sign in writes nothing to the user but a changed @handle, only to the attempt', async () => {
+  it('a later sign in writes nothing to the user but a changed @handle and the sign-in time, only to the attempt', async () => {
     const user = await User.create({
       name: 'Tele',
       email: 'tele@inventory.local',
@@ -395,11 +401,13 @@ describe('Database state of a Telegram sign up / sign in', () => {
       status: 'pending',
       emailVerified: true,
     });
-    const before = JSON.stringify(await User.findById(user._id).lean());
+    const before = await User.findById(user._id).lean();
     const { cookies, code } = await withCode();
     expect((await verify(cookies, code)).status).toBe(200);
 
-    expect(JSON.stringify(await User.findById(user._id).lean())).toBe(before);
+    const { lastLoginAt, ...after } = (await User.findById(user._id).lean())!;
+    expect(lastLoginAt).toBeInstanceOf(Date);
+    expect(JSON.stringify(after)).toBe(JSON.stringify(before));
     const session = (await AuthSession.findOne())!;
     expect(session).toMatchObject({ status: 'COMPLETED', purpose: 'LOGIN' });
     expect(String(session.user)).toBe(String(user._id));

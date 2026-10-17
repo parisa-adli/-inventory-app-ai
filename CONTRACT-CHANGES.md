@@ -171,12 +171,14 @@ PRD §2 changed: staff may create and edit categories and suppliers; delete stay
 ## C16. Users list sort and page size (P1.29, 2026-10-17; approved by the user)
 
 `GET /api/users` (`listUsersQuerySchema`). The response shape `{ items, page, limit, total, totalPages }` is unchanged.
-- **`sort`** = `createdAt | name` (`USER_SORTS`; default `createdAt`) and an optional **`order`** = `asc | desc` (the catalog `SORT_ORDERS`; default asc for name, desc otherwise, `defaultUserSortOrder`). An unknown value is 400 `VALIDATION_ERROR`.
+- **`sort`** = `createdAt | name | lastLoginAt` (`USER_SORTS`; default `createdAt`) and an optional **`order`** = `asc | desc` (the catalog `SORT_ORDERS`; default asc for name, desc otherwise, `defaultUserSortOrder`). An unknown value is 400 `VALIDATION_ERROR`.
 - Names sort case-insensitively (collation). Every sort breaks ties by `_id` in the same direction, so paging never repeats or skips a user.
 - **The pending-first rank is removed** (every Users tab already filters by status): with no `sort` the list is newest first. A deliberate deviation from the PRD's "pending rows first", see `tasks/TASK.md` Open Question 15.
 - **Default `limit` 10 → 20** (`USERS_PAGE_SIZE_DEFAULT`); the maximum stays 100.
+- **`sort=lastLoginAt`** (#23; desc by default): accounts that never signed in come last in both directions.
+- **`AdminUser.lastLoginAt`**: ISO string or null. Set whenever a new Session (refresh-token family) is issued: password or Telegram sign-in, and the fresh session after `POST /api/auth/password`. Not changed by `POST /api/auth/refresh`.
 
-**Shared:** `USER_SORTS`, `UserSort`, `defaultUserSortOrder`.
+**Shared:** `USER_SORTS`, `UserSort`, `defaultUserSortOrder`, `AdminUser.lastLoginAt`. `User` model gains `lastLoginAt` (index `{ lastLoginAt: -1, _id: -1 }`).
 
 ## Not applicable (nothing to change)
 

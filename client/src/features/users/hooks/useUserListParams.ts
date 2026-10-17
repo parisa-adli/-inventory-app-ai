@@ -20,6 +20,7 @@ export const USER_SORT_PRESETS = [
   { value: 'createdAt-asc', label: 'Oldest', sort: 'createdAt', order: 'asc' },
   { value: 'name-asc', label: 'Name A→Z', sort: 'name', order: 'asc' },
   { value: 'name-desc', label: 'Name Z→A', sort: 'name', order: 'desc' },
+  { value: 'lastLoginAt-desc', label: 'Recently active', sort: 'lastLoginAt', order: 'desc' },
 ] as const satisfies { value: string; label: string; sort: UserSort; order: SortOrder }[];
 
 /** The "All" choice of the role and email-status selects (a Select item cannot have an empty value). */

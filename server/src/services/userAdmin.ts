@@ -24,6 +24,7 @@ interface UserLike {
   statusReason?: string | null;
   statusChangedAt?: Date | null;
   statusChangedBy?: Types.ObjectId | null;
+  lastLoginAt?: Date | null;
   createdAt: Date;
 }
 
@@ -39,6 +40,7 @@ export const toAdminUser = (user: UserLike): AdminUser => ({
   statusReason: user.statusReason ?? null,
   statusChangedAt: user.statusChangedAt ? user.statusChangedAt.toISOString() : null,
   statusChangedBy: user.statusChangedBy ? String(user.statusChangedBy) : null,
+  lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
   createdAt: user.createdAt.toISOString(),
 });
 
@@ -58,7 +60,10 @@ const lastAdminError = () => new ForbiddenError('At least one active admin must 
 /** Case-insensitive sort for names. */
 const NAME_COLLATION = { locale: 'en', strength: 2 } as const;
 
-/** GET /api/users: filters, then the requested sort (newest first by default) with an `_id` tie-break. */
+/**
+ * GET /api/users: filters, then the requested sort (newest first by default) with an `_id` tie-break.
+ * By last sign-in, accounts that never signed in come last in both directions.
+ */
 export const listUsers = async (query: ListUsersQuery): Promise<UsersPage> => {
   const { status, role, verified, search, page, limit, sort } = query;
   const direction = (query.order ?? defaultUserSortOrder(sort)) === 'asc' ? 1 : -1;
@@ -71,9 +76,13 @@ export const listUsers = async (query: ListUsersQuery): Promise<UsersPage> => {
     filter.$or = [{ name: pattern }, { email: pattern }];
   }
 
+  const neverSignedInLast = sort === 'lastLoginAt';
   const pipeline: PipelineStage[] = [
     { $match: filter },
-    { $sort: { [sort]: direction, _id: direction } },
+    ...(neverSignedInLast
+      ? [{ $addFields: { neverSignedIn: { $eq: [{ $ifNull: ['$lastLoginAt', null] }, null] } } }]
+      : []),
+    { $sort: { ...(neverSignedInLast ? { neverSignedIn: 1 } : {}), [sort]: direction, _id: direction } },
     { $skip: (page - 1) * limit },
     { $limit: limit },
   ];

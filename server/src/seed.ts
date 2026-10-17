@@ -10,6 +10,8 @@ import { normalizeKey } from './utils/text.js';
 
 type UserDoc = InstanceType<typeof User>;
 
+const HOUR_MS = 3_600_000;
+
 // EmailToken, AuthSession and RefreshToken are runtime-generated and never seeded.
 const seedUsers = async (): Promise<Map<string, UserDoc>> => {
   const userMap = new Map<string, UserDoc>();
@@ -25,6 +27,7 @@ const seedUsers = async (): Promise<Map<string, UserDoc>> => {
       status: data.status,
       emailVerified: data.emailVerified,
       ...(data.telegramChatId ? { telegramChatId: data.telegramChatId } : {}),
+      ...(data.lastLoginHoursAgo !== null ? { lastLoginAt: new Date(Date.now() - data.lastLoginHoursAgo * HOUR_MS) } : {}),
     });
     userMap.set(user.email, user);
   }

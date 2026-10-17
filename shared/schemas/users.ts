@@ -10,7 +10,7 @@ export const STATUS_REASON_MAX = 500;
 
 const roleField = z.enum([USER_ROLES.ADMIN, USER_ROLES.STAFF]);
 
-export const USER_SORTS = ['createdAt', 'name'] as const;
+export const USER_SORTS = ['createdAt', 'name', 'lastLoginAt'] as const;
 export type UserSort = (typeof USER_SORTS)[number];
 
 /** Order used when the query names a sort but no order: A→Z for names, newest first otherwise. */

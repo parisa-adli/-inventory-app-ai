@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ACCOUNT_STATUS, PERMISSIONS } from '@inventory/shared';
+import { ACCOUNT_STATUS, PERMISSIONS, type UsersPage } from '@inventory/shared';
 import { useCan } from '@/features/auth/hooks/useCan';
 import { getApiError } from '@/lib/apiError';
 import * as usersApi from '../api/usersApi';
@@ -8,6 +8,7 @@ import { USER_SORT_PRESETS } from './useUserListParams';
 
 export const usersKeys = {
   all: ['users'] as const,
+  lists: () => ['users', 'list'] as const,
   list: (params: usersApi.UsersListParams) => ['users', 'list', params] as const,
   pendingCount: () => ['users', 'pending-count'] as const,
 };
@@ -25,19 +26,34 @@ const PENDING_COUNT_POLL_MS = 60 * 1000;
  * Accounts awaiting approval, for the nav and Pending-tab badges: the pending list with page size 1,
  * read for its `total`. Ignores the Users page filters; under `usersKeys.all`, so every user mutation
  * refreshes it. Polls every minute and on window focus. Sends nothing without `USERS_MANAGE`.
+ * When the total changes, the cached pending lists are invalidated too, so the Pending tab never
+ * shows a count its rows disagree with.
  */
 export const usePendingCount = () => {
   const canManage = useCan(PERMISSIONS.USERS_MANAGE);
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: usersKeys.pendingCount(),
-    queryFn: () =>
-      usersApi.fetchUsers({
+    queryFn: async () => {
+      const startedAt = Date.now();
+      const previous = queryClient.getQueryData<UsersPage>(usersKeys.pendingCount());
+      const page = await usersApi.fetchUsers({
         status: ACCOUNT_STATUS.PENDING,
         page: 1,
         limit: 1,
         sort: USER_SORT_PRESETS[0].sort,
         order: USER_SORT_PRESETS[0].order,
-      }),
+      });
+      if (previous && previous.total !== page.total) {
+        // Skips lists already fetched since this count started (e.g. after a mutation invalidated both).
+        // A list fetch still in flight is restarted: it may have begun before the change.
+        void queryClient.invalidateQueries({
+          queryKey: [...usersKeys.lists(), { status: ACCOUNT_STATUS.PENDING }],
+          predicate: (query) => query.state.dataUpdatedAt < startedAt,
+        });
+      }
+      return page;
+    },
     select: (page) => page.total,
     enabled: canManage,
     staleTime: 0,

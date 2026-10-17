@@ -452,6 +452,22 @@ test.describe('pending count badge (stubbed API)', () => {
     await expect(usersLink(page)).toHaveAccessibleName('Users 4 awaiting approval');
   });
 
+  test('a rise on focus also refreshes the Pending list, without a reload', async ({ page }) => {
+    await signInAs(page, admin);
+    let pending = [verified];
+    await stubPending(page, () => pending.length, () => page1(pending));
+
+    await page.goto('/app/users');
+    await expect(pendingTab(page)).toHaveAccessibleName('Pending 1 awaiting approval');
+    await expect(page.getByRole('row', { name: /Vera Verified/ })).toBeVisible();
+
+    pending = [verified, unverified];
+    await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
+
+    await expect(pendingTab(page)).toHaveAccessibleName('Pending 2 awaiting approval');
+    await expect(page.getByRole('row', { name: /Uli Unverified/ })).toBeVisible();
+  });
+
   test('rises on the next poll, a minute later, without a reload', async ({ page }) => {
     await page.clock.install();
     await signInAs(page, admin);

@@ -30,7 +30,7 @@ History: `c127d2c` scaffold → `b173a2a` Phase 1 Part A + server dependency upg
 
 **Progress (Phase 2, 2026-10-16):** Phase 2 Categories & Suppliers is done (server `8e23ae3` + client commit); see its section for the decisions. The delete guard is re-verified in P3.1.
 
-**Progress:** Phase 0 is done except the unchecked items below (P0.2 and P0.8 are partial, P0.9 is deferred). **Phase 1: Parts A, B and C done (C: the manual check with the real bot is still to be run by the user); Part D: admin approve, reject, revoke and reactivate are done; the server half of admin user management v2 (P1.24) is done, its client half is not; the Phase 1 acceptance run remains. Part E (Profile & sessions) done; its live-bot link check is still to be run by the user.** Phases 2–6 not started.
+**Progress:** Phase 0 is done except the unchecked items below (P0.2 and P0.8 are partial, P0.9 is deferred). **Phase 1: Parts A, B and C done (C: the manual check with the real bot is still to be run by the user); Part D: admin approve, reject, revoke and reactivate are done; the server half of admin user management v2 (P1.24) is done, its client half is not; the Phase 1 acceptance run remains. Part E (Profile & sessions) done; its live-bot link check is still to be run by the user. P1.29 (users list sort/filters/search, pending badge, mobile cards): slice 1/5 (#21, shared `SearchInput` + `Pager`) done; the rest not started.** Phases 2–6 not started.
 
 ---
 
@@ -280,6 +280,38 @@ Deps: Parts B (login and the auth context) and A (`requireRole`).
   - *Server (done):* one guard per file with specific codes (`EMAIL_UNVERIFIED`, `ACCOUNT_PENDING`, `ACCOUNT_REJECTED`, `PASSWORD_CHANGE_REQUIRED`, `FORBIDDEN`) composed in `middleware/guards.ts` (the admin routes now use `can(USERS_MANAGE)`, see P1.25); `PATCH /api/users/:id`, temp password, manual verify, admin resend, Telegram unlink, list filters (role/verified/search, pending first); `POST /api/auth/password`; rules in `services/userAdmin.ts`. Tests: `routes/accessMatrix.test.ts` (every guarded route × anonymous/unverified/pending/rejected/staff/admin) and `routes/usersAdmin.test.ts` (one test per rule).
   - *Client (to do):* route on the new gate codes and on `mustChangePassword` (a change-password screen), move the Users page to `PATCH /users/:id` and add the new actions/filters, then drop the legacy activate/reject/reactivate routes and settle `CANNOT_MODIFY_SELF` / `LAST_ADMIN`.
 - [x] **P1.25 [X · D] RBAC foundation** (`CONTRACT-CHANGES.md` C12): `PERMISSIONS`, `ROLE_PERMISSIONS`, `hasPermission` in `shared/constants/permissions.ts` (fixed in code; `ROLE_HIERARCHY` removed). Server: `requirePermission` replaces `requireRole`, `can(...)` replaces `adminOnly`/`withRole`; `server/src/permissions.test.ts` pins the PRD §2 table. Client: `useCan`, `<Can>`, route `requirePermission` (replaces `requireRole`), nav items filtered by permission.
+- [ ] **P1.29 [S+C · D] Users list: sort, filters, search, pending badge, mobile cards** (planned 2026-10-17 from a Q&A session; write contract entry C16 in `CONTRACT-CHANGES.md` when building). Deps: P1.15, P1.20, P2.4 (the catalog list pattern). **Not in scope:** row-action dropdown (the inline buttons stay), Telegram bot notify on approve/reject, required reject reason, the temp-password / verify-manually confirmations, glossary/ADR. The list response keeps its current `{ items, page, limit, total, totalPages }` shape (already the catalog shape).
+  - *Decisions:*
+    - **Layout kept.** The table and the Pending / Active / Rejected tabs stay as they are; the tab is the `status` filter and Pending stays the default tab. Actions remain inline buttons (no dropdown).
+    - **Ordering.** `pendingRank` is dropped (every list is already status-filtered by its tab). Default is newest first. Sort presets in one "Sort by" select (as in `CatalogToolbar`): **Newest** (default), **Oldest**, **Name A→Z**, **Name Z→A**, **Recently active** (`lastLoginAt` desc, never-signed-in last). Ties by `_id`; name sorts case-insensitive (collation).
+    - **Filters.** Search (name or email, debounced 300 ms), role (All / Admin / Staff), email status (All / Verified / Not verified), in a toolbar above the table.
+    - **URL state.** `?status=&search=&role=&verified=&sort=&order=&page=`, with defaults left out, so a refresh or shared link reproduces the view. A filter, sort or tab change resets the page to 1. Filters persist across tabs. "Clear filters" appears while any filter is set. Empty state with filters: "No users match these filters"; the per-tab empty text stays for the no-filter case.
+    - **Page size 20** (`USERS_PAGE_SIZE_DEFAULT` 10 → 20).
+    - **`lastLoginAt`** (new, nullable on `User`): stamped when `issueSession` starts a new session family (password sign-in, Telegram sign-in, the sessions issued after a password reset/change), **not** on refresh rotation. Exposed on `AdminUser`, shown as "Last sign-in" ("Never" when null).
+    - **Pending badge.** `usePendingCount()` = `GET /users?status=pending&limit=1` reading only `total`, key `['users', 'pending-count']` (under `usersKeys.all`, so every user mutation invalidates it). It refetches every 60 s and on window focus, and is enabled only with `USERS_MANAGE`. The count shows as a badge on the **Users** sidebar link (sidebar and mobile drawer) and on the **Pending** tab; nothing at 0. No toast.
+    - **Mobile.** Below `sm`, one card per account (name, email, email-status badge, role, signed up, last sign-in, the same action buttons). From `sm` up, the existing table plus Role and Last sign-in columns. One component tree with two presentations, like the catalog grid.
+  - *Server / shared:*
+    - `shared/schemas/users.ts`: `USER_SORTS = ['createdAt', 'name', 'lastLoginAt']`. `listUsersQuerySchema` gains `sort` (default `createdAt`) and optional `order`. `defaultUserSortOrder`: name → asc, else desc. Reuse `SORT_ORDERS` from `schemas/catalog.ts`.
+    - `shared/types/users.ts`: `AdminUser.lastLoginAt: string | null`.
+    - `models/User.ts`: `lastLoginAt: Date | null`, index `{ lastLoginAt: -1 }`.
+    - `services/jwt.ts`: `issueSession` sets `lastLoginAt` when no family is passed.
+    - `services/userAdmin.ts` `listUsers`: replace the `pendingRank` stage with the requested sort (a has-login rank keeps nulls last for `lastLoginAt`, name collation, `_id` tie-break); `toAdminUser` maps `lastLoginAt`.
+    - Seed: active seeded users get a `lastLoginAt`; pending users stay null.
+    - Tests (`routes/usersAdmin.test.ts`): each sort including nulls-last, the default order, page size 20, `lastLoginAt` set on sign-in and unchanged by a refresh.
+  - *Client:*
+    - `features/users/hooks/useUserListParams.ts` (new): URL-backed list state built like `features/catalog/hooks/useCatalogSearchParams.ts` (same `pick` / `update` / default-omission logic) with its own `USER_SORT_PRESETS`. It is a separate hook; the catalog one is not generalised.
+    - Shared pieces: the debounced search box moves out of `features/catalog/components/CatalogToolbar.tsx` into `components/SearchInput.tsx`, and `features/catalog/components/Pager.tsx` moves to `components/Pager.tsx`. Each is used by 2 features once the Users page lands; catalog behaviour is unchanged, except that `SearchInput` fixes Back→Forward across a search (the box stayed empty and the debounce wiped `search` from the URL; regression test `tests/search-input.spec.ts`). **Done (#21).**
+    - `features/users/components/UsersToolbar.tsx` (new): `SearchInput`, role select, email-status select, Sort by, Clear filters.
+    - `features/users/hooks/useUsers.ts`: `UsersListParams` gains the filter/sort fields (the query key already holds the whole params object). Add `usePendingCount()`.
+    - `features/users/pages/Users.tsx`: `useUserListParams` replaces the `useState` status/page. Add the toolbar and the Pending-tab badge, and use the shared `Pager` instead of the hand-rolled Prev/Next. The existing buttons and tooltips are extracted into `UserActions`, used by the table row and by a new `UserCard` (`sm:hidden`; the table `hidden sm:block`). The page still steps back after the last row on a page is handled, now via `setPage(page - 1, { replace: true })`.
+    - `app/layouts/AppNav.tsx`: the Users item shows the pending-count badge.
+    - Tests (`tests/users.spec.ts`): filters, search and sorts appear in the URL and survive a reload; the badge rises after a new registration and drops after Activate; at mobile viewport, cards and no table. `tests/categories-suppliers.spec.ts` still passes after the extraction.
+  - *Acceptance:*
+    - [ ] Every filter, sort and search narrows or orders the list; a refresh or shared link reproduces the view.
+    - [ ] Recently active puts never-signed-in users last.
+    - [ ] A new sign-up raises the Pending badge (sidebar + tab) within 60 s or on focus, without a reload; Activate / Reject lowers it right away.
+    - [ ] At 375 px the page shows cards with working actions and no horizontal scroll; the table shows from `sm` up.
+    - [ ] `npm run typecheck`, `lint`, `test`, `build` pass; users and catalog e2e pass.
 - [ ] Run the full acceptance checklist below, then mark Phase 1 done.
 
 ### Part E — Profile & sessions ✅
@@ -470,6 +502,7 @@ These need a decision (PRD wins by default; per `CLAUDE.md`, stop and ask rather
 12. **Chart treatment of adjustments:** excluded from In/Out chart (PRD says received vs shipped only) — confirm.
 13. ✅ **Resolved in Part B — base URL of emailed links.** Links are built from `CLIENT_URL`; `APP_URL` was dropped. Original question: `.env.example` has `APP_URL=http://localhost:5000` (the API), but verification and reset links open client pages (Verify-Email landing, Reset Password) that then call the API, and the client runs on `CLIENT_URL` (`http://localhost:5173`). *Proposed:* build links from the client origin (`${CLIENT_URL}/verify-email/:token`, `${CLIENT_URL}/reset-password/:token`) and either point `APP_URL` at the client or drop it. Ask before building P1.4.
 14. ✅ **Resolved in Part B — token lifetimes and rate limits.** Verify 24 h, reset 1 h; per-IP, 15-min window: login 10, register 10, forgot-password 5, reset-password 10, resend-verification 10 (429 `RATE_LIMITED`). Original question: The PRD says tokens are "expiring" and auth routes are "rate-limited" but gives no values. *Proposed:* verify-email token 24 h, reset-password token 1 h; per-IP limits on register/login/forgot/reset (e.g. 10 requests per 15 min). Confirm or change before P1.4 / P1.17.
+15. ✅ **Resolved (2026-10-17, P1.29) — users list ordering.** The PRD and `01-identity-auth.md` say "pending rows first"; the pending-first sort (`pendingRank`) is dropped in favour of user-chosen sorts (default newest first). Waiting applicants stay visible because the Pending tab is the default view and a pending-count badge shows on the Users sidebar link and the Pending tab. A deliberate deviation from the PRD wording, confirmed by the user.
 
 ---
 

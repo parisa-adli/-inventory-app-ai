@@ -3,11 +3,11 @@ import type { UseQueryResult } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import type { Paginated, Permission } from '@inventory/shared';
 import { Can } from '@/features/auth/components/Can';
+import { Pager } from '@/components/Pager';
 import { Button } from '@/components/ui/button';
 import { useCatalogSearchParams } from '../hooks/useCatalogSearchParams';
 import { CatalogGridMessage, CatalogGridSkeleton, GRID_CLASS } from './CatalogGridStates';
 import { CatalogToolbar } from './CatalogToolbar';
-import { Pager } from './Pager';
 
 interface CatalogPageLayoutProps<T> {
   title: string;

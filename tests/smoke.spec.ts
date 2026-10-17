@@ -331,6 +331,10 @@ test.describe('client smoke', () => {
         json: { id: '1', name: 'Test Admin', email: 'a@x.com', role: 'admin', status: 'active', emailVerified: true },
       })
     );
+    // The admin nav's pending-users count
+    await page.route('**/api/users?*', (route) =>
+      route.fulfill({ json: { items: [], page: 1, limit: 1, total: 0, totalPages: 1 } })
+    );
 
     await page.goto('/');
     await expect(page.getByRole('heading', { level: 2, name: 'Dashboard' })).toBeVisible();

@@ -15,6 +15,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { PendingCountBadge } from '../components/PendingCountBadge';
 import { UsersToolbar } from '../components/UsersToolbar';
 import { useUserListParams } from '../hooks/useUserListParams';
 import { useActivateUser, useReactivateUser, useRejectUser, useRevokeUser, useUsers } from '../hooks/useUsers';
@@ -84,6 +85,7 @@ export default function Users() {
           {Object.entries(VIEWS).map(([value, { tab }]) => (
             <TabsTrigger key={value} value={value}>
               {tab}
+              {value === ACCOUNT_STATUS.PENDING && <PendingCountBadge className="ml-1.5" />}
             </TabsTrigger>
           ))}
         </TabsList>

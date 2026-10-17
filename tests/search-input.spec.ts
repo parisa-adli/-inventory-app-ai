@@ -6,6 +6,10 @@ const admin = { id: 'a1', name: 'Admin', email: 'admin@inventory.local', role: '
 
 test('back and forward restore the search box', async ({ page }) => {
   await page.route('**/api/auth/me', (route) => route.fulfill({ json: admin }));
+  // The admin nav's pending-users count
+  await page.route('**/api/users?*', (route) =>
+    route.fulfill({ json: { items: [], page: 1, limit: 1, total: 0, totalPages: 1 } }),
+  );
   await page.route(/\/api\/categories(\?.*)?$/, (route) =>
     route.fulfill({ json: { items: [], page: 1, limit: 12, total: 0, totalPages: 1 } }),
   );

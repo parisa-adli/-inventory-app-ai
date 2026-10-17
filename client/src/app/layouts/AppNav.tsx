@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ComponentType } from 'react'
 import { Link, NavLink } from 'react-router'
 import {
   ArrowLeftRight,
@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { useAuthUser, useLogout } from '@/features/auth/hooks/useAuth'
+import { PendingCountBadge } from '@/features/users/components/PendingCountBadge'
 import { cn } from '@/lib/utils'
 import { APP_HOME, PATHS } from '@/app/paths'
 
@@ -37,6 +38,8 @@ interface NavItem {
   icon: LucideIcon
   /** Shown only to users whose role grants it; omitted = every signed-in user. */
   permission?: Permission
+  /** Rendered at the end of the link, e.g. a count; it decides itself whether to show. */
+  badge?: ComponentType<{ className?: string }>
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -45,7 +48,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: PATHS.categories, label: 'Categories', icon: FolderTree, permission: PERMISSIONS.INVENTORY_VIEW },
   { to: PATHS.suppliers, label: 'Suppliers', icon: Truck, permission: PERMISSIONS.INVENTORY_VIEW },
   { to: PATHS.movements, label: 'Movements', icon: ArrowLeftRight, permission: PERMISSIONS.INVENTORY_VIEW },
-  { to: PATHS.users, label: 'Users', icon: Users, permission: PERMISSIONS.USERS_MANAGE },
+  { to: PATHS.users, label: 'Users', icon: Users, permission: PERMISSIONS.USERS_MANAGE, badge: PendingCountBadge },
 ]
 
 const useNavItems = () => {
@@ -77,7 +80,7 @@ function SidebarContent({ items, onNavigate }: SidebarContentProps) {
         </Link>
       </div>
       <nav aria-label="Main" className="flex flex-col gap-1 p-2">
-        {items.map(({ to, label, icon: Icon }) => (
+        {items.map(({ to, label, icon: Icon, badge: ItemBadge }) => (
           <NavLink
             key={to}
             to={to}
@@ -91,6 +94,7 @@ function SidebarContent({ items, onNavigate }: SidebarContentProps) {
           >
             <Icon className="size-4" />
             {label}
+            {ItemBadge && <ItemBadge className="ml-auto" />}
           </NavLink>
         ))}
       </nav>

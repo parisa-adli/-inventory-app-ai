@@ -36,7 +36,13 @@ const pageOf = (items: unknown[], meta: Partial<{ page: number; total: number; t
   ...meta,
 });
 
-const signInAs = (page: Page, user: unknown) => page.route('**/api/auth/me', (route) => route.fulfill({ json: user }));
+const signInAs = async (page: Page, user: unknown) => {
+  await page.route('**/api/auth/me', (route) => route.fulfill({ json: user }));
+  // An admin's nav asks for the pending-users count; unstubbed, its 401 would end the session
+  await page.route('**/api/users?*', (route) =>
+    route.fulfill({ json: { items: [], page: 1, limit: 1, total: 0, totalPages: 1 } }),
+  );
+};
 
 /** Stubs GET list calls and records each one's query string. */
 const stubList = async (page: Page, resource: string, body: (url: URL) => unknown) => {

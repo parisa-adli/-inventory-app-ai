@@ -34,12 +34,16 @@ const signInAs = async (page: Page, user: unknown) => {
   await page.route('**/api/auth/me', (route) => route.fulfill({ json: user }));
 };
 
-/** Stubs GET /api/users and records each call's query string. */
+/** The nav's pending-count request: the pending list with page size 1. */
+const isPendingCount = (url: URL) =>
+  url.searchParams.get('status') === 'pending' && url.searchParams.get('limit') === '1';
+
+/** Stubs GET /api/users and records each list call's query string (not the pending-count calls). */
 const stubUsers = async (page: Page, body: (url: URL) => unknown = () => page1([verified])) => {
   const queries: Record<string, string>[] = [];
   await page.route('**/api/users?*', (route, request) => {
     const url = new URL(request.url());
-    queries.push(Object.fromEntries(url.searchParams));
+    if (!isPendingCount(url)) queries.push(Object.fromEntries(url.searchParams));
     return route.fulfill({ json: body(url) });
   });
   return queries;
@@ -394,5 +398,139 @@ test.describe('last sign-in (stubbed API)', () => {
     await expect(page.getByRole('columnheader', { name: 'Last sign-in' })).toBeVisible();
     await expect(page.getByRole('row', { name: /Vera Verified/ }).getByRole('cell', { name: 'Jun 15, 2026' })).toBeVisible();
     await expect(page.getByRole('row', { name: /Uli Unverified/ }).getByRole('cell', { name: 'Never' })).toBeVisible();
+  });
+});
+
+test.describe('pending count badge (stubbed API)', () => {
+  /** A pending-count response: page size 1, only `total` matters. */
+  const countPage = (total: number) => ({
+    items: total ? [verified] : [],
+    page: 1,
+    limit: 1,
+    total,
+    totalPages: Math.max(total, 1),
+  });
+
+  /** Stubs GET /api/users: the pending count answers `pending()`, the list answers `list`. */
+  const stubPending = async (page: Page, pending: () => number, list: () => unknown = () => page1([verified])) => {
+    const countCalls: Record<string, string>[] = [];
+    await page.route('**/api/users?*', (route) => {
+      const url = new URL(route.request().url());
+      if (!isPendingCount(url)) return route.fulfill({ json: list() });
+      countCalls.push(Object.fromEntries(url.searchParams));
+      return route.fulfill({ json: countPage(pending()) });
+    });
+    return countCalls;
+  };
+
+  const usersLink = (page: Page) => page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /^Users/ });
+  const pendingTab = (page: Page) => page.getByRole('tab', { name: /^Pending/ });
+
+  test('shows the pending total on the Users link and the Pending tab, ignoring the page filters', async ({ page }) => {
+    await signInAs(page, admin);
+    const countCalls = await stubPending(page, () => 3);
+
+    await page.goto('/app/users?role=admin&search=vera&sort=name');
+
+    await expect(usersLink(page)).toHaveAccessibleName('Users 3 awaiting approval');
+    await expect(pendingTab(page)).toHaveAccessibleName('Pending 3 awaiting approval');
+    expect(countCalls.at(-1)).toEqual({ status: 'pending', page: '1', limit: '1', sort: 'createdAt', order: 'desc' });
+  });
+
+  test('rises when the window regains focus', async ({ page }) => {
+    await signInAs(page, admin);
+    let pending = 1;
+    await stubPending(page, () => pending);
+
+    await page.goto('/');
+    await expect(usersLink(page)).toHaveAccessibleName('Users 1 awaiting approval');
+
+    pending = 4;
+    // TanStack Query's focus manager listens for visibilitychange on window
+    await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
+
+    await expect(usersLink(page)).toHaveAccessibleName('Users 4 awaiting approval');
+  });
+
+  test('rises on the next poll, a minute later, without a reload', async ({ page }) => {
+    await page.clock.install();
+    await signInAs(page, admin);
+    let pending = 1;
+    const countCalls = await stubPending(page, () => pending);
+
+    await page.goto('/');
+    await expect(usersLink(page)).toHaveAccessibleName('Users 1 awaiting approval');
+    const callsBefore = countCalls.length;
+
+    pending = 2;
+    await page.clock.runFor(59_000);
+    expect(countCalls.length).toBe(callsBefore);
+    await page.clock.runFor(1_000);
+
+    await expect(usersLink(page)).toHaveAccessibleName('Users 2 awaiting approval');
+  });
+
+  test('shows the badge in the mobile drawer', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 800 });
+    await signInAs(page, admin);
+    await stubPending(page, () => 2);
+
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Open menu' }).click();
+
+    await expect(page.getByRole('dialog').getByRole('link', { name: /^Users/ })).toHaveAccessibleName(
+      'Users 2 awaiting approval'
+    );
+  });
+
+  test('drops after Activate', async ({ page }) => {
+    await signInAs(page, admin);
+    let pending = [verified, unverified];
+    await stubPending(page, () => pending.length, () => page1(pending));
+    await page.route('**/api/users/u1/activate', (route) => {
+      pending = [unverified];
+      return route.fulfill({ json: { ...verified, status: 'active' } });
+    });
+
+    await page.goto('/app/users');
+    await expect(pendingTab(page)).toHaveAccessibleName('Pending 2 awaiting approval');
+    await page.getByRole('row', { name: /Vera Verified/ }).getByRole('button', { name: 'Activate' }).click();
+
+    await expect(pendingTab(page)).toHaveAccessibleName('Pending 1 awaiting approval');
+    await expect(usersLink(page)).toHaveAccessibleName('Users 1 awaiting approval');
+  });
+
+  test('drops after Reject, and is gone at 0', async ({ page }) => {
+    await signInAs(page, admin);
+    let pending = [unverified];
+    await stubPending(page, () => pending.length, () => page1(pending));
+    await page.route('**/api/users/u2/reject', (route) => {
+      pending = [];
+      return route.fulfill({ json: { ...unverified, status: 'rejected' } });
+    });
+
+    await page.goto('/app/users');
+    await expect(usersLink(page)).toHaveAccessibleName('Users 1 awaiting approval');
+    await page.getByRole('button', { name: 'Reject' }).click();
+    await page.getByRole('button', { name: 'Reject user' }).click();
+
+    await expect(usersLink(page)).toHaveAccessibleName('Users');
+    await expect(pendingTab(page)).toHaveAccessibleName('Pending');
+  });
+
+  test('staff get no badge and send no /users request', async ({ page }) => {
+    await signInAs(page, staff);
+    const usersCalls: string[] = [];
+    await page.route('**/api/users?*', (route) => {
+      usersCalls.push(route.request().url());
+      return route.fulfill({ json: countPage(5) });
+    });
+
+    await page.goto('/');
+    await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Products' })).toBeVisible();
+    await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
+
+    await expect(page.getByText('awaiting approval')).toHaveCount(0);
+    expect(usersCalls).toEqual([]);
   });
 });

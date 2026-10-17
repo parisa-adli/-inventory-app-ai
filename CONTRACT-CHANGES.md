@@ -90,7 +90,7 @@ Server half only; the client moves over in its own session. `/shared` was unfroz
 `/auth/me`, `/auth/resend-verification`, `PATCH /auth/email` and the new `POST /auth/password` use `signedIn` (session only); logout stays unguarded; everything under `/api/users` is `adminOnly`.
 
 **New endpoints** (all `adminOnly`):
-- `GET /api/users` gains `role`, `verified` (`true|false`) and `search` (name or email, case-insensitive); pending users are listed first, then newest first.
+- `GET /api/users` gains `role`, `verified` (`true|false`) and `search` (name or email, case-insensitive); pending users are listed first, then newest first (**superseded by C16**: user-chosen sort, newest first by default).
 - `PATCH /api/users/:id` `{ role?, status?: 'active'|'rejected', statusReason? }` -> `AdminUser`. 400 `EMAIL_NOT_VERIFIED` (activate unverified), 403 `FORBIDDEN` (self reject/demote, last active admin), 409 `CONFLICT` (changed concurrently), 404.
 - `POST /api/users/:id/password/temp` -> `{ temporaryPassword }` once (`Cache-Control: no-store`); sets `mustChangePassword`, revokes refresh tokens.
 - `POST /api/users/:id/email/verify-manually` -> `AdminUser` (idempotent).
@@ -167,6 +167,16 @@ PRD §2 changed: staff may create and edit categories and suppliers; delete stay
 - **Permissions** (`shared/constants/permissions.ts`): `categories.manage` / `suppliers.manage` are replaced by `categories.write` + `categories.delete` and `suppliers.write` + `suppliers.delete`. Staff get both `*.write`.
 - **Endpoints:** `POST` and `PATCH /:id` on `/api/categories` and `/api/suppliers` are `can(CATEGORIES_WRITE)` / `can(SUPPLIERS_WRITE)`, so staff now get 201 / 200 instead of 403. `DELETE /:id` is `can(CATEGORIES_DELETE)` / `can(SUPPLIERS_DELETE)`, unchanged for staff (403 `FORBIDDEN`). Everything else in C14 stands.
 - **Client:** staff see "Add …" and the card's Edit; Delete is admin only. The P3 product form's "+ New category / supplier" follows `*_WRITE`, so staff get it too.
+
+## C16. Users list sort and page size (P1.29, 2026-10-17; approved by the user)
+
+`GET /api/users` (`listUsersQuerySchema`). The response shape `{ items, page, limit, total, totalPages }` is unchanged.
+- **`sort`** = `createdAt | name` (`USER_SORTS`; default `createdAt`) and an optional **`order`** = `asc | desc` (the catalog `SORT_ORDERS`; default asc for name, desc otherwise, `defaultUserSortOrder`). An unknown value is 400 `VALIDATION_ERROR`.
+- Names sort case-insensitively (collation). Every sort breaks ties by `_id` in the same direction, so paging never repeats or skips a user.
+- **The pending-first rank is removed** (every Users tab already filters by status): with no `sort` the list is newest first. A deliberate deviation from the PRD's "pending rows first", see `tasks/TASK.md` Open Question 15.
+- **Default `limit` 10 → 20** (`USERS_PAGE_SIZE_DEFAULT`); the maximum stays 100.
+
+**Shared:** `USER_SORTS`, `UserSort`, `defaultUserSortOrder`.
 
 ## Not applicable (nothing to change)
 

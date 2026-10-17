@@ -1,5 +1,5 @@
 import type { PipelineStage, Types } from 'mongoose';
-import { ACCOUNT_STATUS, USER_ROLES } from '@inventory/shared';
+import { ACCOUNT_STATUS, USER_ROLES, defaultUserSortOrder } from '@inventory/shared';
 import type { AdminUser, ListUsersQuery, UpdateUserInput, UsersPage } from '@inventory/shared';
 import { User } from '../models/User.js';
 import { sendTracked } from './accountMail.js';
@@ -55,9 +55,13 @@ export const emailNotVerifiedError = () =>
 const selfActionError = () => new ForbiddenError('You cannot reject or demote your own account.');
 const lastAdminError = () => new ForbiddenError('At least one active admin must remain.');
 
-/** GET /api/users: filters, pending first, then newest first. */
+/** Case-insensitive sort for names. */
+const NAME_COLLATION = { locale: 'en', strength: 2 } as const;
+
+/** GET /api/users: filters, then the requested sort (newest first by default) with an `_id` tie-break. */
 export const listUsers = async (query: ListUsersQuery): Promise<UsersPage> => {
-  const { status, role, verified, search, page, limit } = query;
+  const { status, role, verified, search, page, limit, sort } = query;
+  const direction = (query.order ?? defaultUserSortOrder(sort)) === 'asc' ? 1 : -1;
   const filter: Record<string, unknown> = {};
   if (status) filter.status = status;
   if (role) filter.role = role;
@@ -69,13 +73,12 @@ export const listUsers = async (query: ListUsersQuery): Promise<UsersPage> => {
 
   const pipeline: PipelineStage[] = [
     { $match: filter },
-    { $addFields: { pendingRank: { $cond: [{ $eq: ['$status', ACCOUNT_STATUS.PENDING] }, 0, 1] } } },
-    { $sort: { pendingRank: 1, createdAt: -1, _id: -1 } },
+    { $sort: { [sort]: direction, _id: direction } },
     { $skip: (page - 1) * limit },
     { $limit: limit },
   ];
 
-  const [total, users] = await Promise.all([User.countDocuments(filter), User.aggregate<UserLike>(pipeline)]);
+  const [total, users] = await Promise.all([User.countDocuments(filter), User.aggregate<UserLike>(pipeline).collation(NAME_COLLATION)]);
   return {
     items: users.map(toAdminUser),
     page,

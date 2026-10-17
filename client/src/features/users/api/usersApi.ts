@@ -1,10 +1,15 @@
-import type { AccountStatus, AdminUser, UsersPage } from '@inventory/shared';
+import type { AccountStatus, AdminUser, SortOrder, UserRole, UserSort, UsersPage } from '@inventory/shared';
 import api from '@/lib/axios';
 
 export interface UsersListParams {
   status: AccountStatus;
   page: number;
   limit: number;
+  sort: UserSort;
+  order: SortOrder;
+  search?: string;
+  role?: UserRole;
+  verified?: boolean;
 }
 
 export const fetchUsers = async (params: UsersListParams): Promise<UsersPage> => {

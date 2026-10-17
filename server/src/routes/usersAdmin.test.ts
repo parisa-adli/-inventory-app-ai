@@ -202,29 +202,6 @@ describe('PATCH /api/users/:id', () => {
 });
 
 describe('GET /api/users filters', () => {
-  it('lists pending users first, then newest first', async () => {
-    // createdAt is immutable once timestamps set it, so it is given at creation
-    const admin = await makeUser({
-      name: 'Admin',
-      role: 'admin',
-      status: 'active',
-      emailVerified: true,
-      createdAt: new Date('2025-01-01'),
-    });
-    await makeUser({ name: 'Active new', status: 'active', emailVerified: true, createdAt: new Date('2026-03-01') });
-    await makeUser({ name: 'Pending old', createdAt: new Date('2026-01-01') });
-    await makeUser({ name: 'Pending new', createdAt: new Date('2026-02-01') });
-
-    const res = await request(app).get('/api/users').set('Cookie', cookieFor(admin._id));
-
-    expect(res.body.items.map((u: { name: string }) => u.name)).toEqual([
-      'Pending new',
-      'Pending old',
-      'Active new',
-      'Admin',
-    ]);
-  });
-
   it('filters by role, verified and a case-insensitive search on name or email', async () => {
     const admin = await makeAdmin();
     await makeUser({ name: 'Jane Doe', emailVerified: true });
@@ -242,6 +219,93 @@ describe('GET /api/users filters', () => {
     // Regex characters are matched literally
     expect(await list('search=.*')).toEqual([]);
   });
+});
+
+describe('GET /api/users sorting', () => {
+  // createdAt is immutable once timestamps set it, so it is given at creation
+  const seedSortable = async () => {
+    const admin = await makeUser({
+      name: 'admin',
+      role: 'admin',
+      status: 'active',
+      emailVerified: true,
+      createdAt: new Date('2025-01-01'),
+    });
+    await makeUser({ name: 'bravo', createdAt: new Date('2026-01-01') });
+    await makeUser({ name: 'Charlie', status: 'active', emailVerified: true, createdAt: new Date('2026-03-01') });
+    await makeUser({ name: 'Alpha', createdAt: new Date('2026-02-01') });
+    return admin;
+  };
+  const names = async (admin: { _id: unknown }, query = '') => {
+    const res = await request(app).get(`/api/users?${query}`).set('Cookie', cookieFor(admin._id));
+    expect(res.status).toBe(200);
+    return res.body.items.map((u: { name: string }) => u.name);
+  };
+
+  it('lists newest first when no sort is given, whatever the status', async () => {
+    const admin = await seedSortable();
+    expect(await names(admin)).toEqual(['Charlie', 'Alpha', 'bravo', 'admin']);
+  });
+
+  it.each([
+    ['sort=createdAt', ['Charlie', 'Alpha', 'bravo', 'admin']],
+    ['sort=createdAt&order=desc', ['Charlie', 'Alpha', 'bravo', 'admin']],
+    ['sort=createdAt&order=asc', ['admin', 'bravo', 'Alpha', 'Charlie']],
+    ['sort=name', ['admin', 'Alpha', 'bravo', 'Charlie']],
+    ['sort=name&order=asc', ['admin', 'Alpha', 'bravo', 'Charlie']],
+    ['sort=name&order=desc', ['Charlie', 'bravo', 'Alpha', 'admin']],
+  ])('%s orders the list (names ignore case)', async (query, expected) => {
+    const admin = await seedSortable();
+    expect(await names(admin, query)).toEqual(expected);
+  });
+
+  it('breaks ties by _id so paging never repeats or skips a user', async () => {
+    const admin = await makeAdmin();
+    const sameDay = new Date('2026-01-01');
+    for (let i = 0; i < 5; i++) await makeUser({ name: 'Same', createdAt: sameDay });
+    const ids = async (query: string) =>
+      (await request(app).get(`/api/users?status=pending&${query}`).set('Cookie', cookieFor(admin._id))).body.items.map(
+        (u: { id: string }) => u.id
+      );
+
+    for (const sort of ['sort=createdAt', 'sort=name']) {
+      const pages = [...(await ids(`${sort}&limit=2&page=1`)), ...(await ids(`${sort}&limit=2&page=2`)), ...(await ids(`${sort}&limit=2&page=3`))];
+      expect(new Set(pages).size).toBe(5);
+      expect(pages).toEqual(await ids(`${sort}&limit=5`));
+    }
+  });
+
+  it('combines the filters with a sort', async () => {
+    const admin = await seedSortable();
+    await makeUser({ name: 'Alfred', emailVerified: true, createdAt: new Date('2026-04-01') });
+    await makeUser({ name: 'Alfie', createdAt: new Date('2026-05-01') });
+    // Seeded emails all contain "al" (inventory.local), so the search names "alf"
+    expect(await names(admin, 'status=pending&search=ALF&sort=name&order=desc')).toEqual(['Alfred', 'Alfie']);
+    expect(await names(admin, 'status=pending&verified=false&sort=createdAt&order=asc')).toEqual([
+      'bravo',
+      'Alpha',
+      'Alfie',
+    ]);
+    expect(await names(admin, 'role=admin&sort=name')).toEqual(['admin']);
+  });
+
+  it('pages 20 users at a time by default', async () => {
+    const admin = await makeAdmin();
+    for (let i = 0; i < 21; i++) await makeUser({ name: `U${i}` });
+    const res = await request(app).get('/api/users').set('Cookie', cookieFor(admin._id));
+    expect(res.body).toMatchObject({ page: 1, limit: 20, total: 22, totalPages: 2 });
+    expect(res.body.items).toHaveLength(20);
+  });
+
+  it.each(['sort=email', 'sort=pendingRank', 'order=up', 'sort=name&order=DESC'])(
+    '400s on an unknown sort or order (%s)',
+    async (query) => {
+      const admin = await makeAdmin();
+      const res = await request(app).get(`/api/users?${query}`).set('Cookie', cookieFor(admin._id));
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    }
+  );
 });
 
 describe('email and Telegram credentials', () => {

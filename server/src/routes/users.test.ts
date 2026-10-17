@@ -85,7 +85,7 @@ describe('GET /api/users', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.items.map((u: { name: string }) => u.name)).toEqual(['New', 'Old']);
-    expect(res.body).toMatchObject({ page: 1, limit: 10, total: 2, totalPages: 1 });
+    expect(res.body).toMatchObject({ page: 1, limit: 20, total: 2, totalPages: 1 });
     expect(res.body.items[0]).toMatchObject({ emailVerified: false, telegramLinked: true, status: 'pending' });
     expect(JSON.stringify(res.body)).not.toMatch(/passwordHash|telegramChatId/);
   });

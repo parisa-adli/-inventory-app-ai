@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { ACCOUNT_STATUS, USERS_PAGE_SIZE_DEFAULT, type AccountStatus, type AdminUser } from '@inventory/shared';
+import { useEffect, useState } from 'react';
+import { ACCOUNT_STATUS, type AccountStatus, type AdminUser } from '@inventory/shared';
 import { useAuthUser } from '@/features/auth/hooks/useAuth';
+import { Pager } from '@/components/Pager';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,7 +15,10 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { UsersToolbar } from '../components/UsersToolbar';
+import { useUserListParams } from '../hooks/useUserListParams';
 import { useActivateUser, useReactivateUser, useRejectUser, useRevokeUser, useUsers } from '../hooks/useUsers';
+import { ROLE_LABELS } from '../roles';
 
 const formatDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' });
 
@@ -41,11 +45,11 @@ const VIEWS: Record<AccountStatus, { tab: string; title: string; hint: string; e
 
 /** Admin-only. Pending users to activate or reject, active users to revoke, rejected users to reactivate. */
 export default function Users() {
-  const [status, setStatus] = useState<AccountStatus>(ACCOUNT_STATUS.PENDING);
-  const [page, setPage] = useState(1);
+  const list = useUserListParams();
+  const { status, page, setPage } = list;
   // Confirmed for both reject (pending) and revoke (active): the same server transition
   const [toReject, setToReject] = useState<AdminUser | null>(null);
-  const users = useUsers({ status, page, limit: USERS_PAGE_SIZE_DEFAULT });
+  const users = useUsers(list.params);
   const me = useAuthUser().data;
   const activate = useActivateUser();
   const reject = useRejectUser();
@@ -59,9 +63,14 @@ export default function Users() {
   // Handling the last user on a page would leave that page empty: step back to the previous one
   const afterHandled = {
     onSuccess: () => {
-      if (data && data.items.length === 1 && page > 1) setPage(page - 1);
+      if (data && data.items.length === 1 && page > 1) setPage(page - 1, { replace: true });
     },
   };
+
+  // A stale link or a change elsewhere left us past the last page: go to the last one that exists
+  useEffect(() => {
+    if (data && !users.isPlaceholderData && page > data.totalPages) setPage(data.totalPages, { replace: true });
+  }, [data, users.isPlaceholderData, page, setPage]);
 
   return (
     <div className="space-y-4 px-4 sm:px-0">
@@ -70,13 +79,7 @@ export default function Users() {
         <p className="text-sm text-muted-foreground">{view.hint}</p>
       </div>
 
-      <Tabs
-        value={status}
-        onValueChange={(value: string) => {
-          setStatus(value as AccountStatus);
-          setPage(1);
-        }}
-      >
+      <Tabs value={status} onValueChange={(value: string) => list.setStatus(value as AccountStatus)}>
         <TabsList>
           {Object.entries(VIEWS).map(([value, { tab }]) => (
             <TabsTrigger key={value} value={value}>
@@ -85,6 +88,8 @@ export default function Users() {
           ))}
         </TabsList>
       </Tabs>
+
+      <UsersToolbar list={list} />
 
       {users.isPending && <p className="text-sm text-muted-foreground" role="status">Loading users…</p>}
       {users.isError && (
@@ -98,7 +103,7 @@ export default function Users() {
 
       {data && data.items.length === 0 && (
         <p className="rounded-md border bg-white p-6 text-center text-sm text-muted-foreground">
-          {view.empty}
+          {list.hasFilters ? 'No users match these filters.' : view.empty}
         </p>
       )}
 
@@ -110,6 +115,7 @@ export default function Users() {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
+                  <TableHead>Role</TableHead>
                   <TableHead>Email status</TableHead>
                   <TableHead>Signed up</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -120,6 +126,9 @@ export default function Users() {
                   <TableRow key={user.id}>
                     <TableCell className="font-medium">{user.name}</TableCell>
                     <TableCell>{user.email}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{ROLE_LABELS[user.role]}</Badge>
+                    </TableCell>
                     <TableCell>
                       {user.emailVerified ? (
                         <Badge variant="secondary">Verified</Badge>
@@ -208,26 +217,7 @@ export default function Users() {
         </div>
       )}
 
-      {data && data.totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">
-            Page {data.page} of {data.totalPages} · {data.total} users
-          </span>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-              Previous
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={page >= data.totalPages}
-              onClick={() => setPage(page + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      )}
+      {data && data.items.length > 0 && <Pager meta={data} onPage={(next) => setPage(next)} />}
 
       <Dialog open={toReject !== null} onOpenChange={(open: boolean) => !open && setToReject(null)}>
         <DialogContent>

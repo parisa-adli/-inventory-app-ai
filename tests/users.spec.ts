@@ -24,13 +24,29 @@ const unverified = pendingUser({ id: 'u2', name: 'Uli Unverified', email: 'uli@i
 const page1 = (items: unknown[], totalPages = 1) => ({
   items,
   page: 1,
-  limit: 10,
+  limit: 20,
   total: items.length,
   totalPages,
 });
 
 const signInAs = async (page: Page, user: unknown) => {
   await page.route('**/api/auth/me', (route) => route.fulfill({ json: user }));
+};
+
+/** Stubs GET /api/users and records each call's query string. */
+const stubUsers = async (page: Page, body: (url: URL) => unknown = () => page1([verified])) => {
+  const queries: Record<string, string>[] = [];
+  await page.route('**/api/users?*', (route, request) => {
+    const url = new URL(request.url());
+    queries.push(Object.fromEntries(url.searchParams));
+    return route.fulfill({ json: body(url) });
+  });
+  return queries;
+};
+
+const choose = async (page: Page, select: string, option: string) => {
+  await page.getByRole('combobox', { name: select }).click();
+  await page.getByRole('option', { name: option, exact: true }).click();
 };
 
 test.describe('admin users page (stubbed API)', () => {
@@ -184,5 +200,169 @@ test.describe('admin users page (stubbed API)', () => {
     await page.goto('/');
 
     await expect(page.getByRole('link', { name: 'Users' })).toBeVisible();
+  });
+});
+
+test.describe('users list filters, sort and URL state (stubbed API)', () => {
+  test('each toolbar control updates the URL and sends the matching query', async ({ page }) => {
+    await signInAs(page, admin);
+    const queries = await stubUsers(page);
+
+    await page.goto('/app/users');
+    await expect(page.getByRole('row', { name: /Vera Verified/ })).toBeVisible();
+    expect(queries.at(-1)).toEqual({ status: 'pending', page: '1', limit: '20', sort: 'createdAt', order: 'desc' });
+
+    await page.getByLabel('Search').fill('vera');
+    await expect(page).toHaveURL(/search=vera/);
+    await choose(page, 'Role', 'Staff');
+    await expect(page).toHaveURL(/role=staff/);
+    await choose(page, 'Email status', 'Not verified');
+    await expect(page).toHaveURL(/verified=false/);
+    await choose(page, 'Sort by', 'Name Z→A');
+    await expect(page).toHaveURL(/sort=name&order=desc/);
+    await page.getByRole('tab', { name: 'Active' }).click();
+    await expect(page).toHaveURL(/status=active/);
+
+    await expect
+      .poll(() => queries.at(-1))
+      .toEqual({
+        status: 'active',
+        page: '1',
+        limit: '20',
+        sort: 'name',
+        order: 'desc',
+        search: 'vera',
+        role: 'staff',
+        verified: 'false',
+      });
+    // Filters persist across tabs
+    await expect(page.getByLabel('Search')).toHaveValue('vera');
+  });
+
+  test('typing in the search replaces the history entry instead of adding one', async ({ page }) => {
+    await signInAs(page, admin);
+    await stubUsers(page);
+
+    await page.goto('/app/dashboard');
+    await page.goto('/app/users');
+    await page.getByLabel('Search').fill('ve');
+    await expect(page).toHaveURL(/search=ve/);
+    await page.getByLabel('Search').fill('vera');
+    await expect(page).toHaveURL(/search=vera/);
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/app\/dashboard$/);
+  });
+
+  test('a reload or deep link restores the controls', async ({ page }) => {
+    await signInAs(page, admin);
+    const queries = await stubUsers(page, () => ({ ...page1([verified], 3), page: 2, total: 45 }));
+
+    await page.goto('/app/users?status=rejected&search=vera&role=admin&verified=true&sort=createdAt&order=asc&page=2');
+
+    await expect(page.getByRole('tab', { name: 'Rejected' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByLabel('Search')).toHaveValue('vera');
+    await expect(page.getByRole('combobox', { name: 'Role' })).toHaveText('Admin');
+    await expect(page.getByRole('combobox', { name: 'Email status' })).toHaveText('Verified');
+    await expect(page.getByRole('combobox', { name: 'Sort by' })).toHaveText('Oldest');
+    await expect(page.getByText('Page 2 of 3')).toBeVisible();
+    expect(queries.at(-1)).toEqual({
+      status: 'rejected',
+      page: '2',
+      limit: '20',
+      sort: 'createdAt',
+      order: 'asc',
+      search: 'vera',
+      role: 'admin',
+      verified: 'true',
+    });
+
+    await page.reload();
+    await expect(page.getByRole('combobox', { name: 'Sort by' })).toHaveText('Oldest');
+    await expect(page.getByLabel('Search')).toHaveValue('vera');
+  });
+
+  test('invalid URL values fall back to the defaults', async ({ page }) => {
+    await signInAs(page, admin);
+    const queries = await stubUsers(page);
+
+    await page.goto('/app/users?status=nope&search=%20%20&role=owner&verified=maybe&sort=email&order=up&page=-3');
+
+    await expect(page.getByRole('tab', { name: 'Pending' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('combobox', { name: 'Sort by' })).toHaveText('Newest');
+    // A blank search is no filter
+    await expect(page.getByRole('button', { name: 'Clear filters' })).toHaveCount(0);
+    expect(queries.at(-1)).toEqual({ status: 'pending', page: '1', limit: '20', sort: 'createdAt', order: 'desc' });
+  });
+
+  test('Clear filters resets the filters and keeps the tab and sort', async ({ page }) => {
+    await signInAs(page, admin);
+    await stubUsers(page);
+
+    await page.goto('/app/users');
+    await expect(page.getByRole('row', { name: /Vera Verified/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Clear filters' })).toHaveCount(0);
+
+    await page.goto('/app/users?status=active&search=vera&role=staff&verified=false&sort=name');
+    await page.getByRole('button', { name: 'Clear filters' }).click();
+
+    await expect(page).toHaveURL(/\/app\/users\?status=active&sort=name$/);
+    await expect(page.getByLabel('Search')).toHaveValue('');
+    await expect(page.getByRole('combobox', { name: 'Role' })).toHaveText('All roles');
+    await expect(page.getByRole('combobox', { name: 'Email status' })).toHaveText('Any email status');
+    await expect(page.getByRole('button', { name: 'Clear filters' })).toHaveCount(0);
+  });
+
+  test('a filter, sort or tab change resets the page to 1', async ({ page }) => {
+    await signInAs(page, admin);
+    await stubUsers(page, (url) => ({ ...page1([verified], 3), page: Number(url.searchParams.get('page')), total: 45 }));
+
+    await page.goto('/app/users?page=2');
+    await expect(page.getByText('Page 2 of 3')).toBeVisible();
+    await choose(page, 'Role', 'Admin');
+    await expect(page).not.toHaveURL(/page=/);
+
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page).toHaveURL(/page=2/);
+    await choose(page, 'Sort by', 'Oldest');
+    await expect(page).not.toHaveURL(/page=/);
+
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page).toHaveURL(/page=2/);
+    await page.getByRole('tab', { name: 'Active' }).click();
+    await expect(page).not.toHaveURL(/page=/);
+  });
+
+  test('a page past the end is replaced by the last page', async ({ page }) => {
+    await signInAs(page, admin);
+    await stubUsers(page, (url) => {
+      const current = Number(url.searchParams.get('page'));
+      return { ...page1(current > 2 ? [] : [verified], 2), page: current, total: 21 };
+    });
+
+    await page.goto('/app/users?page=5');
+
+    await expect(page).toHaveURL(/page=2/);
+    await expect(page.getByRole('row', { name: /Vera Verified/ })).toBeVisible();
+  });
+
+  test('says no users match when filters exclude everyone', async ({ page }) => {
+    await signInAs(page, admin);
+    await stubUsers(page, () => page1([]));
+
+    await page.goto('/app/users?role=admin');
+
+    await expect(page.getByText('No users match these filters.')).toBeVisible();
+    await expect(page.getByText('No users are waiting for approval.')).toHaveCount(0);
+  });
+
+  test("shows each user's role", async ({ page }) => {
+    await signInAs(page, admin);
+    await stubUsers(page, () => page1([verified, { ...unverified, role: 'admin' }]));
+
+    await page.goto('/app/users');
+
+    await expect(page.getByRole('row', { name: /Vera Verified/ }).getByRole('cell', { name: 'Staff' })).toBeVisible();
+    await expect(page.getByRole('row', { name: /Uli Unverified/ }).getByRole('cell', { name: 'Admin' })).toBeVisible();
   });
 });

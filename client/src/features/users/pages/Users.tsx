@@ -5,13 +5,14 @@ import { Pager } from '@/components/Pager';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -46,6 +47,22 @@ const VIEWS: Record<AccountStatus, { tab: string; title: string; hint: string; e
   },
 };
 
+/** The confirmation for rejecting a pending user or revoking an active one (the same server transition). */
+const CONFIRM_COPY = {
+  reject: {
+    verb: 'Reject',
+    description: 'They will see a "not approved" screen the next time they open the app.',
+    label: 'Reject user',
+    busy: 'Rejecting…',
+  },
+  revoke: {
+    verb: 'Revoke',
+    description: 'They lose access on their next request and their sessions end. You can reactivate them later.',
+    label: 'Revoke user',
+    busy: 'Revoking…',
+  },
+};
+
 /** Admin-only. Pending users to activate or reject, active users to revoke, rejected users to reactivate. */
 export default function Users() {
   const list = useUserListParams();
@@ -61,6 +78,7 @@ export default function Users() {
   const view = VIEWS[status];
   const revoking = toReject?.status === ACCOUNT_STATUS.ACTIVE;
   const confirmMutation = revoking ? revoke : reject;
+  const confirmCopy = CONFIRM_COPY[revoking ? 'revoke' : 'reject'];
 
   const data = users.data;
   // Handling the last user on a page would leave that page empty: step back to the previous one
@@ -175,22 +193,17 @@ export default function Users() {
 
       {data && data.items.length > 0 && <Pager meta={data} onPage={(next) => setPage(next)} />}
 
-      <Dialog open={toReject !== null} onOpenChange={(open: boolean) => !open && setToReject(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {revoking ? 'Revoke' : 'Reject'} {toReject?.name}?
-            </DialogTitle>
-            <DialogDescription>
-              {revoking
-                ? 'They lose access on their next request and their sessions end. You can reactivate them later.'
-                : 'They will see a "not approved" screen the next time they open the app.'}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setToReject(null)}>
-              Cancel
-            </Button>
+      {/* Same AlertDialog as the catalog's delete confirmation (DeleteRecordDialog) */}
+      <AlertDialog open={toReject !== null} onOpenChange={(open: boolean) => !open && setToReject(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmCopy.verb} {toReject?.name}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>{confirmCopy.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <Button
               variant="destructive"
               disabled={confirmMutation.isPending}
@@ -203,11 +216,11 @@ export default function Users() {
                 }
               }}
             >
-              {revoking ? 'Revoke user' : 'Reject user'}
+              {confirmMutation.isPending ? confirmCopy.busy : confirmCopy.label}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -605,11 +605,11 @@ test.describe('account cards on phones (stubbed API)', () => {
 
     await page.goto('/app/users');
     await card(page, 'Uli Unverified').getByRole('button', { name: 'Reject' }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel' }).click();
     expect(rejectCalls).toBe(0);
 
     await card(page, 'Uli Unverified').getByRole('button', { name: 'Reject' }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Reject user' }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Reject user' }).click();
     await expect(page.getByText('Uli Unverified was rejected')).toBeVisible();
     expect(rejectCalls).toBe(1);
   });

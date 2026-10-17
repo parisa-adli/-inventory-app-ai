@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ACCOUNT_STATUS } from '../constants/account-status';
 import { USER_ROLES } from '../constants/roles';
-import { SORT_ORDERS, type SortOrder } from './catalog';
+import { SORT_ORDERS } from './sort';
 
 export const USERS_PAGE_SIZE_DEFAULT = 20;
 export const USERS_PAGE_SIZE_MAX = 100;
@@ -12,9 +12,6 @@ const roleField = z.enum([USER_ROLES.ADMIN, USER_ROLES.STAFF]);
 
 export const USER_SORTS = ['createdAt', 'name', 'lastLoginAt'] as const;
 export type UserSort = (typeof USER_SORTS)[number];
-
-/** Order used when the query names a sort but no order: A→Z for names, newest first otherwise. */
-export const defaultUserSortOrder = (sort: UserSort): SortOrder => (sort === 'name' ? 'asc' : 'desc');
 
 /** Query string of GET /api/users. Values arrive as strings, so numbers and booleans are coerced. */
 export const listUsersQuerySchema = z.object({
@@ -28,7 +25,7 @@ export const listUsersQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(USERS_PAGE_SIZE_MAX).default(USERS_PAGE_SIZE_DEFAULT),
   /** Newest first by default. */
   sort: z.enum(USER_SORTS).default('createdAt'),
-  /** Defaults to `defaultUserSortOrder(sort)`. */
+  /** Defaults to `defaultSortOrder(sort)`. */
   order: z.enum(SORT_ORDERS).optional(),
 });
 

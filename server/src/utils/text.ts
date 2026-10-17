@@ -1,3 +1,6 @@
+/** MongoDB collation for case-insensitive sorting and comparison of names. */
+export const NAME_COLLATION = { locale: 'en', strength: 2 } as const;
+
 /** Escapes user input so it matches literally inside a RegExp (search boxes). */
 export const escapeRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 

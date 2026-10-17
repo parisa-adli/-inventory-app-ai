@@ -1,5 +1,5 @@
 import type { PipelineStage, Types } from 'mongoose';
-import { ACCOUNT_STATUS, USER_ROLES, defaultUserSortOrder } from '@inventory/shared';
+import { ACCOUNT_STATUS, USER_ROLES, defaultSortOrder } from '@inventory/shared';
 import type { AdminUser, ListUsersQuery, UpdateUserInput, UsersPage } from '@inventory/shared';
 import { User } from '../models/User.js';
 import { sendTracked } from './accountMail.js';
@@ -8,7 +8,7 @@ import { createEmailToken, discardPendingTokens } from './emailToken.js';
 import { endAllSessions, revokeAllUserTokens } from './jwt.js';
 import { hashPassword } from './password.js';
 import { randomPassword } from '../utils/crypto.js';
-import { escapeRegex } from '../utils/text.js';
+import { NAME_COLLATION, escapeRegex } from '../utils/text.js';
 import { AppError, ConflictError, ForbiddenError, NotFoundError } from '../utils/errors.js';
 
 /** A User document or an aggregate row: the fields the admin view needs. */
@@ -57,16 +57,13 @@ export const emailNotVerifiedError = () =>
 const selfActionError = () => new ForbiddenError('You cannot reject or demote your own account.');
 const lastAdminError = () => new ForbiddenError('At least one active admin must remain.');
 
-/** Case-insensitive sort for names. */
-const NAME_COLLATION = { locale: 'en', strength: 2 } as const;
-
 /**
  * GET /api/users: filters, then the requested sort (newest first by default) with an `_id` tie-break.
  * By last sign-in, accounts that never signed in come last in both directions.
  */
 export const listUsers = async (query: ListUsersQuery): Promise<UsersPage> => {
   const { status, role, verified, search, page, limit, sort } = query;
-  const direction = (query.order ?? defaultUserSortOrder(sort)) === 'asc' ? 1 : -1;
+  const direction = (query.order ?? defaultSortOrder(sort)) === 'asc' ? 1 : -1;
   const filter: Record<string, unknown> = {};
   if (status) filter.status = status;
   if (role) filter.role = role;

@@ -6,7 +6,7 @@ import {
   USERS_PAGE_SIZE_DEFAULT,
   USER_ROLES,
   USER_SORTS,
-  defaultUserSortOrder,
+  defaultSortOrder,
   type AccountStatus,
   type SortOrder,
   type UserRole,
@@ -47,7 +47,7 @@ export const useUserListParams = () => {
   const verified = pick(searchParams.get('verified'), VERIFIED);
   const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1);
   const sort = pick(searchParams.get('sort'), USER_SORTS) ?? 'createdAt';
-  const order = pick(searchParams.get('order'), SORT_ORDERS) ?? defaultUserSortOrder(sort);
+  const order = pick(searchParams.get('order'), SORT_ORDERS) ?? defaultSortOrder(sort);
 
   const params = useMemo<UsersListParams>(
     () => ({

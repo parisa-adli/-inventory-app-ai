@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SORT_ORDERS } from './sort';
 
 // Shared by the category and supplier schemas (and later products): list query and optional text fields.
 
@@ -8,12 +9,7 @@ export const CATALOG_SEARCH_MAX = 100;
 
 /** `name` is the record's title on categories. */
 export const CATALOG_SORTS = ['name', 'createdAt', 'productCount'] as const;
-export const SORT_ORDERS = ['asc', 'desc'] as const;
 export type CatalogSort = (typeof CATALOG_SORTS)[number];
-export type SortOrder = (typeof SORT_ORDERS)[number];
-
-/** Order used when the query names a sort but no order: A→Z for names, newest and most products first. */
-export const defaultSortOrder = (sort: CatalogSort): SortOrder => (sort === 'name' ? 'asc' : 'desc');
 
 /** Query string of GET /api/categories and GET /api/suppliers. Values arrive as strings. */
 export const catalogListQuerySchema = z.object({

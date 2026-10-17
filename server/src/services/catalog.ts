@@ -2,14 +2,11 @@ import { isValidObjectId, type HydratedDocument, type Model, type PipelineStage,
 import { defaultSortOrder } from '@inventory/shared';
 import type { CatalogListQuery, Paginated } from '@inventory/shared';
 import { AppError, NotFoundError, isDuplicateKeyError } from '../utils/errors.js';
-import { escapeRegex } from '../utils/text.js';
+import { NAME_COLLATION, escapeRegex } from '../utils/text.js';
 import { countProductsReferencing, productCountStages, type ProductRefField } from './productRefs.js';
 
 // Categories and suppliers share one set of rules: search + sort + paging with product counts,
 // a normalized unique name, PATCH where null clears a field, and delete blocked while products use it.
-
-/** Case-insensitive sort and comparison for names. */
-const NAME_COLLATION = { locale: 'en', strength: 2 } as const;
 
 interface CatalogConfig<TDoc, TDto> {
   // Mongoose's model generics differ per schema; the config only needs find/aggregate/save

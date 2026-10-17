@@ -14,14 +14,16 @@ import {
 } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { formatDate } from '@/lib/format';
+import { EmailStatusBadge } from '../components/EmailStatusBadge';
 import { PendingCountBadge } from '../components/PendingCountBadge';
+import { UserActions, type UserActionHandlers } from '../components/UserActions';
+import { UserCard } from '../components/UserCard';
 import { UsersToolbar } from '../components/UsersToolbar';
 import { useUserListParams } from '../hooks/useUserListParams';
 import { useActivateUser, useReactivateUser, useRejectUser, useRevokeUser, useUsers } from '../hooks/useUsers';
 import { ROLE_LABELS } from '../roles';
-
-const formatDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' });
 
 const VIEWS: Record<AccountStatus, { tab: string; title: string; hint: string; empty: string }> = {
   pending: {
@@ -67,6 +69,18 @@ export default function Users() {
       if (data && data.items.length === 1 && page > 1) setPage(page - 1, { replace: true });
     },
   };
+  const actions: UserActionHandlers = {
+    meId: me?.id,
+    onActivate: (user) => activate.mutate(user.id, afterHandled),
+    onReactivate: (user) => reactivate.mutate(user.id, afterHandled),
+    onReject: setToReject,
+    pending: {
+      activate: activate.isPending,
+      reactivate: reactivate.isPending,
+      reject: reject.isPending,
+      revoke: revoke.isPending,
+    },
+  };
 
   // A stale link or a change elsewhere left us past the last page: go to the last one that exists
   useEffect(() => {
@@ -110,8 +124,15 @@ export default function Users() {
       )}
 
       {data && data.items.length > 0 && (
-        <div className="rounded-md border bg-white">
-          <TooltipProvider>
+        <TooltipProvider>
+          <ul className="space-y-3 sm:hidden" aria-label="Users">
+            {data.items.map((user) => (
+              <li key={user.id}>
+                <UserCard user={user} actions={actions} />
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-hidden rounded-xl border bg-card sm:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -133,11 +154,7 @@ export default function Users() {
                       <Badge variant="outline">{ROLE_LABELS[user.role]}</Badge>
                     </TableCell>
                     <TableCell>
-                      {user.emailVerified ? (
-                        <Badge variant="secondary">Verified</Badge>
-                      ) : (
-                        <Badge variant="outline">Not verified</Badge>
-                      )}
+                      <EmailStatusBadge verified={user.emailVerified} />
                     </TableCell>
                     <TableCell>{formatDate(user.createdAt)}</TableCell>
                     <TableCell className={user.lastLoginAt ? undefined : 'text-muted-foreground'}>
@@ -145,82 +162,15 @@ export default function Users() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        {user.status === ACCOUNT_STATUS.ACTIVE && user.id !== me?.id && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={revoke.isPending}
-                            onClick={() => setToReject(user)}
-                          >
-                            Revoke
-                          </Button>
-                        )}
-                        {user.status === ACCOUNT_STATUS.REJECTED &&
-                          (user.emailVerified ? (
-                            <Button
-                              size="sm"
-                              disabled={reactivate.isPending}
-                              onClick={() => reactivate.mutate(user.id, afterHandled)}
-                            >
-                              Reactivate
-                            </Button>
-                          ) : (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span tabIndex={0}>
-                                  <Button size="sm" disabled aria-label={`Reactivate ${user.name}`}>
-                                    Reactivate
-                                  </Button>
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                This user has not verified their email address yet.
-                              </TooltipContent>
-                            </Tooltip>
-                          ))}
-                        {user.status === ACCOUNT_STATUS.PENDING && (
-                          <>
-                            {user.emailVerified ? (
-                              <Button
-                                size="sm"
-                                disabled={activate.isPending}
-                                onClick={() => activate.mutate(user.id, afterHandled)}
-                              >
-                                Activate
-                              </Button>
-                            ) : (
-                              <Tooltip>
-                                {/* A disabled button swallows pointer events, so the span carries the tooltip */}
-                                <TooltipTrigger asChild>
-                                  <span tabIndex={0}>
-                                    <Button size="sm" disabled aria-label={`Activate ${user.name}`}>
-                                      Activate
-                                    </Button>
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  This user has not verified their email address yet.
-                                </TooltipContent>
-                              </Tooltip>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={reject.isPending}
-                              onClick={() => setToReject(user)}
-                            >
-                              Reject
-                            </Button>
-                          </>
-                        )}
+                        <UserActions user={user} {...actions} />
                       </div>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-          </TooltipProvider>
-        </div>
+          </div>
+        </TooltipProvider>
       )}
 
       {data && data.items.length > 0 && <Pager meta={data} onPage={(next) => setPage(next)} />}

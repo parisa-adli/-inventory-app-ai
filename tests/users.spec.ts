@@ -534,3 +534,90 @@ test.describe('pending count badge (stubbed API)', () => {
     expect(usersCalls).toEqual([]);
   });
 });
+
+test.describe('account cards on phones (stubbed API)', () => {
+  const card = (page: Page, name: string) => page.getByRole('article', { name });
+
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await signInAs(page, admin);
+  });
+
+  test('shows one card per account and no table, without horizontal scroll', async ({ page }) => {
+    await stubUsers(page, () => page1([{ ...verified, lastLoginAt: '2026-06-15T12:00:00.000Z' }, unverified]));
+
+    await page.goto('/app/users');
+
+    const vera = card(page, 'Vera Verified');
+    await expect(vera).toBeVisible();
+    await expect(vera).toContainText('vera@inventory.local');
+    await expect(vera).toContainText('Verified');
+    await expect(vera).toContainText('Staff');
+    await expect(vera).toContainText('Mar 1, 2026');
+    await expect(vera).toContainText('Jun 15, 2026');
+    await expect(card(page, 'Uli Unverified')).toContainText('Not verified');
+    await expect(card(page, 'Uli Unverified')).toContainText('Never');
+    await expect(page.getByRole('table')).toHaveCount(0);
+
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+
+  test('activates from a card', async ({ page }) => {
+    let activated = false;
+    await stubUsers(page, () => page1(activated ? [unverified] : [verified, unverified]));
+    await page.route('**/api/users/u1/activate', (route) => {
+      activated = true;
+      return route.fulfill({ json: { ...verified, status: 'active' } });
+    });
+
+    await page.goto('/app/users');
+    await card(page, 'Vera Verified').getByRole('button', { name: 'Activate' }).click();
+
+    await expect(page.getByText('Vera Verified was activated')).toBeVisible();
+    await expect(card(page, 'Vera Verified')).toHaveCount(0);
+  });
+
+  test('rejects from a card after confirming', async ({ page }) => {
+    let rejectCalls = 0;
+    await stubUsers(page, () => page1([unverified]));
+    await page.route('**/api/users/u2/reject', (route) => {
+      rejectCalls += 1;
+      return route.fulfill({ json: { ...unverified, status: 'rejected' } });
+    });
+
+    await page.goto('/app/users');
+    await card(page, 'Uli Unverified').getByRole('button', { name: 'Reject' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+    expect(rejectCalls).toBe(0);
+
+    await card(page, 'Uli Unverified').getByRole('button', { name: 'Reject' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Reject user' }).click();
+    await expect(page.getByText('Uli Unverified was rejected')).toBeVisible();
+    expect(rejectCalls).toBe(1);
+  });
+
+  test('the disabled Activate explains itself on focus', async ({ page }) => {
+    await stubUsers(page, () => page1([unverified]));
+
+    await page.goto('/app/users');
+    const activate = card(page, 'Uli Unverified').getByRole('button', { name: /Activate/ });
+    await expect(activate).toBeDisabled();
+    await activate.locator('..').focus();
+
+    await expect(page.getByRole('tooltip').first()).toContainText('has not verified their email');
+  });
+});
+
+test.describe('users page on a desktop (stubbed API)', () => {
+  test('shows the table and no cards', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await signInAs(page, admin);
+    await stubUsers(page, () => page1([verified, unverified]));
+
+    await page.goto('/app/users');
+
+    await expect(page.getByRole('row', { name: /Vera Verified/ })).toBeVisible();
+    await expect(page.getByRole('article')).toHaveCount(0);
+  });
+});

@@ -108,6 +108,12 @@ Dark-mode values come from shadcn's neutral `.dark` block in `globals.css`. Do n
 - Loading: six `Skeleton h-40 rounded-xl` in the grid. Empty and error: muted text centered in a `rounded-xl border p-8` box.
 - Delete confirms in an `AlertDialog`; when the server refuses (in use), the same dialog switches to "Used by products" with the reason and a link, and only a "Close" button.
 
+### Table with phone cards (Users; `client/src/features/users`)
+
+- From `sm` up, the table pattern (wrapper `hidden sm:block`). Below `sm`, the same rows as a `space-y-3` list of `Card`s (`sm:hidden`), one per record, each an `article` named by its title.
+- Card: `CardTitle` name, muted email (`break-all`) below it; the status and role badges in a wrapping row; the dates as a two-column `dl` (muted labels). The row's action buttons go in the `CardFooter` as `grid auto-cols-fr grid-flow-col gap-2`, so they share the full width equally; the footer is hidden when there are no actions.
+- One actions component renders the buttons, confirmations and tooltips for both the row and the card. Toolbar controls stack full width below `lg`.
+
 ### Profile page pattern (`docs/design/profile.png`, `set-password-to-profile.png`, `password-and-telegram-linked.png`)
 
 - `/app/profile`, built in `client/src/features/profile`. H1 "Profile", then three `Card`s stacked with `space-y-6` in a `max-w-2xl` column: Account, Sign-in methods, Active sessions.

@@ -4,7 +4,8 @@ import type { Permission } from '@inventory/shared';
 import { Can } from '@/features/auth/components/Can';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { formatDate, productCountLabel } from '../format';
+import { formatDate } from '@/lib/format';
+import { productCountLabel } from '../format';
 
 interface CatalogCardProps {
   title: string;

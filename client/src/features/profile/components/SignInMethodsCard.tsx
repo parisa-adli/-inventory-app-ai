@@ -129,9 +129,9 @@ export function SignInMethodsCard({ user }: { user: AuthUser }) {
               <Badge variant="outline">{user.hasPassword ? 'Set' : 'Not set'}</Badge>
             </div>
             {editing === null && (
-              <div className="flex flex-col items-end gap-2">
+              <div className="flex flex-col sm:items-end gap-2 ">
                 {user.hasPassword ? (
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <Button variant="ghost" onClick={() => setEditing('change')}>
                       Change password
                     </Button>

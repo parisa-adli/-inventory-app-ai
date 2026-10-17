@@ -111,7 +111,7 @@ Dark-mode values come from shadcn's neutral `.dark` block in `globals.css`. Do n
 ### Table with phone cards (Users; `client/src/features/users`)
 
 - From `sm` up, the table pattern (wrapper `hidden sm:block`). Below `sm`, the same rows as a `space-y-3` list of `Card`s (`sm:hidden`), one per record, each an `article` named by its title.
-- Card: `CardTitle` name, muted email (`break-all`) below it; the status and role badges in a wrapping row; the dates as a two-column `dl` (muted labels). The row's action buttons go in the `CardFooter` as `grid auto-cols-fr grid-flow-col gap-2`, so they share the full width equally; the footer is hidden when there are no actions.
+- Card: `CardTitle` name, muted email (`break-all`) below it; the status and role badges in a wrapping row; the dates as a two-column `dl` (muted labels). The row's action buttons go in the `CardFooter` as `grid auto-cols-fr grid-flow-col gap-2`, so they share the full width equally; the footer is hidden when there are no actions. When Activate / Reactivate is disabled because the email is unverified, a muted `text-xs` line in the card body says why (a tooltip never opens on a tap).
 - One actions component renders the buttons, confirmations and tooltips for both the row and the card. Toolbar controls stack full width below `lg`.
 
 ### Profile page pattern (`docs/design/profile.png`, `set-password-to-profile.png`, `password-and-telegram-linked.png`)

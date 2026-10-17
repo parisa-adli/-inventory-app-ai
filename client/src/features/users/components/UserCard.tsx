@@ -1,4 +1,4 @@
-import type { AdminUser } from '@inventory/shared';
+import { ACCOUNT_STATUS, type AdminUser } from '@inventory/shared';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDate } from '@/lib/format';
@@ -9,6 +9,7 @@ import { UserActions, type UserActionHandlers } from './UserActions';
 /** One account on a phone: what the table row shows, with the action buttons at full width below. */
 export function UserCard({ user, actions }: { user: AdminUser; actions: UserActionHandlers }) {
   const titleId = `user-card-${user.id}`;
+  const awaitingVerification = user.status !== ACCOUNT_STATUS.ACTIVE && !user.emailVerified;
   return (
     <Card className="gap-4" role="article" aria-labelledby={titleId}>
       <CardHeader>
@@ -30,6 +31,13 @@ export function UserCard({ user, actions }: { user: AdminUser; actions: UserActi
             {user.lastLoginAt ? formatDate(user.lastLoginAt) : 'Never'}
           </dd>
         </dl>
+        {/* The disabled button's tooltip never opens on a tap, so the card says why */}
+        {awaitingVerification && (
+          <p className="text-xs text-muted-foreground">
+            Can be {user.status === ACCOUNT_STATUS.REJECTED ? 'reactivated' : 'activated'} once they verify their
+            email address.
+          </p>
+        )}
       </CardContent>
       <CardFooter className="grid auto-cols-fr grid-flow-col gap-2 empty:hidden">
         <UserActions user={user} {...actions} fullWidth />

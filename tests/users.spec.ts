@@ -558,6 +558,7 @@ test.describe('account cards on phones (stubbed API)', () => {
     await expect(card(page, 'Uli Unverified')).toContainText('Not verified');
     await expect(card(page, 'Uli Unverified')).toContainText('Never');
     await expect(page.getByRole('table')).toHaveCount(0);
+    await expect(card(page, 'Vera Verified')).not.toContainText('verify their email');
 
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow).toBeLessThanOrEqual(0);
@@ -603,6 +604,8 @@ test.describe('account cards on phones (stubbed API)', () => {
     await page.goto('/app/users');
     const activate = card(page, 'Uli Unverified').getByRole('button', { name: /Activate/ });
     await expect(activate).toBeDisabled();
+    // A tap opens no tooltip, so the card says why as well
+    await expect(card(page, 'Uli Unverified')).toContainText('Can be activated once they verify their email address.');
     await activate.locator('..').focus();
 
     await expect(page.getByRole('tooltip').first()).toContainText('has not verified their email');

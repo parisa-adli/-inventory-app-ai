@@ -160,6 +160,18 @@ describe('GET /api/products', () => {
     expect((await list('?limit=101')).status).toBe(400);
   });
 
+  it('searches title and SKU case-insensitively, treating regex characters literally', async () => {
+    await seed(['Wireless Mouse', 'USB Cable (2m)', 'Desk Lamp']);
+    const titles = async (search: string) =>
+      (await list(`?search=${encodeURIComponent(search)}`)).body.items.map((p: { title: string }) => p.title);
+
+    expect(await titles('mouse')).toEqual(['Wireless Mouse']);
+    expect(await titles('sku-desk')).toEqual(['Desk Lamp']);
+    expect(await titles('(2m)')).toEqual(['USB Cable (2m)']);
+    expect(await titles('.*')).toEqual([]);
+    expect(await titles('  ')).toEqual(['Desk Lamp', 'USB Cable (2m)', 'Wireless Mouse']);
+  });
+
   it('shows an unassigned supplier as null', async () => {
     await seed(['Loose screws'], { supplier: undefined });
     expect((await list()).body.items[0].supplier).toBeNull();

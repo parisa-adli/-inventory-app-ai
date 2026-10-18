@@ -3,7 +3,7 @@ import { Category } from '../models/Category.js';
 import { Product } from '../models/Product.js';
 import { Supplier } from '../models/Supplier.js';
 import { AppError, ValidationError, isDuplicateKeyError } from '../utils/errors.js';
-import { NAME_COLLATION } from '../utils/text.js';
+import { NAME_COLLATION, escapeRegex } from '../utils/text.js';
 
 interface ProductLike {
   _id: unknown;
@@ -67,9 +67,13 @@ export const createProduct = async (input: CreateProductInput): Promise<ProductD
   }
 };
 
-/** GET: active products, title A→Z (case-insensitive), paged. Filters and sorts arrive in #34. */
-export const listProducts = async ({ page, limit }: ListProductsQuery): Promise<ProductsPage> => {
-  const filter = { archivedAt: null };
+/** GET: active products, title A→Z (case-insensitive), paged, with an escaped search. Filters and sorts arrive in #34. */
+export const listProducts = async ({ search, page, limit }: ListProductsQuery): Promise<ProductsPage> => {
+  const filter: Record<string, unknown> = { archivedAt: null };
+  if (search) {
+    const pattern = new RegExp(escapeRegex(search), 'i');
+    filter.$or = [{ title: pattern }, { sku: pattern }];
+  }
   const [total, rows] = await Promise.all([
     Product.countDocuments(filter),
     Product.find(filter)

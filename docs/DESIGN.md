@@ -109,6 +109,13 @@ Dark-mode values come from shadcn's neutral `.dark` block in `globals.css`. Do n
 - Stock history (`History`, on every row, archived ones included) opens the Stock History dialog (`sm:max-w-3xl`, scrolls when tall): the product and its on-hand count in the description, then a bordered table of Date (date and time, muted), Type (badge: `secondary` Receive, `outline` Ship, `default` Adjustment), Change (signed `+5` / `−3`, right-aligned, `font-medium`), After (right-aligned), Note (muted, `—` when empty) and By, newest first, with the pagination row below. Loading is skeleton rows; empty and error use the `ListMessage` box.
 - The create dialog (`sm:max-w-lg`, scrolls when tall): Title, SKU (hint: saved in capitals), then a two-column grid of Category / Supplier (optional, a "No supplier" item) selects, Cost / Sale price and the Unit select, then the optional Image URL. There is no quantity field.
 
+### Stock movements page (`client/src/features/movements`)
+
+- `/app/movements`: H1 "Stock movements" + muted subtitle, no primary action (read-only). A toolbar row (stacks full width below `lg`): the product picker (`flex-1`), the type `Select` (`lg:w-44`, `h-9` to match the buttons), the date-range button (`lg:w-64`), and a ghost "Clear filters" (`X`) while any filter is set.
+- **Product picker:** an outline button with `role="combobox"` ("All products" muted, or the picked title; `ChevronsUpDown`) opening a `Popover` as wide as the button, holding a `Command` with a search input ("Search title or SKU…"). The server searches (`shouldFilter={false}`); items show the title with the SKU muted on the right and a `Check` on the picked one; "All products" heads the list while the search is empty.
+- **Date range:** an outline button with a `CalendarIcon` ("Any date" muted, or "Oct 1 – 5, 2026") opening a `Popover` (`p-0`) with a two-month `Calendar` in range mode; future days are disabled. One picked day means that one day.
+- The table is the Stock History table across products, plus a Product column (title `font-medium`, the SKU `text-xs text-muted-foreground` under it, a `secondary` "Archived" badge beside archived ones). Pagination below; skeleton rows while loading; the `ListMessage` box for empty ("No stock movements yet." / "No movements match these filters.") and error.
+
 ### Card grid pattern (Categories, Suppliers; `client/src/features/catalog`)
 
 - Page header (H1 + muted subtitle, primary "Add …" on the right for staff and admins), then one row with the search `Input` (`flex-1`, leading `Search` icon) and a "Sort by" `Select` (`sm:w-48`).

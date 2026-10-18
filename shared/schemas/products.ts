@@ -7,6 +7,7 @@ export const PRODUCT_SKU_MAX = 32;
 export const PRODUCT_IMAGE_URL_MAX = 2048;
 export const PRODUCTS_PAGE_SIZE_DEFAULT = 20;
 export const PRODUCTS_PAGE_SIZE_MAX = 100;
+export const PRODUCT_SEARCH_MAX = 100;
 
 const title = requiredText('Title', PRODUCT_TITLE_MAX);
 
@@ -77,6 +78,8 @@ export const productFormSchema = z.object({
 
 /** Query string of GET /api/products. Values arrive as strings. */
 export const listProductsQuerySchema = z.object({
+  /** Case-insensitive substring of the title or SKU; an empty string means no search. */
+  search: z.string().trim().max(PRODUCT_SEARCH_MAX).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(PRODUCTS_PAGE_SIZE_MAX).default(PRODUCTS_PAGE_SIZE_DEFAULT),
 });

@@ -130,3 +130,117 @@ test.describe('products (stubbed API)', () => {
     await expect(page.getByRole('dialog').getByText(message)).toBeVisible();
   });
 });
+
+test.describe('inline stock −/+ (stubbed API)', () => {
+  const MOUSE = {
+    id: 'p1',
+    title: 'Wireless Mouse',
+    sku: 'ELE-001',
+    category: { id: ELECTRONICS.id, name: ELECTRONICS.title },
+    supplier: null,
+    costPrice: 12.5,
+    salePrice: 24.99,
+    quantity: 1,
+    unitOfMeasure: 'pcs',
+    imageUrl: null,
+    status: 'active',
+    archivedAt: null,
+    ...stamp,
+  };
+
+  /**
+   * One product whose quantity only the stubbed POST /api/stock-movements changes. `hold` delays the next
+   * answer until released; `conflictOnHand` makes the next POST lose to a colleague with that much left.
+   */
+  const stubStock = async (page: Page) => {
+    const state = { quantity: MOUSE.quantity, conflictOnHand: null as number | null, hold: null as Promise<void> | null };
+    const bodies: Record<string, unknown>[] = [];
+    await page.route('**/api/auth/me', (route) => route.fulfill({ json: staff }));
+    await page.route(/\/api\/products(\?.*)?$/, (route) =>
+      route.fulfill({ json: pageOf([{ ...MOUSE, quantity: state.quantity }], 20) })
+    );
+    await page.route('**/api/stock-movements', async (route, request) => {
+      const body = request.postDataJSON();
+      bodies.push(body);
+      if (state.hold) await state.hold;
+      if (state.conflictOnHand !== null) {
+        state.quantity = state.conflictOnHand;
+        state.conflictOnHand = null;
+        return route.fulfill({
+          status: 409,
+          json: { error: { code: 'INSUFFICIENT_STOCK', message: `Only ${state.quantity} on hand.`, details: { onHand: state.quantity } } },
+        });
+      }
+      const delta = body.type === 'ship' ? -body.quantity : body.quantity;
+      state.quantity += delta;
+      return route.fulfill({
+        status: 201,
+        json: {
+          id: `m${bodies.length}`,
+          type: body.type,
+          delta,
+          quantityAfter: state.quantity,
+          unitCost: MOUSE.costPrice,
+          unitPrice: MOUSE.salePrice,
+          note: null,
+          occurredAt: '2026-10-18T10:00:00.000Z',
+          product: { id: MOUSE.id, title: MOUSE.title, sku: MOUSE.sku, archived: false },
+          user: { id: staff.id, name: staff.name },
+        },
+      });
+    });
+    return { state, bodies };
+  };
+
+  test('+ receives 1 and − ships 1; the buttons wait for the server and − stops at 0', async ({ page }) => {
+    const { state, bodies } = await stubStock(page);
+    await page.goto('/app/products');
+
+    const row = page.getByRole('row', { name: /Wireless Mouse/ });
+    const plus = row.getByRole('button', { name: 'Receive 1 Wireless Mouse' });
+    const minus = row.getByRole('button', { name: 'Ship 1 Wireless Mouse' });
+    await expect(row).toContainText('Low stock');
+
+    // Not optimistic: while the request runs both buttons are disabled and the number stays
+    let release!: () => void;
+    state.hold = new Promise((resolve) => (release = resolve));
+    await plus.click();
+    await expect(plus).toBeDisabled();
+    await expect(minus).toBeDisabled();
+    await expect(row.getByText('1', { exact: true })).toBeVisible();
+    state.hold = null;
+    release();
+
+    await expect(page.getByText('Received 1 × Wireless Mouse')).toBeVisible();
+    await expect(row.getByText('2', { exact: true })).toBeVisible();
+    await expect(plus).toBeEnabled();
+
+    await minus.click();
+    await expect(row.getByText('1', { exact: true })).toBeVisible();
+    await minus.click();
+    await expect(row.getByText('0', { exact: true })).toBeVisible();
+    await expect(row).toContainText('Out of stock');
+    await expect(minus).toBeDisabled();
+    await expect(plus).toBeEnabled();
+
+    expect(bodies).toEqual([
+      { productId: 'p1', type: 'receive', quantity: 1 },
+      { productId: 'p1', type: 'ship', quantity: 1 },
+      { productId: 'p1', type: 'ship', quantity: 1 },
+    ]);
+  });
+
+  test('a colleague beating me to the last unit shows a toast and the real number', async ({ page }) => {
+    const { state } = await stubStock(page);
+    await page.goto('/app/products');
+
+    const row = page.getByRole('row', { name: /Wireless Mouse/ });
+    await expect(row.getByText('1', { exact: true })).toBeVisible();
+    state.conflictOnHand = 0;
+    await row.getByRole('button', { name: 'Ship 1 Wireless Mouse' }).click();
+
+    await expect(page.locator('[data-sonner-toast]').getByText('Only 0 on hand.')).toBeVisible();
+    await expect(row.getByText('0', { exact: true })).toBeVisible();
+    await expect(row.getByRole('button', { name: 'Ship 1 Wireless Mouse' })).toBeDisabled();
+  });
+});

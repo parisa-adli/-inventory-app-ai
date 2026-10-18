@@ -1,9 +1,20 @@
-import { ImageIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { ImageIcon, Minus, Plus } from 'lucide-react';
 import { createColumnHelper, tableFeatures, useTable } from '@tanstack/react-table';
-import { STOCK_STATUSES, getStockStatus, type Product, type ProductStatus } from '@inventory/shared';
+import {
+  PERMISSIONS,
+  STOCK_MOVEMENT_TYPES,
+  STOCK_STATUSES,
+  getStockStatus,
+  type Product,
+  type ProductStatus,
+} from '@inventory/shared';
+import { useCan } from '@/features/auth/hooks/useCan';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import { useRecordMovement } from '../hooks/useRecordMovement';
 
 const money = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' });
 
@@ -39,7 +50,7 @@ const columns = column.columns([
   column.accessor('salePrice', { header: 'Sale', cell: (info) => money.format(info.getValue()) }),
   column.accessor('quantity', {
     header: 'Quantity',
-    cell: (info) => <QuantityCell quantity={info.getValue()} />,
+    cell: ({ row }) => <QuantityCell product={row.original} />,
   }),
   column.accessor('unitOfMeasure', { header: 'Unit', cell: (info) => <span className="text-muted-foreground">{info.getValue()}</span> }),
   column.accessor('status', {
@@ -66,7 +77,8 @@ function ProductCell({ product }: { product: Product }) {
   );
 }
 
-function QuantityCell({ quantity }: { quantity: number }) {
+function QuantityCell({ product }: { product: Product }) {
+  const { quantity } = product;
   const stock = getStockStatus(quantity);
   return (
     <div className="flex items-center justify-end gap-2">
@@ -78,12 +90,50 @@ function QuantityCell({ quantity }: { quantity: number }) {
           Out of stock
         </Badge>
       )}
-      <span className="tabular-nums">{quantity}</span>
+      <QuantityStepper product={product}>
+        <span className="min-w-6 text-center tabular-nums">{quantity}</span>
+      </QuantityStepper>
     </div>
   );
 }
 
-/** The products list as a TanStack Table. Paging is server-side (the page's Pager); sorting arrives in #34. */
+/**
+ * Inline −/+ (#30): a ship or a receive of 1, through the same ledger as every other stock change.
+ * Not optimistic; both buttons wait while one runs. Archived products are frozen, so they get none.
+ */
+function QuantityStepper({ product, children }: { product: Product; children: ReactNode }) {
+  const canAdjust = useCan(PERMISSIONS.STOCK_ADJUST);
+  const record = useRecordMovement();
+  if (!canAdjust || product.status === 'archived') return children;
+
+  const step = (type: typeof STOCK_MOVEMENT_TYPES.RECEIVE | typeof STOCK_MOVEMENT_TYPES.SHIP) =>
+    record.mutate({ productId: product.id, type, quantity: 1 });
+  return (
+    <div className="flex items-center gap-1" aria-busy={record.isPending}>
+      <Button
+        variant="outline"
+        size="icon"
+        aria-label={`Ship 1 ${product.title}`}
+        disabled={record.isPending || product.quantity === 0}
+        onClick={() => step(STOCK_MOVEMENT_TYPES.SHIP)}
+      >
+        <Minus />
+      </Button>
+      {children}
+      <Button
+        variant="outline"
+        size="icon"
+        aria-label={`Receive 1 ${product.title}`}
+        disabled={record.isPending}
+        onClick={() => step(STOCK_MOVEMENT_TYPES.RECEIVE)}
+      >
+        <Plus />
+      </Button>
+    </div>
+  );
+}
+
+/** The products list as a TanStack Table. Paging is server-side (the page's Pager); sorting arrives in #34. Quantity has inline −/+ (#30). */
 export function ProductsTable({ products }: { products: Product[] }) {
   const table = useTable({ features, columns, data: products, getRowId: (product) => product.id });
 

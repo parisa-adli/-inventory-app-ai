@@ -186,6 +186,8 @@ Where the PRD and the agreed Q&A conflict, the Q&A wins (`docs/adr/0001`). C17â€
 
 ## C17. StockMovement stores a signed delta and snapshots
 
+*Applied in #30 (`models/StockMovement.ts`, its update/delete hooks, and the stock module `services/stock.ts`). Filtering and sorting by `occurredAt` land with the movements list.*
+
 - PRD: magnitude `quantity` and `resultingQuantity`. Agreed: signed **`delta`** (non-zero integer), **`quantityAfter`**, the price snapshots **`unitCost` / `unitPrice`** (new) and **`occurredAt`** (defaults to now; only the seed backdates it). Date filtering and newest-first sorting use `occurredAt`.
 - Movements cannot be updated or deleted (model hooks).
 
@@ -197,10 +199,14 @@ Where the PRD and the agreed Q&A conflict, the Q&A wins (`docs/adr/0001`). C17â€
 
 ## C19. Stock changes and history go through `/api/stock-movements`
 
+*`POST` applied in #30: it answers 201 with the movement in the list item shape (`{ id, type, delta, quantityAfter, unitCost, unitPrice, note, occurredAt, product: { id, title, sku, archived }, user: { id, name } }`). Unknown body keys such as `occurredAt` are stripped, so a request can never backdate a movement. The `GET` lands with the movements list.*
+
 - `POST /api/stock-movements` `{ productId, type, quantity, note? }` **replaces** `PATCH /api/products/:id/quantity` and `POST /api/products/:id/adjust-stock`. Receive and ship take a positive `quantity`; adjustment takes a signed non-zero one and requires a `note`. The inline +/- buttons post a receive or ship of 1.
 - `GET /api/stock-movements?product=` **replaces** `GET /api/products/:id/stock-movements` (the Stock History dialog filters by product).
 
 ## C20. Shipping more than is on hand is 409 `INSUFFICIENT_STOCK`
+
+*Applied in #30. An unknown product is 404 `NOT_FOUND`.*
 
 - PRD: 400. Agreed: 409 `INSUFFICIENT_STOCK` with `details: { onHand }`. Any stock change on an archived product is 409 `PRODUCT_ARCHIVED`; archived is reported before insufficient.
 

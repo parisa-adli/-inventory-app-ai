@@ -119,6 +119,12 @@ const ROUTES: RouteCase[] = [
   // Products (#29): reads and create for every active user. An incomplete body proves the guard let it through
   accountRoute('get', '/api/products', 200),
   accountRoute('post', '/api/products', [400, 'VALIDATION_ERROR'], { title: 'Widget' }),
+  // Stock changes (#30): every active user (STOCK_ADJUST); the product does not exist
+  accountRoute('post', '/api/stock-movements', [404, 'NOT_FOUND'], {
+    productId: '000000000000000000000000',
+    type: 'receive',
+    quantity: 1,
+  }),
 
   adminRoute('get', '/api/users', 200),
   adminRoute('patch', '/api/users/:id', 200, { role: 'staff' }),

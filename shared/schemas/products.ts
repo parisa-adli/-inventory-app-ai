@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { UNITS_OF_MEASURE } from '../constants/units';
-import { formField, requiredText } from './catalog';
+import { formField, objectId, requiredText } from './catalog';
 
 export const PRODUCT_TITLE_MAX = 120;
 export const PRODUCT_SKU_MAX = 32;
@@ -19,7 +19,6 @@ const sku = z
   .max(PRODUCT_SKU_MAX, `SKU must be at most ${PRODUCT_SKU_MAX} characters`)
   .regex(/^[A-Z0-9-]+$/, 'SKU may only contain letters, digits and dashes');
 
-const objectId = (message: string) => z.string().regex(/^[a-f\d]{24}$/i, message);
 const category = objectId('Choose a category');
 const supplier = objectId('Choose a supplier');
 

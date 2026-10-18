@@ -26,6 +26,9 @@ export const catalogListQuerySchema = z.object({
 export type CatalogListQuery = z.infer<typeof catalogListQuerySchema>;
 export type CatalogListParams = z.input<typeof catalogListQuerySchema>;
 
+/** A MongoDB ObjectId sent as a reference (a category, supplier or product id). */
+export const objectId = (message: string) => z.string().regex(/^[a-f\d]{24}$/i, message);
+
 /** A required, trimmed text field. */
 export const requiredText = (label: string, max: number) =>
   z

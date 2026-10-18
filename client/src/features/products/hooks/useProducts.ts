@@ -56,3 +56,26 @@ export const useUpdateProduct = () => {
     onError: (err) => toast.error(getApiError(err).message),
   });
 };
+
+/** Archive or unarchive (#36). Movements carry an "Archived" tag and the dashboard's stock value leaves archived stock out. */
+export const useSetProductArchived = () => {
+  const invalidate = useInvalidate([productsKeys.all, movementsKeys.all, dashboardKeys.all]);
+  return useMutation({
+    mutationFn: productsApi.setProductArchived,
+    onSuccess: (product) => toast.success(`${product.title} was ${product.status === 'archived' ? 'archived' : 'restored'}`),
+    onError: (err) => toast.error(getApiError(err).message),
+    // Also on error: a 404 means the list on screen was stale
+    onSettled: () => invalidate(),
+  });
+};
+
+/** Delete (#36). The category and supplier cards count products. */
+export const useDeleteProduct = () => {
+  const invalidate = useInvalidate([productsKeys.all, categoriesKeys.all, suppliersKeys.all, dashboardKeys.all]);
+  return useMutation({
+    mutationFn: productsApi.deleteProduct,
+    onSuccess: (product) => toast.success(`${product.title} was deleted`),
+    onError: (err) => toast.error(getApiError(err).message),
+    onSettled: () => invalidate(),
+  });
+};

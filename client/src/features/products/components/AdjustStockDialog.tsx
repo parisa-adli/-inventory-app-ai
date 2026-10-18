@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -59,42 +60,76 @@ interface AdjustStockDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+/** The server's PRODUCT_ARCHIVED message, also shown when the list already reports the product archived. */
+const ARCHIVED_MESSAGE = 'This product is archived; its stock cannot change.';
+
 /** Receive, Ship or Manual Adjustment of one product (#31), through the same ledger as the inline −/+. */
 export function AdjustStockDialog({ product, onOpenChange }: AdjustStockDialogProps) {
   return (
     <Dialog open={!!product} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-        {product && (
-          <>
-            <DialogHeader>
-              <DialogTitle>Adjust stock</DialogTitle>
-              <DialogDescription>
-                {product.title} ({product.sku}): {product.quantity} {product.unitOfMeasure} on hand.
-              </DialogDescription>
-            </DialogHeader>
-            <Tabs defaultValue={STOCK_MOVEMENT_TYPES.RECEIVE}>
-              <TabsList className="w-full">
-                {Object.values(STOCK_MOVEMENT_TYPES).map((type) => (
-                  <TabsTrigger key={type} value={type}>
-                    {TABS[type].tab}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-              {/* Radix mounts only the active tab, so switching tabs starts a fresh form */}
-              {Object.values(STOCK_MOVEMENT_TYPES).map((type) => (
-                <TabsContent key={type} value={type}>
-                  <MovementForm product={product} type={type} onDone={() => onOpenChange(false)} />
-                </TabsContent>
-              ))}
-            </Tabs>
-          </>
-        )}
+        {/* Keyed, so "archived meanwhile" is forgotten when the dialog closes or opens on another product */}
+        {product && <AdjustStockContent key={product.id} product={product} onDone={() => onOpenChange(false)} />}
       </DialogContent>
     </Dialog>
   );
 }
 
-function MovementForm({ product, type, onDone }: { product: Product; type: StockMovementType; onDone: () => void }) {
+/**
+ * A product archived while the dialog is open (#36), learnt from a 409 PRODUCT_ARCHIVED or from a refetch, freezes
+ * the dialog on every tab: the reason shows above the tabs and nothing can be submitted, only cancelled.
+ */
+function AdjustStockContent({ product, onDone }: { product: Product; onDone: () => void }) {
+  const [archivedMeanwhile, setArchivedMeanwhile] = useState(false);
+  const frozen = archivedMeanwhile || product.status === 'archived';
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Adjust stock</DialogTitle>
+        <DialogDescription>
+          {product.title} ({product.sku}): {product.quantity} {product.unitOfMeasure} on hand.
+        </DialogDescription>
+      </DialogHeader>
+      {frozen && (
+        <p role="alert" className="rounded-md border border-destructive/50 px-3 py-2 text-sm text-destructive">
+          {ARCHIVED_MESSAGE}
+        </p>
+      )}
+      <Tabs defaultValue={STOCK_MOVEMENT_TYPES.RECEIVE}>
+        <TabsList className="w-full">
+          {Object.values(STOCK_MOVEMENT_TYPES).map((type) => (
+            <TabsTrigger key={type} value={type}>
+              {TABS[type].tab}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        {/* Radix mounts only the active tab, so switching tabs starts a fresh form */}
+        {Object.values(STOCK_MOVEMENT_TYPES).map((type) => (
+          <TabsContent key={type} value={type}>
+            <MovementForm
+              product={product}
+              type={type}
+              frozen={frozen}
+              onArchived={() => setArchivedMeanwhile(true)}
+              onDone={onDone}
+            />
+          </TabsContent>
+        ))}
+      </Tabs>
+    </>
+  );
+}
+
+interface MovementFormProps {
+  product: Product;
+  type: StockMovementType;
+  /** The product is archived: the form cannot be submitted. */
+  frozen: boolean;
+  onArchived: () => void;
+  onDone: () => void;
+}
+
+function MovementForm({ product, type, frozen, onArchived, onDone }: MovementFormProps) {
   const record = useRecordMovement();
   const form = useForm<StockMovementFormInput, unknown, StockMovementFormValues>({
     resolver: zodResolver(stockMovementFormSchema),
@@ -114,7 +149,8 @@ function MovementForm({ product, type, onDone }: { product: Product; type: Stock
     } catch (err) {
       // The mutation already toasted and refetched; the reason also stays next to what caused it
       const { code, message } = getApiError(err);
-      form.setError(code === 'INSUFFICIENT_STOCK' ? 'quantity' : 'root', { message });
+      if (code === 'PRODUCT_ARCHIVED') onArchived();
+      else form.setError(code === 'INSUFFICIENT_STOCK' ? 'quantity' : 'root', { message });
     }
   };
 
@@ -137,7 +173,7 @@ function MovementForm({ product, type, onDone }: { product: Product; type: Stock
           <Button type="button" variant="outline" onClick={onDone}>
             Cancel
           </Button>
-          <Button type="submit" disabled={record.isPending}>
+          <Button type="submit" disabled={frozen || record.isPending}>
             {record.isPending ? 'Saving…' : copy.submit}
           </Button>
         </DialogFooter>

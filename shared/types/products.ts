@@ -31,3 +31,8 @@ export interface Product {
 
 /** GET /api/products */
 export type ProductsPage = Paginated<Product>;
+
+/** `details` of a 409 PRODUCT_HAS_MOVEMENTS: a product with any history cannot be deleted, only archived. */
+export interface ProductHasMovementsDetails {
+  movementCount: number;
+}

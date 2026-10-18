@@ -121,6 +121,10 @@ const ROUTES: RouteCase[] = [
   accountRoute('get', '/api/products', 200),
   accountRoute('post', '/api/products', [400, 'VALIDATION_ERROR'], { title: 'Widget' }),
   accountRoute('patch', '/api/products/:id', [404, 'NOT_FOUND'], { title: 'Widget' }),
+  // Archive, unarchive and delete (#36): admin only (PRODUCTS_ARCHIVE, PRODUCTS_DELETE)
+  adminRoute('patch', '/api/products/:id/archive', [404, 'NOT_FOUND']),
+  adminRoute('patch', '/api/products/:id/unarchive', [404, 'NOT_FOUND']),
+  adminRoute('delete', '/api/products/:id', [404, 'NOT_FOUND']),
   // Stock history (#32): every active user (INVENTORY_VIEW)
   accountRoute('get', '/api/stock-movements', 200),
   // Stock changes (#30): every active user (STOCK_ADJUST); the product does not exist

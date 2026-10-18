@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
-import { PERMISSIONS, type ProductStatus } from '@inventory/shared';
+import { PERMISSIONS, type Product, type ProductStatus } from '@inventory/shared';
 import { Can } from '@/features/auth/components/Can';
 import { ListMessage } from '@/components/ListMessage';
 import { Pager } from '@/components/Pager';
@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AdjustStockDialog } from '../components/AdjustStockDialog';
+import { ArchiveProductDialog } from '../components/ArchiveProductDialog';
+import { DeleteProductDialog } from '../components/DeleteProductDialog';
 import { ProductFormDialog } from '../components/ProductFormDialog';
 import { ProductsTable } from '../components/ProductsTable';
 import { ProductsToolbar } from '../components/ProductsToolbar';
@@ -31,7 +33,10 @@ export default function Products() {
   const view = STATUS_VIEWS[status];
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [adjustingId, setAdjustingId] = useState<string | null>(null);
+  // The product as it was when the dialog opened: a refetch may drop it from this tab (archived meanwhile)
+  const [adjustingSnapshot, setAdjustingSnapshot] = useState<Product | null>(null);
+  const [archiving, setArchiving] = useState<Product | null>(null);
+  const [deleting, setDeleting] = useState<Product | null>(null);
   const [historyProductId, setHistoryProductId] = useState<string | null>(null);
   const query = useProducts(list.params);
   const { data } = query;
@@ -42,7 +47,7 @@ export default function Products() {
   }, [data, query.isPlaceholderData, page, setPage]);
   // Looked up in the live list, so the on-hand count in the dialogs follows every refetch
   const editing = data?.items.find((product) => product.id === editingId) ?? null;
-  const adjusting = data?.items.find((product) => product.id === adjustingId);
+  const adjusting = adjustingSnapshot ? (data?.items.find((product) => product.id === adjustingSnapshot.id) ?? adjustingSnapshot) : undefined;
   const showingHistory = data?.items.find((product) => product.id === historyProductId) ?? null;
 
   return (
@@ -100,8 +105,10 @@ export default function Products() {
             order={list.order}
             onSort={list.setSort}
             onEdit={(product) => setEditingId(product.id)}
-            onAdjustStock={(product) => setAdjustingId(product.id)}
+            onAdjustStock={setAdjustingSnapshot}
             onStockHistory={(product) => setHistoryProductId(product.id)}
+            onToggleArchive={setArchiving}
+            onDelete={setDeleting}
           />
           <Pager meta={data} onPage={(next) => setPage(next)} />
         </>
@@ -109,8 +116,10 @@ export default function Products() {
 
       <ProductFormDialog open={creating} onOpenChange={setCreating} />
       <ProductFormDialog open={!!editing} product={editing} onOpenChange={(open) => !open && setEditingId(null)} />
-      <AdjustStockDialog product={adjusting} onOpenChange={(open) => !open && setAdjustingId(null)} />
+      <AdjustStockDialog product={adjusting} onOpenChange={(open) => !open && setAdjustingSnapshot(null)} />
       <StockHistoryDialog product={showingHistory} onOpenChange={(open) => !open && setHistoryProductId(null)} />
+      <ArchiveProductDialog product={archiving} onClose={() => setArchiving(null)} />
+      <DeleteProductDialog product={deleting} onClose={() => setDeleting(null)} onArchiveInstead={setArchiving} />
     </div>
   );
 }

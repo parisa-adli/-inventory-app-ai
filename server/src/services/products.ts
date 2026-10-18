@@ -10,6 +10,7 @@ import type {
 } from '@inventory/shared';
 import { Category } from '../models/Category.js';
 import { Product, type ProductDoc } from '../models/Product.js';
+import { StockMovement } from '../models/StockMovement.js';
 import { Supplier } from '../models/Supplier.js';
 import { AppError, NotFoundError, ValidationError, isDuplicateKeyError } from '../utils/errors.js';
 import { NAME_COLLATION, escapeRegex } from '../utils/text.js';
@@ -108,6 +109,41 @@ export const updateProduct = async (id: string, patch: UpdateProductInput): Prom
     if (patch[field] !== undefined) product.set(field, patch[field]);
   }
   return save(product);
+};
+
+/**
+ * Archive or unarchive (#36). Allowed with stock on hand; archiving freezes stock (the stock module's guard matches
+ * `archivedAt: null`) and leaves the history alone. Repeating either is a no-op, so the first archive date is kept.
+ */
+export const setArchived = async (id: string, archived: boolean): Promise<ProductDto> => {
+  const product = isValidObjectId(id) ? await Product.findById(id) : null;
+  if (!product) throw new NotFoundError('Product not found');
+  if (archived !== Boolean(product.archivedAt)) product.set('archivedAt', archived ? new Date() : null);
+  return save(product);
+};
+
+const hasMovements = (movementCount: number) =>
+  new AppError(
+    409,
+    'PRODUCT_HAS_MOVEMENTS',
+    `This product has ${movementCount} stock movement${movementCount === 1 ? '' : 's'}, so deleting it would erase audit history. Archive it instead.`,
+    { movementCount }
+  );
+
+/**
+ * DELETE (#36): only a product that never had a movement, so the ledger never loses history. The delete also
+ * requires quantity 0: every movement that succeeds raises the quantity before its record is written, so one
+ * landing between the count and the delete makes the delete miss instead of leaving an orphaned movement.
+ */
+export const deleteProduct = async (id: string): Promise<void> => {
+  if (!isValidObjectId(id) || !(await Product.exists({ _id: id }))) throw new NotFoundError('Product not found');
+  const movementCount = await StockMovement.countDocuments({ product: id });
+  if (movementCount > 0) throw hasMovements(movementCount);
+  const { deletedCount } = await Product.deleteOne({ _id: id, quantity: 0 });
+  if (deletedCount === 0) {
+    if (!(await Product.exists({ _id: id }))) throw new NotFoundError('Product not found');
+    throw hasMovements(Math.max(1, await StockMovement.countDocuments({ product: id })));
+  }
 };
 
 /** The `quantity` condition of a stock status, from the shared ranges (`getStockStatus` in database form). */

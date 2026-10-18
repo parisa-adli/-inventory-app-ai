@@ -15,3 +15,15 @@ export const updateProduct = async ({ id, body }: { id: string; body: UpdateProd
   const { data } = await api.patch<Product>(`/products/${id}`, body);
   return data;
 };
+
+/** PATCH /products/:id/archive or /unarchive (admin). */
+export const setProductArchived = async ({ id, archived }: { id: string; archived: boolean }): Promise<Product> => {
+  const { data } = await api.patch<Product>(`/products/${id}/${archived ? 'archive' : 'unarchive'}`);
+  return data;
+};
+
+/** DELETE /products/:id (admin): only a product that never had a movement. */
+export const deleteProduct = async (product: Product): Promise<Product> => {
+  await api.delete(`/products/${product.id}`);
+  return product;
+};

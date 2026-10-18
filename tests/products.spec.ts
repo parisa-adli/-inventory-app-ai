@@ -176,8 +176,9 @@ test.describe('stock changes (stubbed API)', () => {
     // The toolbar's category and supplier filters
     await page.route(/\/api\/categories(\?.*)?$/, (route) => route.fulfill({ json: pageOf([ELECTRONICS], 100) }));
     await page.route(/\/api\/suppliers(\?.*)?$/, (route) => route.fulfill({ json: pageOf([TECHSUPPLY], 100) }));
+    // The Active tab, like the real list: an archived product drops out of it
     await page.route(/\/api\/products(\?.*)?$/, (route) =>
-      route.fulfill({ json: pageOf([{ ...MOUSE, quantity: state.quantity }], 20) })
+      route.fulfill({ json: pageOf(state.archived ? [] : [{ ...MOUSE, quantity: state.quantity }], 20) })
     );
     await page.route(/\/api\/stock-movements(\?.*)?$/, async (route, request) => {
       if (request.method() === 'GET') {
@@ -367,17 +368,32 @@ test.describe('stock changes (stubbed API)', () => {
     ]);
   });
 
-  test('a product archived meanwhile is refused with a clear message', async ({ page }) => {
-    const { state } = await stubStock(page);
+  test('a product archived meanwhile is refused, and the dialog stays open but frozen on every tab', async ({ page }) => {
+    const { state, bodies } = await stubStock(page);
     await page.goto('/app/products');
-    const dialog = await openAdjustStock(page, 'Receive');
+    const dialog = await openAdjustStock(page, 'Ship');
 
     state.archived = true;
-    await dialog.getByLabel('Quantity to receive').fill('2');
-    await dialog.getByRole('button', { name: 'Receive stock' }).click();
+    await dialog.getByLabel('Quantity to ship').fill('1');
+    await dialog.getByRole('button', { name: 'Ship stock' }).click();
     const message = 'This product is archived; its stock cannot change.';
     await expect(page.locator('[data-sonner-toast]').getByText(message)).toBeVisible();
+    // The refetch dropped the product from the active list; the dialog says why and cannot submit again (#36)
+    await expect(page.getByText('No products yet.')).toBeVisible();
     await expect(dialog.getByRole('alert')).toHaveText(message);
+    await expect(dialog.getByRole('button', { name: 'Ship stock' })).toBeDisabled();
+    for (const [tab, submit] of [
+      ['Receive', 'Receive stock'],
+      ['Manual Adjustment', 'Record adjustment'],
+    ]) {
+      await dialog.getByRole('tab', { name: tab }).click();
+      await expect(dialog.getByRole('alert')).toHaveText(message);
+      await expect(dialog.getByRole('button', { name: submit })).toBeDisabled();
+    }
+    expect(bodies).toHaveLength(1);
+
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(dialog).toHaveCount(0);
   });
 
   test('Stock History lists the movements newest first, and a change made meanwhile is on top when it reopens', async ({

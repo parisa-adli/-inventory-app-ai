@@ -462,3 +462,105 @@ describe('GET /api/products filters and sorts', () => {
     expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 });
+
+// #36: admin-only archive, unarchive and delete
+describe('archive, unarchive and delete', () => {
+  let admin: string[];
+  beforeEach(async () => {
+    admin = await sessionAs('admin');
+  });
+
+  const createdId = async () => {
+    const res = await create(validProduct());
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    return res.body.id as string;
+  };
+  const archive = (id: string, cookie = admin) => request(app).patch(`/api/products/${id}/archive`).set('Cookie', cookie);
+  const unarchive = (id: string, cookie = admin) => request(app).patch(`/api/products/${id}/unarchive`).set('Cookie', cookie);
+  const remove = (id: string, cookie = admin) => request(app).delete(`/api/products/${id}`).set('Cookie', cookie);
+  const receive = (productId: string, quantity = 1) =>
+    request(app).post('/api/stock-movements').set('Cookie', staff).send({ productId, type: 'receive', quantity });
+  const history = (productId: string) => request(app).get(`/api/stock-movements?product=${productId}`).set('Cookie', staff);
+
+  it('archives a product with stock on hand: it moves to the Archived tab, keeps its history and refuses stock changes', async () => {
+    const id = await createdId();
+    expect((await receive(id, 5)).status).toBe(201);
+
+    const res = await archive(id);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body).toMatchObject({ id, status: 'archived', quantity: 5 });
+    expect(res.body.archivedAt).toEqual(expect.any(String));
+
+    expect((await list()).body.total).toBe(0);
+    expect((await list('?status=archived')).body.items.map((p: { id: string }) => p.id)).toEqual([id]);
+    expect((await history(id)).body).toMatchObject({ total: 1, items: [{ delta: 5, quantityAfter: 5 }] });
+
+    const refused = await receive(id);
+    expect(refused.status).toBe(409);
+    expect(refused.body.error.code).toBe('PRODUCT_ARCHIVED');
+  });
+
+  it('unarchives a product: it is back in the active list and accepts stock changes', async () => {
+    const id = await createdId();
+    const first = await archive(id);
+    // Archiving again keeps the original date
+    expect((await archive(id)).body.archivedAt).toBe(first.body.archivedAt);
+
+    const res = await unarchive(id);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ id, status: 'active', archivedAt: null });
+    expect((await list()).body.items.map((p: { id: string }) => p.id)).toEqual([id]);
+    expect((await receive(id)).status).toBe(201);
+    expect((await unarchive(id)).body.status).toBe('active');
+  });
+
+  it('deletes a product that never had a movement', async () => {
+    const id = await createdId();
+
+    const res = await remove(id);
+    expect(res.status).toBe(204);
+    expect((await list()).body.total).toBe(0);
+    expect((await remove(id)).status).toBe(404);
+  });
+
+  it('refuses to delete a product with movements, even back at 0, and says how many', async () => {
+    const id = await createdId();
+    await receive(id, 2);
+    await request(app).post('/api/stock-movements').set('Cookie', staff).send({ productId: id, type: 'ship', quantity: 2 });
+
+    const res = await remove(id);
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatchObject({ code: 'PRODUCT_HAS_MOVEMENTS', details: { movementCount: 2 } });
+    expect(res.body.error.message).toContain('Archive it instead');
+    expect((await list()).body.total).toBe(1);
+  });
+
+  it('refuses an archived product with movements too, and deletes an archived one without', async () => {
+    const stocked = await createdId();
+    await receive(stocked);
+    await archive(stocked);
+    expect((await remove(stocked)).body.error.code).toBe('PRODUCT_HAS_MOVEMENTS');
+
+    const res = await create(validProduct({ sku: 'ELE-002' }));
+    await archive(res.body.id);
+    expect((await remove(res.body.id)).status).toBe(204);
+  });
+
+  it('answers 404 for a product that does not exist', async () => {
+    for (const id of [String(new Types.ObjectId()), 'not-an-id']) {
+      for (const res of [await archive(id), await unarchive(id), await remove(id)]) {
+        expect(res.status).toBe(404);
+        expect(res.body.error.code).toBe('NOT_FOUND');
+      }
+    }
+  });
+
+  it('refuses staff with 403 and changes nothing', async () => {
+    const id = await createdId();
+    for (const res of [await archive(id, staff), await unarchive(id, staff), await remove(id, staff)]) {
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('FORBIDDEN');
+    }
+    expect((await list()).body.items).toMatchObject([{ id, status: 'active' }]);
+  });
+});

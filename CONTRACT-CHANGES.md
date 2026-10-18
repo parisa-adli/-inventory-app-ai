@@ -226,6 +226,13 @@ Where the PRD and the agreed Q&A conflict, the Q&A wins (`docs/adr/0001`). C17â€
 
 - The seed replaces the 32 hand-written products with about 60 generated ones across 6 of the 8 categories. Quantities are no longer stored in the seed data: they come from replayed movements (an opening balance about 90 days ago, then a fixed-seed history), and the seed fails if reconciliation reports any mismatch.
 
+## C24. Archive, unarchive and delete a product (admin)
+
+*Applied in #36.*
+
+- `PATCH /api/products/:id/archive` and `/unarchive` (`PRODUCTS_ARCHIVE`) answer 200 with the product. Archiving with stock on hand is allowed; repeating either is a no-op, so the first `archivedAt` is kept.
+- PRD: `DELETE /api/products/:id` with no rule for history (Open Question 7). Agreed (#27): 204 only for a product that never had a movement, otherwise 409 `PRODUCT_HAS_MOVEMENTS` with `details: { movementCount }`; archived products follow the same rule. The delete also requires quantity 0, so a movement landing between the count and the delete makes it refuse instead of orphaning the movement.
+
 ## Not applicable (nothing to change)
 
 - Stale JWT: the access token carries only `sub`; `/me` and `requireAuth` read the DB.

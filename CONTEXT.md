@@ -71,7 +71,7 @@ _Avoid_: "history" for the data itself ("Stock History" is the name of the dialo
 The first receive in a product's **Ledger**, bringing in the stock it already had when tracking began. A new product starts at zero, so its stock enters only through movements.
 
 **Reconciliation**
-An admin check that compares every product's quantity with the sum of its **Ledger** and lists the products that disagree. On request it repairs them by setting the quantity to the ledger sum; it never writes a movement.
+An admin check that compares every product's quantity with the sum of its **Ledger** and lists the products that disagree. On request it repairs them by setting the quantity to the ledger sum; it never writes a movement. This repair is the one quantity change that is not a **Stock movement**, the only exception to "every quantity change writes a movement": nothing moved, the stored quantity is brought back to its ledger.
 _Avoid_: "audit", "recount" (nothing is physically counted).
 
 **Archived product**

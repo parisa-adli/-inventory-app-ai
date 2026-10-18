@@ -15,6 +15,9 @@ const badgeVariants = cva(
         destructive:
           "border-transparent bg-destructive/10 text-destructive dark:bg-destructive/20",
         outline: "text-foreground",
+        // Low stock (DESIGN.md §2.2), the one status color besides destructive
+        warning:
+          "border-transparent bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400",
       },
     },
     defaultVariants: {

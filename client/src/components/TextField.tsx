@@ -12,8 +12,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 
-interface TextFieldProps<T extends FieldValues> {
-  control: Control<T>;
+/** `TOut` is what the form's resolver outputs, when it differs from the input (e.g. a price typed as text). */
+interface TextFieldProps<T extends FieldValues, TOut = T> {
+  control: Control<T, unknown, TOut>;
   name: FieldPath<T>;
   label: string;
   type?: 'text' | 'email' | 'password' | 'tel';
@@ -26,7 +27,7 @@ interface TextFieldProps<T extends FieldValues> {
   labelAction?: ReactNode;
 }
 
-export function TextField<T extends FieldValues>({
+export function TextField<T extends FieldValues, TOut = T>({
   control,
   name,
   label,
@@ -35,7 +36,7 @@ export function TextField<T extends FieldValues>({
   autoComplete,
   hint,
   labelAction,
-}: TextFieldProps<T>) {
+}: TextFieldProps<T, TOut>) {
   const [revealed, setRevealed] = useState(false);
   const isPassword = type === 'password';
 

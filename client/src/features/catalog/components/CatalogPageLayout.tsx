@@ -3,10 +3,11 @@ import type { UseQueryResult } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import type { Paginated, Permission } from '@inventory/shared';
 import { Can } from '@/features/auth/components/Can';
+import { ListMessage } from '@/components/ListMessage';
 import { Pager } from '@/components/Pager';
 import { Button } from '@/components/ui/button';
 import { useCatalogSearchParams } from '../hooks/useCatalogSearchParams';
-import { CatalogGridMessage, CatalogGridSkeleton, GRID_CLASS } from './CatalogGridStates';
+import { CatalogGridSkeleton, GRID_CLASS } from './CatalogGridStates';
 import { CatalogToolbar } from './CatalogToolbar';
 
 interface CatalogPageLayoutProps<T> {
@@ -73,17 +74,17 @@ export function CatalogPageLayout<T>({
 
       {query.isPending && <CatalogGridSkeleton />}
       {query.isError && !data && (
-        <CatalogGridMessage>
+        <ListMessage>
           <span role="alert">Could not load {plural}. </span>
           <button className="text-foreground underline" onClick={() => query.refetch()}>
             Try again
           </button>
-        </CatalogGridMessage>
+        </ListMessage>
       )}
       {data && data.items.length === 0 && (
-        <CatalogGridMessage>
+        <ListMessage>
           {list.search ? `No ${plural} match “${list.search}”.` : `No ${plural} yet.`}
-        </CatalogGridMessage>
+        </ListMessage>
       )}
       {data && data.items.length > 0 && (
         <>

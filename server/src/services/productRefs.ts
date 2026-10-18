@@ -1,21 +1,18 @@
-import mongoose, { type PipelineStage, type Types } from 'mongoose';
+import type { PipelineStage, Types } from 'mongoose';
 import type { InUseDetails } from '@inventory/shared';
+import { Product } from '../models/Product.js';
 
-// Products arrive in P3. Until then these read the raw `products` collection by field name, so the
-// category/supplier delete guard and the list counts already work (tests insert raw documents).
-// P3.1: swap both to the Product model and re-verify the guard.
-
-export const PRODUCTS_COLLECTION = 'products';
+// The category/supplier delete guard and the list counts. Archived products count too: a product is
+// archived while `archivedAt` is set (docs/adr/0003).
 
 /** Product fields that reference a catalog record. */
 export type ProductRefField = 'category' | 'supplier';
 
 /** How many products (archived included) reference the record; the delete guard blocks on any. */
 export const countProductsReferencing = async (field: ProductRefField, id: Types.ObjectId): Promise<InUseDetails> => {
-  const products = mongoose.connection.collection(PRODUCTS_COLLECTION);
   const [productCount, archivedCount] = await Promise.all([
-    products.countDocuments({ [field]: id }),
-    products.countDocuments({ [field]: id, status: 'archived' }),
+    Product.countDocuments({ [field]: id }),
+    Product.countDocuments({ [field]: id, archivedAt: { $ne: null } }),
   ]);
   return { productCount, archivedCount };
 };
@@ -24,7 +21,7 @@ export const countProductsReferencing = async (field: ProductRefField, id: Types
 export const productCountStages = (field: ProductRefField): PipelineStage[] => [
   {
     $lookup: {
-      from: PRODUCTS_COLLECTION,
+      from: Product.collection.collectionName,
       let: { recordId: '$_id' },
       pipeline: [{ $match: { $expr: { $eq: [`$${field}`, '$$recordId'] } } }, { $count: 'n' }],
       as: 'productCountRows',

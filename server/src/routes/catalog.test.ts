@@ -3,15 +3,15 @@ import request from 'supertest';
 import mongoose from 'mongoose';
 import { createApp } from '../app.js';
 import { Category } from '../models/Category.js';
+import { Product } from '../models/Product.js';
 import { Supplier } from '../models/Supplier.js';
 import { User } from '../models/User.js';
 import { ACCESS_COOKIE, signAccessToken } from '../services/jwt.js';
-import { PRODUCTS_COLLECTION } from '../services/productRefs.js';
 import { clearTestDb, connectTestDb, disconnectTestDb } from '../test/db.js';
 
 // Categories and suppliers share one service (services/catalog.ts); each rule is tested on the entity
-// where it is most visible, the shared ones on both. Products do not exist yet (P3), so tests insert
-// raw documents into the products collection.
+// where it is most visible, the shared ones on both. Product counts and the delete guard read real
+// Product documents (archived = archivedAt set).
 
 const app = createApp();
 
@@ -28,8 +28,22 @@ const sessionAs = async (role: 'admin' | 'staff') => {
   return [`${ACCESS_COOKIE}=${signAccessToken(String(user._id))}`];
 };
 
-const insertProducts = (docs: object[]) =>
-  mongoose.connection.collection(PRODUCTS_COLLECTION).insertMany(docs.map((doc) => ({ title: 'P', ...doc })));
+/** Real products; one referencing only a supplier gets a fresh category (a product always has one). */
+type ProductRefs = { category?: mongoose.Types.ObjectId; supplier?: mongoose.Types.ObjectId; archivedAt?: Date };
+const insertProducts = async (docs: ProductRefs[]) => {
+  for (const doc of docs) {
+    const category = doc.category ?? (await Category.create({ title: `Fallback ${++counter}` }))._id;
+    await Product.create({
+      title: 'P',
+      sku: `SKU-${++counter}`,
+      costPrice: 1,
+      salePrice: 1,
+      unitOfMeasure: 'pcs',
+      ...doc,
+      category,
+    });
+  }
+};
 
 let admin: string[];
 
@@ -37,7 +51,6 @@ beforeAll(connectTestDb);
 afterAll(disconnectTestDb);
 beforeEach(async () => {
   await clearTestDb();
-  await mongoose.connection.collection(PRODUCTS_COLLECTION).deleteMany({});
   admin = await sessionAs('admin');
 });
 
@@ -127,8 +140,8 @@ describe.each(ENTITIES)('$path', ({ path, nameField, model, duplicate, inUse, re
     const created = await create('Snacks');
     const id = new mongoose.Types.ObjectId(String(created.body.id));
     await insertProducts([
-      { [ref]: id, status: 'active' },
-      { [ref]: id, status: 'archived' },
+      { [ref]: id },
+      { [ref]: id, archivedAt: new Date() },
     ]);
 
     const list = await request(app).get(path).set('Cookie', admin);
@@ -139,7 +152,7 @@ describe.each(ENTITIES)('$path', ({ path, nameField, model, duplicate, inUse, re
     expect(res.body.error).toMatchObject({ code: inUse, details: { productCount: 2, archivedCount: 1 } });
     expect(await model.countDocuments()).toBe(1);
 
-    await mongoose.connection.collection(PRODUCTS_COLLECTION).deleteMany({});
+    await Product.deleteMany({});
     const ok = await request(app).delete(`${path}/${created.body.id}`).set('Cookie', admin);
     expect(ok.status).toBe(204);
     expect(await model.countDocuments()).toBe(0);

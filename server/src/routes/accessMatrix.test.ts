@@ -116,6 +116,10 @@ const ROUTES: RouteCase[] = [
   accountRoute('patch', '/api/suppliers/:id', [404, 'NOT_FOUND'], { name: 'Acme' }),
   adminRoute('delete', '/api/suppliers/:id', [404, 'NOT_FOUND']),
 
+  // Products (#29): reads and create for every active user. An incomplete body proves the guard let it through
+  accountRoute('get', '/api/products', 200),
+  accountRoute('post', '/api/products', [400, 'VALIDATION_ERROR'], { title: 'Widget' }),
+
   adminRoute('get', '/api/users', 200),
   adminRoute('patch', '/api/users/:id', 200, { role: 'staff' }),
   adminRoute('post', '/api/users/:id/password/temp', 200),

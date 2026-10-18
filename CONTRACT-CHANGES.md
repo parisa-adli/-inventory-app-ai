@@ -191,6 +191,8 @@ Where the PRD and the agreed Q&A conflict, the Q&A wins (`docs/adr/0001`). C17â€
 
 ## C18. Product stores `archivedAt` instead of `status`
 
+*Applied in #29 (the Product model, the derived `status` in responses, and the category/supplier delete guard counting `archivedAt` as archived). The `status` filter lands with #34.*
+
 - PRD: stored `status: active | archived`. Agreed: `archivedAt` (date or null). Responses carry a derived `status`, and `GET /api/products` still accepts `status` as a filter (`docs/adr/0003`).
 
 ## C19. Stock changes and history go through `/api/stock-movements`
@@ -203,6 +205,8 @@ Where the PRD and the agreed Q&A conflict, the Q&A wins (`docs/adr/0001`). C17â€
 - PRD: 400. Agreed: 409 `INSUFFICIENT_STOCK` with `details: { onHand }`. Any stock change on an archived product is 409 `PRODUCT_ARCHIVED`; archived is reported before insufficient.
 
 ## C21. Product edit is `PATCH`
+
+*Partly applied in #29: creation rejects a non-zero `quantity` (400 `VALIDATION_ERROR`). The `PATCH` itself lands with #35.*
 
 - PRD: `PUT /api/products/:id`. Agreed: `PATCH /api/products/:id`, following the Phase 2 convention (an absent field is unchanged, `null` clears supplier / image URL). `quantity` is rejected as unknown on edit, and product creation rejects any non-zero quantity: every product starts at 0.
 

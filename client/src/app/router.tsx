@@ -18,6 +18,7 @@ import VerifyEmail from '@/features/auth/pages/VerifyEmail';
 import VerifyEmailPending from '@/features/auth/pages/VerifyEmailPending';
 import Categories from '@/features/categories/pages/Categories';
 import Dashboard from '@/features/dashboard/pages/Dashboard';
+import Products from '@/features/products/pages/Products';
 import Profile from '@/features/profile/pages/Profile';
 import Suppliers from '@/features/suppliers/pages/Suppliers';
 import Users from '@/features/users/pages/Users';
@@ -91,6 +92,7 @@ export const router = createBrowserRouter([
             loader: runGuards,
             ErrorBoundary: NoAccessBoundary,
             children: [
+              { path: 'products', Component: Products },
               { path: 'categories', Component: Categories },
               { path: 'suppliers', Component: Suppliers },
             ],

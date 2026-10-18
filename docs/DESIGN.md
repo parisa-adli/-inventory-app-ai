@@ -36,7 +36,7 @@ Dark-mode values come from shadcn's neutral `.dark` block in `globals.css`. Do n
 
 ### 2.2 Status colors (the only exception to monochrome)
 
-- **Low stock:** a soft amber badge, e.g. `bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400`.
+- **Low stock:** `Badge variant="warning"`, a soft amber (`bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400`), defined once in `components/ui/badge.tsx`.
 - **Out of stock:** an `outline` badge with `text-muted-foreground`, not red.
 - **Error / destructive:** the `destructive` token. The `destructive` Button and Badge variants are a soft tint (`bg-destructive/10 text-destructive`, as in shadcn's Base UI registry), never solid red with white text.
 - If you need a new status color, define it once as a Badge variant. Do not scatter it across pages.
@@ -99,6 +99,13 @@ Dark-mode values come from shadcn's neutral `.dark` block in `globals.css`. Do n
 - Pagination sits below the table:
   - On the left: "Showing 1–10 of 98" (muted).
   - On the right: outline Previous/Next buttons with chevrons, and "Page 1 of 10" between them.
+
+### Products table (`client/src/features/products`, `docs/design/products.png`)
+
+- A TanStack Table v9 (`useTable` + `tableFeatures`, features and columns at module scope) rendered into the shadcn `Table`, wrapper `rounded-xl border bg-card overflow-x-auto`.
+- The first cell is a `size-10 rounded-md border` thumbnail (the image, or a `bg-muted` box with a muted `ImageIcon` placeholder) beside the title (`font-medium`); the SKU has its own column (`text-xs text-muted-foreground`). Empty and error states use the shared `components/ListMessage` box.
+- Category as a `secondary` badge; a product without a supplier shows an `outline` muted "Unassigned" badge. Prices and quantity right-aligned, `tabular-nums`; the stock badge (Low stock / Out of stock, §2.2) sits left of the quantity. Status: `outline` "Active" / `secondary` "Archived".
+- The create dialog (`sm:max-w-lg`, scrolls when tall): Title, SKU (hint: saved in capitals), then a two-column grid of Category / Supplier (optional, a "No supplier" item) selects, Cost / Sale price and the Unit select, then the optional Image URL. There is no quantity field.
 
 ### Card grid pattern (Categories, Suppliers; `client/src/features/catalog`)
 

@@ -199,7 +199,7 @@ Where the PRD and the agreed Q&A conflict, the Q&A wins (`docs/adr/0001`). C17â€
 
 ## C19. Stock changes and history go through `/api/stock-movements`
 
-*`POST` applied in #30: it answers 201 with the movement in the list item shape (`{ id, type, delta, quantityAfter, unitCost, unitPrice, note, occurredAt, product: { id, title, sku, archived }, user: { id, name } }`). Unknown body keys such as `occurredAt` are stripped, so a request can never backdate a movement. The `GET` lands with the movements list.*
+*`POST` applied in #30: it answers 201 with the movement in the list item shape (`{ id, type, delta, quantityAfter, unitCost, unitPrice, note, occurredAt, product: { id, title, sku, archived }, user: { id, name } }`). Unknown body keys such as `occurredAt` are stripped, so a request can never backdate a movement. `GET` applied in #32: `product`, `type`, `dateFrom`, `dateTo`, `page`, `limit` (default 20, max 100), newest `occurredAt` first, in the same item shape. `dateFrom` / `dateTo` are ISO instants (`Z` or an offset), both inclusive, and a range ending before it starts is 400 `VALIDATION_ERROR`.*
 
 - `POST /api/stock-movements` `{ productId, type, quantity, note? }` **replaces** `PATCH /api/products/:id/quantity` and `POST /api/products/:id/adjust-stock`. Receive and ship take a positive `quantity`; adjustment takes a signed non-zero one and requires a `note`. The inline +/- buttons post a receive or ship of 1.
 - `GET /api/stock-movements?product=` **replaces** `GET /api/products/:id/stock-movements` (the Stock History dialog filters by product).

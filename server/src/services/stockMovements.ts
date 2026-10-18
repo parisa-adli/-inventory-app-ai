@@ -1,6 +1,6 @@
-import type { StockMovement as StockMovementDto } from '@inventory/shared';
+import type { ListStockMovementsQuery, StockMovement as StockMovementDto, StockMovementsPage } from '@inventory/shared';
 import type { HydratedDocument } from 'mongoose';
-import type { StockMovementDoc } from '../models/StockMovement.js';
+import { StockMovement, type StockMovementDoc } from '../models/StockMovement.js';
 
 interface PopulatedRefs {
   product: { _id: unknown; title: string; sku: string; archivedAt?: Date | null };
@@ -30,4 +30,36 @@ const toStockMovement = (doc: MovementLike): StockMovementDto => ({
 export const presentMovement = async (movement: HydratedDocument<StockMovementDoc>): Promise<StockMovementDto> => {
   await movement.populate(POPULATE);
   return toStockMovement(movement.toObject() as unknown as MovementLike);
+};
+
+/** GET: newest `occurredAt` first (ties newest written first), paged. Archived products' movements are included and flagged. */
+export const listMovements = async ({
+  product,
+  type,
+  dateFrom,
+  dateTo,
+  page,
+  limit,
+}: ListStockMovementsQuery): Promise<StockMovementsPage> => {
+  const filter = {
+    ...(product && { product }),
+    ...(type && { type }),
+    ...((dateFrom || dateTo) && { occurredAt: { ...(dateFrom && { $gte: dateFrom }), ...(dateTo && { $lte: dateTo }) } }),
+  };
+  const [total, rows] = await Promise.all([
+    StockMovement.countDocuments(filter),
+    StockMovement.find(filter)
+      .sort({ occurredAt: -1, _id: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .populate(POPULATE)
+      .lean<MovementLike[]>(),
+  ]);
+  return {
+    items: rows.map(toStockMovement),
+    page,
+    limit,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+  };
 };

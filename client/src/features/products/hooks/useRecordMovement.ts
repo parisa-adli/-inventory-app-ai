@@ -3,8 +3,8 @@ import { toast } from 'sonner';
 import { STOCK_MOVEMENT_TYPES } from '@inventory/shared';
 import { getApiError } from '@/lib/apiError';
 import { dashboardKeys } from '@/features/dashboard/hooks/useDashboard';
+import * as movementsApi from '@/features/movements/api/movementsApi';
 import { movementsKeys } from '@/features/movements/hooks/useMovements';
-import * as stockMovementsApi from '../api/stockMovementsApi';
 import { productsKeys } from './useProducts';
 
 const PAST_TENSE = {
@@ -25,7 +25,7 @@ export const useRecordMovement = () => {
       [productsKeys.all, movementsKeys.all, dashboardKeys.all].map((queryKey) => queryClient.invalidateQueries({ queryKey }))
     );
   return useMutation({
-    mutationFn: stockMovementsApi.recordMovement,
+    mutationFn: movementsApi.recordMovement,
     onSuccess: (movement) => {
       toast.success(`${PAST_TENSE[movement.type]} ${Math.abs(movement.delta)} × ${movement.product.title}`);
       return refresh();

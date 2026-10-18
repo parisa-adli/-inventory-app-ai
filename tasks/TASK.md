@@ -40,6 +40,8 @@ History: `c127d2c` scaffold → `b173a2a` Phase 1 Part A + server dependency upg
 
 **Progress (#31, 2026-10-18):** the Adjust Stock dialog (P3.12): Receive, Ship and Manual Adjustment tabs from the new Actions column, `stockMovementFormSchema` in `shared/schemas/stockMovements.ts` (form/API parity tests in `server/src/schemas.test.ts`), e2e tests for each tab and the archived refusal in `tests/products.spec.ts`. No server behaviour change: `POST /api/stock-movements` (#30) already takes all three types; `signedDelta` moved to `shared/constants/stock-movement-types.ts` so the stock module and the dialog derive a change the same way.
 
+**Progress (#32, 2026-10-18):** per-product Stock History. Server: `GET /api/stock-movements` (`can(INVENTORY_VIEW)`; `product`, `type`, `dateFrom` / `dateTo` as inclusive ISO instants, `page`, `limit` default 20; newest `occurredAt` first; archived products' movements flagged), `listStockMovementsQuerySchema` and `StockMovementsPage` in `shared/`. Client: a History action on every product row opens `StockHistoryDialog` (paginated, loading / empty / error states), backed by `features/movements` (`movementsApi`, which now also holds the POST, `useMovements`, `MovementTypeBadge`, `formatDelta`) for the movements page (#33) to reuse. Tests: GET cases in `routes/stockMovements.test.ts`, an access-matrix row, a history e2e test in `tests/products.spec.ts`.
+
 ---
 
 ## Dev Environment
@@ -407,7 +409,8 @@ Source: `docs/PRDs/03-products.md`, PRD §4–§6.2. Deps: **P2**.
   - *#30: replaced by `POST /api/stock-movements` `{ productId, type, quantity: 1 }` (C19), guarded by `STOCK_ADJUST`; answers 201 with the movement.*
 - [x] **P3.7 [S] `POST /api/products/:id/adjust-stock`** (`{ type, quantity, note? }`) via stock service. Deps: P3.2.
   - *#30: the same `POST /api/stock-movements` (C19) takes all three types: receive/ship a positive whole amount, adjustment a signed non-zero one with a required reason; `occurredAt` is never accepted. The Adjust Stock dialog that uses it comes later (P3.12).*
-- [ ] **P3.8 [S] `GET /api/products/:id/stock-movements`** (per-product history; may land here or P4.1 — build once, share the query).
+- [x] **P3.8 [S] `GET /api/products/:id/stock-movements`** (per-product history; may land here or P4.1 — build once, share the query).
+  - *#32: replaced by `GET /api/stock-movements?product=` (C19); see P4.1.*
 
 ### Client
 - [ ] **P3.9 [C] Products page header**: search (debounced), Category select, Supplier select (+ "Unassigned"), Stock Status (All/In/Low/Out), Active/Archived tabs. Filters stored in URL search params so the dashboard can deep-link (P5).
@@ -415,12 +418,14 @@ Source: `docs/PRDs/03-products.md`, PRD §4–§6.2. Deps: **P2**.
   - *#29: the table is built (`features/products/components/ProductsTable.tsx`): image placeholder + title + SKU, Category, Supplier ("Unassigned" badge), Cost, Sale, Quantity with the Low/Out stock badge, Unit, Status; the `Pager` below it. Row actions, sorting and URL state come with #31–#36.*
   - *#30: inline −/+ in the Quantity cell (`QuantityStepper`): `−`, value, `+` as outline icon buttons (DESIGN.md), hidden without `STOCK_ADJUST` and on archived products.*
   - *#31: a right-aligned Actions column of ghost icon buttons (DESIGN.md); so far Adjust stock (`ArrowLeftRight`), hidden without `STOCK_ADJUST` and on archived products. The page hands the row handlers to the module-scope columns through a context (`ProductRowActions`).*
+  - *#32: Stock history (`History`) on every row, archived ones included.*
 - [ ] **P3.11 [C] Create/Edit form** (RHF+Zod, shared schema): all fields incl. SKU, unit select, image URL, category, optional supplier.
   - *#29: the create dialog is done (`ProductFormDialog`, `productFormSchema`, no quantity field, a duplicate SKU on the field and in a toast). Edit comes with #35, the "+ New category/supplier" options later.*
 - [x] **P3.12 [C] Adjust Stock modal**: tabs Receive / Ship / Manual Adjustment; adjustment requires reason; ship validates against on-hand. Surface server errors in toasts.
   - *#31: `AdjustStockDialog` (one RHF form per tab, `stockMovementFormSchema` from `@inventory/shared`: the amount typed as text, then the API's rules and messages; the dialog adds `productId`). Ship and a negative adjustment warn past the on-hand count shown but still submit (CONTRACT-CHANGES C20 note); a 409 `INSUFFICIENT_STOCK` shows "Only N on hand." in a toast and on the amount, a 409 `PRODUCT_ARCHIVED` in a toast and under the form. Through `useRecordMovement`, so the same toasts and invalidation as the inline −/+. The dialog reads the product from the live list, so its on-hand count follows each refetch.*
   - *Follow-up in #36 (agreed 2026-10-18): a product archived while the dialog is open must show a clear error and stop submitting (disable submit or close). Today the active-only list drops it on refetch, which closes the dialog by accident; the server already refuses with 409 `PRODUCT_ARCHIVED`.*
-- [ ] **P3.13 [C] Stock History modal** (per product: date, type, qty, resulting qty, note, user).
+- [x] **P3.13 [C] Stock History modal** (per product: date, type, qty, resulting qty, note, user).
+  - *#32: `StockHistoryDialog` (`sm:max-w-3xl`): date and time, type badge (`features/movements/components/MovementTypeBadge`), signed change (`+5` / `−3`, `features/movements/format.ts`), quantity after, note, user; 20 a page with the shared `Pager`; skeleton, empty ("No stock movements yet.") and error-with-retry states. Reads `useMovements({ product })` (`features/movements/hooks/useMovements.ts`, key `['stock-movements', 'list', params]`), so the stock mutations' `stock-movements` invalidation refreshes it.*
 - [ ] **P3.14 [C] Admin-only actions**: Archive/Unarchive/Delete (confirm dialogs), hidden for staff.
 - [ ] **P3.15 [C] Invalidation**: stock mutations invalidate products, product history, global movements, and dashboard queries.
   - *#30: `useRecordMovement` invalidates `products`, `stock-movements` (the root the history dialog and movements page will share, `features/movements/hooks/useMovements.ts`) and `dashboard` (`features/dashboard/hooks/useDashboard.ts`) on success and on error. Ticked when the history dialog and movements page use those keys.*
@@ -431,7 +436,7 @@ Source: `docs/PRDs/03-products.md`, PRD §4–§6.2. Deps: **P2**.
 
 ### Acceptance
 - [ ] Staff creates/edits products and adjusts stock (all 3 types); no archive/delete controls and server rejects those with 403.
-- [ ] Inline ± appears immediately in Stock History as `receive`/`ship` of 1.
+- [x] Inline ± appears immediately in Stock History as `receive`/`ship` of 1. *(#32, e2e in `tests/products.spec.ts`)*
 - [ ] Shipping > on-hand is rejected with a clear error; − never possible at 0.
 - [ ] Adjustment without a reason rejected client- and server-side.
 - [ ] Stock-status filter buckets match `LOW_STOCK_THRESHOLD`.
@@ -446,11 +451,14 @@ Source: `docs/PRDs/03-products.md`, PRD §4–§6.2. Deps: **P2**.
 Source: `docs/PRDs/04-stock-movements.md`. Deps: **P3**.
 
 ### Server
-- [ ] **P4.1 [S] `GET /api/stock-movements`**: filters `product`, `type`, `dateFrom`, `dateTo` (against `createdAt`; make `dateTo` inclusive of the whole day), `limit`/`page`; newest first; populate product title/SKU and user name. Index on `createdAt` and `product`.
-- [ ] **P4.2 [S] Confirm `GET /api/products/:id/stock-movements`** shares the same query/shape and the Stock History modal (P3.13) uses it.
+- [x] **P4.1 [S] `GET /api/stock-movements`**: filters `product`, `type`, `dateFrom`, `dateTo` (against `createdAt`; make `dateTo` inclusive of the whole day), `limit`/`page`; newest first; populate product title/SKU and user name. Index on `createdAt` and `product`.
+  - *#32: `can(INVENTORY_VIEW)`, `listStockMovementsQuerySchema` in `shared/schemas/stockMovements.ts`, `listMovements` in `services/stockMovements.ts`. Filters on `occurredAt` (#27), newest first (ties by `_id`), 20 a page (max 100). `dateFrom` / `dateTo` are ISO instants (`Z` or an offset), both inclusive: the client sends the last instant of the user's local end day; a range ending before it starts is a 400. Archived products' movements are included with `product.archived: true`. Tests in `routes/stockMovements.test.ts`, an access-matrix row.*
+- [x] **P4.2 [S] Confirm `GET /api/products/:id/stock-movements`** shares the same query/shape and the Stock History modal (P3.13) uses it.
+  - *#32: one endpoint (C19); the Stock History dialog sends `?product=`.*
 
 ### Client
 - [ ] **P4.3 [C] Stock Movements page**: read-only TanStack Table (Date, Product, Type badge, Quantity, Resulting Quantity, Note/Reason, User); filters (product select, type select, date-range picker); pagination; filters in query keys.
+  - *#32 left for here: the date-range picker turns the user's local start and end days into `dateFrom` (00:00:00.000 local) and `dateTo` (23:59:59.999 local) as ISO instants; the server compares them inclusively and assumes no timezone. Reuse `useMovements`, `MovementTypeBadge`, `formatDelta` and `formatDateTime`; the Stock History dialog sends only `product`. Show the `product.archived` flag as an "Archived" tag (story 55).*
 
 ### Acceptance
 - [ ] Every movement from anywhere (inline ±, modal receive/ship/adjust) appears with the right user.

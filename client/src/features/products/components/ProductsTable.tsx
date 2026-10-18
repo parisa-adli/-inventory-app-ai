@@ -1,5 +1,5 @@
 import { createContext, use, type ReactNode } from 'react';
-import { ArrowLeftRight, ImageIcon, Minus, Plus } from 'lucide-react';
+import { ArrowLeftRight, History, ImageIcon, Minus, Plus } from 'lucide-react';
 import { createColumnHelper, tableFeatures, useTable } from '@tanstack/react-table';
 import {
   PERMISSIONS,
@@ -33,6 +33,7 @@ const RIGHT_ALIGNED = new Set(['costPrice', 'salePrice', 'quantity', 'actions'])
 /** What the row actions open. The columns live at module scope, so the page hands its handlers down this way. */
 interface ProductRowActions {
   onAdjustStock: (product: Product) => void;
+  onStockHistory: (product: Product) => void;
 }
 const RowActionsContext = createContext<ProductRowActions | null>(null);
 
@@ -147,21 +148,29 @@ function QuantityStepper({ product, children }: { product: Product; children: Re
   );
 }
 
-/** Ghost icon buttons (DESIGN.md): Adjust stock (#31). Archived products are frozen, so they get none. */
+/**
+ * Ghost icon buttons (DESIGN.md): Adjust stock (#31) and Stock history (#32). Archived products are frozen,
+ * so they get no Adjust stock, but their history stays readable.
+ */
 function RowActions({ product }: { product: Product }) {
   const actions = use(RowActionsContext);
   const canChangeStock = useCanChangeStock(product);
-  if (!actions || !canChangeStock) return null;
+  if (!actions) return null;
   return (
     <div className="flex justify-end gap-1">
-      <Button variant="ghost" size="icon" aria-label={`Adjust stock of ${product.title}`} onClick={() => actions.onAdjustStock(product)}>
-        <ArrowLeftRight />
+      {canChangeStock && (
+        <Button variant="ghost" size="icon" aria-label={`Adjust stock of ${product.title}`} onClick={() => actions.onAdjustStock(product)}>
+          <ArrowLeftRight />
+        </Button>
+      )}
+      <Button variant="ghost" size="icon" aria-label={`Stock history of ${product.title}`} onClick={() => actions.onStockHistory(product)}>
+        <History />
       </Button>
     </div>
   );
 }
 
-/** The products list as a TanStack Table. Paging is server-side (the page's Pager); sorting arrives in #34. Quantity has inline −/+ (#30); Actions has Adjust stock (#31). */
+/** The products list as a TanStack Table. Paging is server-side (the page's Pager); sorting arrives in #34. Quantity has inline −/+ (#30); Actions has Adjust stock (#31) and Stock history (#32). */
 export function ProductsTable({ products, ...actions }: { products: Product[] } & ProductRowActions) {
   const table = useTable({ features, columns, data: products, getRowId: (product) => product.id });
 

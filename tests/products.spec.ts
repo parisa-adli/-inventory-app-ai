@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// Products page against a stubbed API: create a product (#29), inline -/+ (#30) and the Adjust Stock dialog (#31).
+// Products page against a stubbed API: create a product (#29), inline -/+ (#30), the Adjust Stock dialog (#31)
+// and the Stock History dialog (#32).
 
 const staff = { id: 's1', name: 'Staff', email: 'staff@inventory.local', role: 'staff', status: 'active', emailVerified: true };
 const admin = { ...staff, id: 'a1', name: 'Admin', email: 'admin@inventory.local', role: 'admin' };
@@ -152,7 +153,8 @@ test.describe('stock changes (stubbed API)', () => {
   /**
    * One product whose quantity only the stubbed POST /api/stock-movements changes, with the server's rules:
    * nothing below 0, nothing on an archived product. `hold` delays the next answer until released;
-   * `conflictOnHand` makes the next POST lose to a colleague with that much left.
+   * `conflictOnHand` makes the next POST lose to a colleague with that much left. GET lists what POST recorded,
+   * newest first; `historyQueries` keeps each GET's query string.
    */
   const stubStock = async (page: Page, user = staff) => {
     const state = {
@@ -162,6 +164,8 @@ test.describe('stock changes (stubbed API)', () => {
       hold: null as Promise<void> | null,
     };
     const bodies: Record<string, unknown>[] = [];
+    const movements: Record<string, unknown>[] = [];
+    const historyQueries: URLSearchParams[] = [];
     const conflict = (code: string, message: string, details?: unknown) => ({
       status: 409,
       json: { error: { code, message, ...(details !== undefined && { details }) } },
@@ -172,7 +176,11 @@ test.describe('stock changes (stubbed API)', () => {
     await page.route(/\/api\/products(\?.*)?$/, (route) =>
       route.fulfill({ json: pageOf([{ ...MOUSE, quantity: state.quantity }], 20) })
     );
-    await page.route('**/api/stock-movements', async (route, request) => {
+    await page.route(/\/api\/stock-movements(\?.*)?$/, async (route, request) => {
+      if (request.method() === 'GET') {
+        historyQueries.push(new URL(request.url()).searchParams);
+        return route.fulfill({ json: pageOf([...movements].reverse(), 20) });
+      }
       const body = request.postDataJSON();
       bodies.push(body);
       if (state.hold) await state.hold;
@@ -188,23 +196,22 @@ test.describe('stock changes (stubbed API)', () => {
         return route.fulfill(conflict('INSUFFICIENT_STOCK', `Only ${state.quantity} on hand.`, { onHand: state.quantity }));
       }
       state.quantity += delta;
-      return route.fulfill({
-        status: 201,
-        json: {
-          id: `m${bodies.length}`,
-          type: body.type,
-          delta,
-          quantityAfter: state.quantity,
-          unitCost: MOUSE.costPrice,
-          unitPrice: MOUSE.salePrice,
-          note: body.note ?? null,
-          occurredAt: '2026-10-18T10:00:00.000Z',
-          product: { id: MOUSE.id, title: MOUSE.title, sku: MOUSE.sku, archived: false },
-          user: { id: user.id, name: user.name },
-        },
-      });
+      const movement = {
+        id: `m${bodies.length}`,
+        type: body.type,
+        delta,
+        quantityAfter: state.quantity,
+        unitCost: MOUSE.costPrice,
+        unitPrice: MOUSE.salePrice,
+        note: body.note ?? null,
+        occurredAt: '2026-10-18T10:00:00.000Z',
+        product: { id: MOUSE.id, title: MOUSE.title, sku: MOUSE.sku, archived: false },
+        user: { id: user.id, name: user.name },
+      };
+      movements.push(movement);
+      return route.fulfill({ status: 201, json: movement });
     });
-    return { state, bodies };
+    return { state, bodies, historyQueries };
   };
 
   test('+ receives 1 and − ships 1; the buttons wait for the server and − stops at 0', async ({ page }) => {
@@ -259,10 +266,10 @@ test.describe('stock changes (stubbed API)', () => {
     await expect(row.getByRole('button', { name: 'Ship 1 Wireless Mouse' })).toBeDisabled();
   });
 
-  const openAdjustStock = async (page: Page, tab: 'Receive' | 'Ship' | 'Manual Adjustment') => {
+  const openAdjustStock = async (page: Page, tab: 'Receive' | 'Ship' | 'Manual Adjustment', onHand = 1) => {
     await page.getByRole('button', { name: 'Adjust stock of Wireless Mouse' }).click();
     const dialog = page.getByRole('dialog', { name: 'Adjust stock' });
-    await expect(dialog).toContainText('Wireless Mouse (ELE-001): 1 pcs on hand.');
+    await expect(dialog).toContainText(`Wireless Mouse (ELE-001): ${onHand} pcs on hand.`);
     await dialog.getByRole('tab', { name: tab }).click();
     return dialog;
   };
@@ -368,5 +375,42 @@ test.describe('stock changes (stubbed API)', () => {
     const message = 'This product is archived; its stock cannot change.';
     await expect(page.locator('[data-sonner-toast]').getByText(message)).toBeVisible();
     await expect(dialog.getByRole('alert')).toHaveText(message);
+  });
+
+  test('Stock History lists the movements newest first, and a change made meanwhile is on top when it reopens', async ({
+    page,
+  }) => {
+    const { historyQueries } = await stubStock(page);
+    await page.goto('/app/products');
+    const row = page.getByRole('row', { name: /Wireless Mouse/ });
+
+    await row.getByRole('button', { name: 'Stock history of Wireless Mouse' }).click();
+    let dialog = page.getByRole('dialog', { name: 'Stock history' });
+    await expect(dialog).toContainText('Wireless Mouse (ELE-001)');
+    await expect(dialog.getByText('No stock movements yet.')).toBeVisible();
+    expect(historyQueries.at(-1)?.get('product')).toBe('p1');
+    await page.keyboard.press('Escape');
+
+    await row.getByRole('button', { name: 'Receive 1 Wireless Mouse' }).click();
+    await expect(row.getByText('2', { exact: true })).toBeVisible();
+    const adjust = await openAdjustStock(page, 'Ship', 2);
+    await adjust.getByLabel('Quantity to ship').fill('2');
+    await adjust.getByLabel('Note (optional)').fill('Order 1042');
+    await adjust.getByRole('button', { name: 'Ship stock' }).click();
+    await expect(adjust).toBeHidden();
+
+    await row.getByRole('button', { name: 'Stock history of Wireless Mouse' }).click();
+    dialog = page.getByRole('dialog', { name: 'Stock history' });
+    const rows = dialog.getByRole('row');
+    // A header row, then the ship on top of the receive
+    await expect(rows).toHaveCount(3);
+    await expect(rows.nth(1)).toContainText('Ship');
+    await expect(rows.nth(1)).toContainText('−2');
+    await expect(rows.nth(1)).toContainText('Order 1042');
+    await expect(rows.nth(1).getByRole('cell').nth(3)).toHaveText('0');
+    await expect(rows.nth(1)).toContainText('Staff');
+    await expect(rows.nth(2)).toContainText('Receive');
+    await expect(rows.nth(2)).toContainText('+1');
+    await expect(rows.nth(2).getByRole('cell').nth(3)).toHaveText('2');
   });
 });

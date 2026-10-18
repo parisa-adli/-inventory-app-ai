@@ -77,3 +77,31 @@ export const stockMovementFormSchema = z
 
 export type StockMovementFormInput = z.input<typeof stockMovementFormSchema>;
 export type StockMovementFormValues = z.output<typeof stockMovementFormSchema>;
+
+export const STOCK_MOVEMENTS_PAGE_SIZE_DEFAULT = 20;
+export const STOCK_MOVEMENTS_PAGE_SIZE_MAX = 100;
+
+/** An ISO instant (`Z` or an offset). The client computes it from the user's local day; the server assumes no timezone. */
+const instant = (label: string) =>
+  z.iso
+    .datetime({ offset: true, error: `${label} must be an ISO date-time` })
+    .transform((value) => new Date(value));
+
+/**
+ * Query string of GET /api/stock-movements. Values arrive as strings. Both ends of the date range are
+ * inclusive: for a whole last day the client sends its final instant (23:59:59.999 local).
+ */
+export const listStockMovementsQuerySchema = z.object({
+  product: productId.optional(),
+  type: type.optional(),
+  dateFrom: instant('dateFrom').optional(),
+  dateTo: instant('dateTo').optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(STOCK_MOVEMENTS_PAGE_SIZE_MAX).default(STOCK_MOVEMENTS_PAGE_SIZE_DEFAULT),
+}).refine(({ dateFrom, dateTo }) => !dateFrom || !dateTo || dateFrom <= dateTo, {
+  path: ['dateTo'],
+  error: 'dateTo cannot be before dateFrom',
+});
+
+export type ListStockMovementsQuery = z.infer<typeof listStockMovementsQuerySchema>;
+export type StockMovementListParams = z.input<typeof listStockMovementsQuerySchema>;

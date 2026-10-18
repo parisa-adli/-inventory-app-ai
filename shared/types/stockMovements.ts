@@ -1,4 +1,5 @@
 import type { StockMovementType } from '../constants/stock-movement-types';
+import type { Paginated } from './catalog';
 
 /** A ledger entry as the API sends it (POST /api/stock-movements, and the movements list). */
 export interface StockMovement {
@@ -15,3 +16,6 @@ export interface StockMovement {
   product: { id: string; title: string; sku: string; archived: boolean };
   user: { id: string; name: string };
 }
+
+/** GET /api/stock-movements */
+export type StockMovementsPage = Paginated<StockMovement>;

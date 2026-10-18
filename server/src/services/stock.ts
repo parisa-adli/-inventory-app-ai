@@ -1,5 +1,5 @@
 import { isValidObjectId } from 'mongoose';
-import { STOCK_MOVEMENT_TYPES, stockMovementRuleError, type StockMovementType } from '@inventory/shared';
+import { signedDelta, stockMovementRuleError, type StockMovementType } from '@inventory/shared';
 import { Product } from '../models/Product.js';
 import { StockMovement } from '../models/StockMovement.js';
 import { AppError, NotFoundError, ValidationError } from '../utils/errors.js';
@@ -24,7 +24,7 @@ export interface RecordMovementInput {
 const validatedDelta = (type: StockMovementType, quantity: number, note: string | undefined) => {
   const broken = stockMovementRuleError(type, quantity, note);
   if (broken) throw new ValidationError(`${broken.path}: ${broken.message}`);
-  return type === STOCK_MOVEMENT_TYPES.SHIP ? -quantity : quantity;
+  return signedDelta(type, quantity);
 };
 
 /**

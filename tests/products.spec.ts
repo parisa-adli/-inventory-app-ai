@@ -1,8 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// Products page against a stubbed API (#29): create a product and see it in the list.
+// Products page against a stubbed API: create a product (#29), inline -/+ (#30) and the Adjust Stock dialog (#31).
 
 const staff = { id: 's1', name: 'Staff', email: 'staff@inventory.local', role: 'staff', status: 'active', emailVerified: true };
+const admin = { ...staff, id: 'a1', name: 'Admin', email: 'admin@inventory.local', role: 'admin' };
 
 const stamp = { createdAt: '2026-03-01T10:00:00.000Z', updatedAt: '2026-03-01T10:00:00.000Z' };
 const pageOf = (items: unknown[], limit: number) => ({ items, page: 1, limit, total: items.length, totalPages: 1 });
@@ -131,7 +132,7 @@ test.describe('products (stubbed API)', () => {
   });
 });
 
-test.describe('inline stock −/+ (stubbed API)', () => {
+test.describe('stock changes (stubbed API)', () => {
   const MOUSE = {
     id: 'p1',
     title: 'Wireless Mouse',
@@ -149,13 +150,25 @@ test.describe('inline stock −/+ (stubbed API)', () => {
   };
 
   /**
-   * One product whose quantity only the stubbed POST /api/stock-movements changes. `hold` delays the next
-   * answer until released; `conflictOnHand` makes the next POST lose to a colleague with that much left.
+   * One product whose quantity only the stubbed POST /api/stock-movements changes, with the server's rules:
+   * nothing below 0, nothing on an archived product. `hold` delays the next answer until released;
+   * `conflictOnHand` makes the next POST lose to a colleague with that much left.
    */
-  const stubStock = async (page: Page) => {
-    const state = { quantity: MOUSE.quantity, conflictOnHand: null as number | null, hold: null as Promise<void> | null };
+  const stubStock = async (page: Page, user = staff) => {
+    const state = {
+      quantity: MOUSE.quantity,
+      archived: false,
+      conflictOnHand: null as number | null,
+      hold: null as Promise<void> | null,
+    };
     const bodies: Record<string, unknown>[] = [];
-    await page.route('**/api/auth/me', (route) => route.fulfill({ json: staff }));
+    const conflict = (code: string, message: string, details?: unknown) => ({
+      status: 409,
+      json: { error: { code, message, ...(details !== undefined && { details }) } },
+    });
+    await page.route('**/api/auth/me', (route) => route.fulfill({ json: user }));
+    // An admin's nav asks for the pending-users count; unstubbed, its 401 would end the session
+    await page.route('**/api/users?*', (route) => route.fulfill({ json: pageOf([], 1) }));
     await page.route(/\/api\/products(\?.*)?$/, (route) =>
       route.fulfill({ json: pageOf([{ ...MOUSE, quantity: state.quantity }], 20) })
     );
@@ -166,12 +179,14 @@ test.describe('inline stock −/+ (stubbed API)', () => {
       if (state.conflictOnHand !== null) {
         state.quantity = state.conflictOnHand;
         state.conflictOnHand = null;
-        return route.fulfill({
-          status: 409,
-          json: { error: { code: 'INSUFFICIENT_STOCK', message: `Only ${state.quantity} on hand.`, details: { onHand: state.quantity } } },
-        });
+      }
+      if (state.archived) {
+        return route.fulfill(conflict('PRODUCT_ARCHIVED', 'This product is archived; its stock cannot change.'));
       }
       const delta = body.type === 'ship' ? -body.quantity : body.quantity;
+      if (state.quantity + delta < 0) {
+        return route.fulfill(conflict('INSUFFICIENT_STOCK', `Only ${state.quantity} on hand.`, { onHand: state.quantity }));
+      }
       state.quantity += delta;
       return route.fulfill({
         status: 201,
@@ -182,10 +197,10 @@ test.describe('inline stock −/+ (stubbed API)', () => {
           quantityAfter: state.quantity,
           unitCost: MOUSE.costPrice,
           unitPrice: MOUSE.salePrice,
-          note: null,
+          note: body.note ?? null,
           occurredAt: '2026-10-18T10:00:00.000Z',
           product: { id: MOUSE.id, title: MOUSE.title, sku: MOUSE.sku, archived: false },
-          user: { id: staff.id, name: staff.name },
+          user: { id: user.id, name: user.name },
         },
       });
     });
@@ -242,5 +257,116 @@ test.describe('inline stock −/+ (stubbed API)', () => {
     await expect(page.locator('[data-sonner-toast]').getByText('Only 0 on hand.')).toBeVisible();
     await expect(row.getByText('0', { exact: true })).toBeVisible();
     await expect(row.getByRole('button', { name: 'Ship 1 Wireless Mouse' })).toBeDisabled();
+  });
+
+  const openAdjustStock = async (page: Page, tab: 'Receive' | 'Ship' | 'Manual Adjustment') => {
+    await page.getByRole('button', { name: 'Adjust stock of Wireless Mouse' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Adjust stock' });
+    await expect(dialog).toContainText('Wireless Mouse (ELE-001): 1 pcs on hand.');
+    await dialog.getByRole('tab', { name: tab }).click();
+    return dialog;
+  };
+
+  test('Receive: an admin receives 5 with a note; the amount must be a whole number', async ({ page }) => {
+    const { bodies } = await stubStock(page, admin);
+    await page.goto('/app/products');
+    const dialog = await openAdjustStock(page, 'Receive');
+    const quantity = dialog.getByLabel('Quantity to receive');
+    const submit = dialog.getByRole('button', { name: 'Receive stock' });
+
+    await quantity.fill('5 boxes');
+    await submit.click();
+    await expect(dialog.getByText('Quantity must be a number')).toBeVisible();
+    await quantity.fill('2.5');
+    await submit.click();
+    await expect(dialog.getByText('Quantity must be a whole number')).toBeVisible();
+    expect(bodies).toHaveLength(0);
+
+    await quantity.fill('5');
+    await dialog.getByLabel('Note (optional)').fill('  PO-17 ');
+    await submit.click();
+
+    await expect(page.getByText('Received 5 × Wireless Mouse')).toBeVisible();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole('row', { name: /Wireless Mouse/ }).getByText('6', { exact: true })).toBeVisible();
+    expect(bodies).toEqual([{ productId: 'p1', type: 'receive', quantity: 5, note: 'PO-17' }]);
+  });
+
+  test('Ship: warns past the count on hand, the server refuses with "only N on hand", then ships what is there', async ({
+    page,
+  }) => {
+    const { bodies } = await stubStock(page);
+    await page.goto('/app/products');
+    const dialog = await openAdjustStock(page, 'Ship');
+    const quantity = dialog.getByLabel('Quantity to ship');
+    const warning = 'Only 1 on hand. This would take stock below 0 and will be refused.';
+
+    await quantity.fill('1');
+    await expect(dialog.getByText(warning)).toHaveCount(0);
+    await quantity.fill('3');
+    await expect(dialog.getByText(warning)).toBeVisible();
+
+    // A warning, not a block: the server has the last word
+    await dialog.getByRole('button', { name: 'Ship stock' }).click();
+    await expect(page.locator('[data-sonner-toast]').getByText('Only 1 on hand.')).toBeVisible();
+    await expect(dialog.getByText('Only 1 on hand.', { exact: true })).toBeVisible();
+
+    await quantity.fill('1');
+    await dialog.getByRole('button', { name: 'Ship stock' }).click();
+    await expect(page.getByText('Shipped 1 × Wireless Mouse')).toBeVisible();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole('row', { name: /Wireless Mouse/ })).toContainText('Out of stock');
+    expect(bodies).toEqual([
+      { productId: 'p1', type: 'ship', quantity: 3 },
+      { productId: 'p1', type: 'ship', quantity: 1 },
+    ]);
+  });
+
+  test('Manual Adjustment: needs a reason and a non-zero change, is refused below 0, and records a signed change', async ({
+    page,
+  }) => {
+    const { bodies } = await stubStock(page);
+    await page.goto('/app/products');
+    const dialog = await openAdjustStock(page, 'Manual Adjustment');
+    const change = dialog.getByLabel('Change');
+    const submit = dialog.getByRole('button', { name: 'Record adjustment' });
+
+    await change.fill('2');
+    await submit.click();
+    await expect(dialog.getByText('An adjustment needs a reason')).toBeVisible();
+    await dialog.getByLabel('Reason').fill('Shelf count');
+    await change.fill('0');
+    await submit.click();
+    await expect(dialog.getByText('An adjustment cannot be 0')).toBeVisible();
+    expect(bodies).toHaveLength(0);
+
+    await change.fill('-4');
+    await expect(dialog.getByText('Only 1 on hand. This would take stock below 0 and will be refused.')).toBeVisible();
+    await submit.click();
+    await expect(page.locator('[data-sonner-toast]').getByText('Only 1 on hand.')).toBeVisible();
+
+    await change.fill('-1');
+    await dialog.getByLabel('Reason').fill('Damaged in transit');
+    await submit.click();
+    await expect(page.getByText('Adjusted 1 × Wireless Mouse')).toBeVisible();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole('row', { name: /Wireless Mouse/ })).toContainText('Out of stock');
+    expect(bodies).toEqual([
+      { productId: 'p1', type: 'adjustment', quantity: -4, note: 'Shelf count' },
+      { productId: 'p1', type: 'adjustment', quantity: -1, note: 'Damaged in transit' },
+    ]);
+  });
+
+  test('a product archived meanwhile is refused with a clear message', async ({ page }) => {
+    const { state } = await stubStock(page);
+    await page.goto('/app/products');
+    const dialog = await openAdjustStock(page, 'Receive');
+
+    state.archived = true;
+    await dialog.getByLabel('Quantity to receive').fill('2');
+    await dialog.getByRole('button', { name: 'Receive stock' }).click();
+    const message = 'This product is archived; its stock cannot change.';
+    await expect(page.locator('[data-sonner-toast]').getByText(message)).toBeVisible();
+    await expect(dialog.getByRole('alert')).toHaveText(message);
   });
 });

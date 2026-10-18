@@ -209,6 +209,7 @@ Where the PRD and the agreed Q&A conflict, the Q&A wins (`docs/adr/0001`). C17â€
 *Applied in #30. An unknown product is 404 `NOT_FOUND`.*
 
 - PRD: 400. Agreed: 409 `INSUFFICIENT_STOCK` with `details: { onHand }`. Any stock change on an archived product is 409 `PRODUCT_ARCHIVED`; archived is reported before insufficient.
+- *#31:* the Adjust Stock dialog's Ship tab (and a negative Manual Adjustment) **warns** when the amount exceeds the on-hand count the table shows, but does not block: `docs/PRDs/03-products.md` says the Ship tab "blocks/validates", the #27 spec (story 33) says it warns before submitting. The server's 409 stays the only refusal, since the count on screen can be stale.
 
 ## C21. Product edit is `PATCH`
 

@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { ImageIcon, Minus, Plus } from 'lucide-react';
+import { createContext, use, type ReactNode } from 'react';
+import { ArrowLeftRight, ImageIcon, Minus, Plus } from 'lucide-react';
 import { createColumnHelper, tableFeatures, useTable } from '@tanstack/react-table';
 import {
   PERMISSIONS,
@@ -27,8 +27,14 @@ const STATUS_BADGES: Record<ProductStatus, { label: string; variant: BadgeProps[
   archived: { label: 'Archived', variant: 'secondary' },
 };
 
-/** Right-aligned number columns (DESIGN.md table pattern). */
-const NUMERIC = new Set(['costPrice', 'salePrice', 'quantity']);
+/** Right-aligned columns (DESIGN.md table pattern): the numbers and the actions. */
+const RIGHT_ALIGNED = new Set(['costPrice', 'salePrice', 'quantity', 'actions']);
+
+/** What the row actions open. The columns live at module scope, so the page hands its handlers down this way. */
+interface ProductRowActions {
+  onAdjustStock: (product: Product) => void;
+}
+const RowActionsContext = createContext<ProductRowActions | null>(null);
 
 const columns = column.columns([
   column.accessor('title', {
@@ -60,6 +66,11 @@ const columns = column.columns([
       return <Badge variant={variant}>{label}</Badge>;
     },
   }),
+  column.display({
+    id: 'actions',
+    header: 'Actions',
+    cell: ({ row }) => <RowActions product={row.original} />,
+  }),
 ]);
 
 function ProductCell({ product }: { product: Product }) {
@@ -76,6 +87,9 @@ function ProductCell({ product }: { product: Product }) {
     </div>
   );
 }
+
+/** Stock changes need STOCK_ADJUST, and archived products are frozen. */
+const useCanChangeStock = (product: Product) => useCan(PERMISSIONS.STOCK_ADJUST) && product.status !== 'archived';
 
 function QuantityCell({ product }: { product: Product }) {
   const { quantity } = product;
@@ -102,9 +116,9 @@ function QuantityCell({ product }: { product: Product }) {
  * Not optimistic; both buttons wait while one runs. Archived products are frozen, so they get none.
  */
 function QuantityStepper({ product, children }: { product: Product; children: ReactNode }) {
-  const canAdjust = useCan(PERMISSIONS.STOCK_ADJUST);
+  const canChangeStock = useCanChangeStock(product);
   const record = useRecordMovement();
-  if (!canAdjust || product.status === 'archived') return children;
+  if (!canChangeStock) return children;
 
   const step = (type: typeof STOCK_MOVEMENT_TYPES.RECEIVE | typeof STOCK_MOVEMENT_TYPES.SHIP) =>
     record.mutate({ productId: product.id, type, quantity: 1 });
@@ -133,36 +147,52 @@ function QuantityStepper({ product, children }: { product: Product; children: Re
   );
 }
 
-/** The products list as a TanStack Table. Paging is server-side (the page's Pager); sorting arrives in #34. Quantity has inline −/+ (#30). */
-export function ProductsTable({ products }: { products: Product[] }) {
+/** Ghost icon buttons (DESIGN.md): Adjust stock (#31). Archived products are frozen, so they get none. */
+function RowActions({ product }: { product: Product }) {
+  const actions = use(RowActionsContext);
+  const canChangeStock = useCanChangeStock(product);
+  if (!actions || !canChangeStock) return null;
+  return (
+    <div className="flex justify-end gap-1">
+      <Button variant="ghost" size="icon" aria-label={`Adjust stock of ${product.title}`} onClick={() => actions.onAdjustStock(product)}>
+        <ArrowLeftRight />
+      </Button>
+    </div>
+  );
+}
+
+/** The products list as a TanStack Table. Paging is server-side (the page's Pager); sorting arrives in #34. Quantity has inline −/+ (#30); Actions has Adjust stock (#31). */
+export function ProductsTable({ products, ...actions }: { products: Product[] } & ProductRowActions) {
   const table = useTable({ features, columns, data: products, getRowId: (product) => product.id });
 
   return (
-    <div className="overflow-x-auto rounded-xl border bg-card">
-      <Table>
-        <TableHeader>
-          {table.getHeaderGroups().map((group) => (
-            <TableRow key={group.id}>
-              {group.headers.map((header) => (
-                <TableHead key={header.id} className={cn(NUMERIC.has(header.column.id) && 'text-right')}>
-                  {header.isPlaceholder ? null : <table.FlexRender header={header} />}
-                </TableHead>
-              ))}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows.map((row) => (
-            <TableRow key={row.id}>
-              {row.getAllCells().map((cell) => (
-                <TableCell key={cell.id} className={cn(NUMERIC.has(cell.column.id) && 'text-right tabular-nums')}>
-                  <table.FlexRender cell={cell} />
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <RowActionsContext value={actions}>
+      <div className="overflow-x-auto rounded-xl border bg-card">
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((group) => (
+              <TableRow key={group.id}>
+                {group.headers.map((header) => (
+                  <TableHead key={header.id} className={cn(RIGHT_ALIGNED.has(header.column.id) && 'text-right')}>
+                    {header.isPlaceholder ? null : <table.FlexRender header={header} />}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows.map((row) => (
+              <TableRow key={row.id}>
+                {row.getAllCells().map((cell) => (
+                  <TableCell key={cell.id} className={cn(RIGHT_ALIGNED.has(cell.column.id) && 'text-right tabular-nums')}>
+                    <table.FlexRender cell={cell} />
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </RowActionsContext>
   );
 }

@@ -6,6 +6,7 @@ import { ListMessage } from '@/components/ListMessage';
 import { Pager } from '@/components/Pager';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AdjustStockDialog } from '../components/AdjustStockDialog';
 import { ProductFormDialog } from '../components/ProductFormDialog';
 import { ProductsTable } from '../components/ProductsTable';
 import { useProducts } from '../hooks/useProducts';
@@ -14,8 +15,11 @@ import { useProducts } from '../hooks/useProducts';
 export default function Products() {
   const [page, setPage] = useState(1);
   const [creating, setCreating] = useState(false);
+  const [adjustingId, setAdjustingId] = useState<string | null>(null);
   const query = useProducts({ page, limit: PRODUCTS_PAGE_SIZE_DEFAULT });
   const { data } = query;
+  // Looked up in the live list, so the on-hand count in the dialog follows every refetch
+  const adjusting = data?.items.find((product) => product.id === adjustingId);
 
   return (
     <div className="space-y-6">
@@ -52,12 +56,13 @@ export default function Products() {
       {data && data.items.length === 0 && <ListMessage>No products yet.</ListMessage>}
       {data && data.items.length > 0 && (
         <>
-          <ProductsTable products={data.items} />
+          <ProductsTable products={data.items} onAdjustStock={(product) => setAdjustingId(product.id)} />
           <Pager meta={data} onPage={setPage} />
         </>
       )}
 
       <ProductFormDialog open={creating} onOpenChange={setCreating} />
+      <AdjustStockDialog product={adjusting} onOpenChange={(open) => !open && setAdjustingId(null)} />
     </div>
   );
 }

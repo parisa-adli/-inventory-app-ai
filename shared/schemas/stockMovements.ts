@@ -24,25 +24,56 @@ export const stockMovementRuleError = (
   return null;
 };
 
+const productId = objectId('Choose a product');
+const type = z.enum(STOCK_MOVEMENT_TYPES, { error: 'Type must be receive, ship or adjustment' });
+
+/** Trimmed; a blank note counts as no note. */
+const note = z
+  .string()
+  .trim()
+  .max(STOCK_MOVEMENT_NOTE_MAX, `Note must be at most ${STOCK_MOVEMENT_NOTE_MAX} characters`)
+  .transform((value) => value || undefined);
+
+const checkRules = (
+  { type, quantity, note }: { type: StockMovementType; quantity: number; note?: string },
+  ctx: z.RefinementCtx
+) => {
+  const broken = stockMovementRuleError(type, quantity, note);
+  if (broken) ctx.addIssue({ code: 'custom', path: [broken.path], message: broken.message });
+};
+
 /**
  * Body of POST /api/stock-movements. `occurredAt` is never accepted here (unknown keys are stripped):
  * only the seed backdates a movement. A blank note counts as no note.
  */
 export const createStockMovementSchema = z
   .object({
-    productId: objectId('Choose a product'),
-    type: z.enum(STOCK_MOVEMENT_TYPES, { error: 'Type must be receive, ship or adjustment' }),
+    productId,
+    type,
     quantity: z.number({ error: 'Quantity must be a number' }),
-    note: z
-      .string()
-      .trim()
-      .max(STOCK_MOVEMENT_NOTE_MAX, `Note must be at most ${STOCK_MOVEMENT_NOTE_MAX} characters`)
-      .transform((note) => note || undefined)
-      .optional(),
+    note: note.optional(),
   })
-  .superRefine(({ type, quantity, note }, ctx) => {
-    const broken = stockMovementRuleError(type, quantity, note);
-    if (broken) ctx.addIssue({ code: 'custom', path: [broken.path], message: broken.message });
-  });
+  .superRefine(checkRules);
 
 export type CreateStockMovementInput = z.infer<typeof createStockMovementSchema>;
+
+/**
+ * The Adjust Stock dialog: the amount is typed as text (plain digits with an optional sign, not `1e2`),
+ * then the same rules and messages as the API. The dialog adds the product it was opened for, which makes
+ * the output a valid POST /api/stock-movements body (no hidden field the user could not fix).
+ */
+export const stockMovementFormSchema = z
+  .object({
+    type,
+    quantity: z
+      .string()
+      .trim()
+      .min(1, { error: 'Quantity is required', abort: true })
+      .regex(/^[-+]?(\d+\.?\d*|\.\d+)$/, { error: 'Quantity must be a number', abort: true })
+      .transform(Number),
+    note,
+  })
+  .superRefine(checkRules);
+
+export type StockMovementFormInput = z.input<typeof stockMovementFormSchema>;
+export type StockMovementFormValues = z.output<typeof stockMovementFormSchema>;

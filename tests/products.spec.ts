@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 // Products page against a stubbed API: create a product (#29), inline -/+ (#30), the Adjust Stock dialog (#31)
-// and the Stock History dialog (#32).
+// and the Stock History dialog (#32), and the Movements page those changes feed (#39).
 
 const staff = { id: 's1', name: 'Staff', email: 'staff@inventory.local', role: 'staff', status: 'active', emailVerified: true };
 const admin = { ...staff, id: 'a1', name: 'Admin', email: 'admin@inventory.local', role: 'admin' };
@@ -431,5 +431,41 @@ test.describe('stock changes (stubbed API)', () => {
     await expect(rows.nth(2)).toContainText('Receive');
     await expect(rows.nth(2)).toContainText('+1');
     await expect(rows.nth(2).getByRole('cell').nth(3)).toHaveText('2');
+  });
+
+  test('inline −/+ and an adjustment show on the Movements page with the user who made them', async ({ page }) => {
+    await stubStock(page);
+    await page.goto('/app/products');
+    const row = page.getByRole('row', { name: /Wireless Mouse/ });
+
+    await row.getByRole('button', { name: 'Receive 1 Wireless Mouse' }).click();
+    await expect(page.getByText('Received 1 × Wireless Mouse')).toBeVisible();
+    await expect(row.getByRole('button', { name: 'Receive 1 Wireless Mouse' })).toBeEnabled();
+    await row.getByRole('button', { name: 'Ship 1 Wireless Mouse' }).click();
+    await expect(page.getByText('Shipped 1 × Wireless Mouse')).toBeVisible();
+    await expect(row.getByRole('button', { name: 'Ship 1 Wireless Mouse' })).toBeEnabled();
+    const adjust = await openAdjustStock(page, 'Manual Adjustment');
+    await adjust.getByLabel('Change').fill('4');
+    await adjust.getByLabel('Reason').fill('Shelf count found four more');
+    await adjust.getByRole('button', { name: 'Record adjustment' }).click();
+    await expect(adjust).toBeHidden();
+
+    await page.getByRole('link', { name: 'Movements' }).first().click();
+    await expect(page).toHaveURL(/\/app\/movements$/);
+    const rows = page.getByRole('row');
+    // A header row, then newest first; the ship and receive of 1 carry no note
+    await expect(rows).toHaveCount(4);
+    await expect(rows.nth(1)).toContainText('Adjustment');
+    await expect(rows.nth(1)).toContainText('+4');
+    await expect(rows.nth(1)).toContainText('Shelf count found four more');
+    await expect(rows.nth(2)).toContainText('Ship');
+    await expect(rows.nth(2)).toContainText('−1');
+    await expect(rows.nth(2).getByRole('cell').nth(5)).toHaveText('—');
+    await expect(rows.nth(3)).toContainText('Receive');
+    await expect(rows.nth(3)).toContainText('+1');
+    for (const n of [1, 2, 3]) {
+      await expect(rows.nth(n)).toContainText('Wireless Mouse');
+      await expect(rows.nth(n).getByRole('cell').last()).toHaveText('Staff');
+    }
   });
 });

@@ -182,11 +182,11 @@ PRD §2 changed: staff may create and edit categories and suppliers; delete stay
 
 ## Products & stock ledger (P3/P4, spec #27; agreed in the design Q&A, 2026-10-18)
 
-Where the PRD and the agreed Q&A conflict, the Q&A wins (`docs/adr/0001`). C17–C23 are agreed but not yet applied; each is marked applied when the #27 commit that implements it lands. Already applied in the prefactor (#28): the movement type `adjustment` (was `adjust`), `LOW_STOCK_THRESHOLD = 10` with `getStockStatus` (out = 0, low = 1–10, in = more than 10), and the `STOCK_RECONCILE` permission.
+Where the PRD and the agreed Q&A conflict, the Q&A wins (`docs/adr/0001`). C17–C24 are all applied (each entry names the issue that applied it) and were verified against a freshly seeded app in the P3/P4 acceptance run (#39). Also applied in the prefactor (#28): the movement type `adjustment` (was `adjust`), `LOW_STOCK_THRESHOLD = 10` with `getStockStatus` (out = 0, low = 1–10, in = more than 10), and the `STOCK_RECONCILE` permission.
 
 ## C17. StockMovement stores a signed delta and snapshots
 
-*Applied in #30 (`models/StockMovement.ts`, its update/delete hooks, and the stock module `services/stock.ts`). Filtering and sorting by `occurredAt` land with the movements list.*
+*Applied in #30 (`models/StockMovement.ts`, its update/delete hooks, and the stock module `services/stock.ts`); filtering and newest-first sorting by `occurredAt` in #32 (`GET /api/stock-movements`).*
 
 - PRD: magnitude `quantity` and `resultingQuantity`. Agreed: signed **`delta`** (non-zero integer), **`quantityAfter`**, the price snapshots **`unitCost` / `unitPrice`** (new) and **`occurredAt`** (defaults to now; only the seed backdates it). Date filtering and newest-first sorting use `occurredAt`.
 - Movements cannot be updated or deleted (model hooks).

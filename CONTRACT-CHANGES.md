@@ -226,6 +226,8 @@ Where the PRD and the agreed Q&A conflict, the Q&A wins (`docs/adr/0001`). C17â€
 
 ## C23. Seed: about 60 generated products
 
+*Applied in #38 (`server/src/seedDatabase.ts`, `shared/seed-data/{products,stock-movements}.ts`): 60 products, 2 archived; the history depends only on the UTC day of the run.*
+
 - The seed replaces the 32 hand-written products with about 60 generated ones across 6 of the 8 categories. Quantities are no longer stored in the seed data: they come from replayed movements (an opening balance about 90 days ago, then a fixed-seed history), and the seed fails if reconciliation reports any mismatch.
 
 ## C24. Archive, unarchive and delete a product (admin)

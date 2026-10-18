@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 
 /**
- * A throwaway in-memory mongod per test file, for the stock and product test files only; every other DB test
+ * A throwaway in-memory mongod per test file, for the stock, product and seed test files only; every other DB test
  * stays on the local *_test database (./db.ts). The binary is cached in the root node_modules/.cache/mongodb-memory-server
  * (MONGOMS_DOWNLOAD_DIR in vitest.config.ts). npm's allowScripts skipped the package's postinstall download,
  * so the first run downloads it (a ~780 MB archive; about 3 minutes on this machine).

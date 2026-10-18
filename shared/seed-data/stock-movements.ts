@@ -1,305 +1,113 @@
-import { STOCK_MOVEMENT_TYPES } from '../constants';
+import { ACCOUNT_STATUS, STOCK_MOVEMENT_TYPES, USER_ROLES, signedDelta, type StockMovementType } from '../constants';
+import type { SeedProduct } from './products';
+import { seedUsers } from './users';
 
 /**
- * Seed stock movements - historical stock changes
+ * Seed stock movements (#38), generated rather than written by hand: an opening balance about 90 days back,
+ * then receives, ships and the odd adjustment, ending on each product's `targetQuantity`. The seed replays
+ * them in order through the stock module, so every seeded quantity is a ledger sum like real stock.
  *
- * Note: productRef and userRef are identifier strings that will be resolved during seeding
- * - productRef: product SKU to look up
- * - userRef: user email to look up
- * - createdAt: dates are relative to seeding time for realistic historical data
+ * Deterministic: each product's ledger comes from a fixed-seed generator keyed by its SKU, and the dates are
+ * whole days before the UTC day of `now`, so two seeds on the same day produce identical movements.
  */
-export const seedStockMovements = [
-  // Electronics - Wireless Mouse initial stock
-  {
-    productRef: 'ELEC-WM-001',
-    type: STOCK_MOVEMENT_TYPES.RECEIVE,
-    quantity: 200,
-    resultingQuantity: 200,
-    note: 'Initial stock receipt',
-    userRef: 'admin@inventory.local',
-    createdAt: new Date('2026-09-01T09:00:00Z'),
-  },
-  {
-    productRef: 'ELEC-WM-001',
-    type: STOCK_MOVEMENT_TYPES.SHIP,
-    quantity: 50,
-    resultingQuantity: 150,
-    note: 'Bulk order to corporate client',
-    userRef: 'sarah.manager@inventory.local',
-    createdAt: new Date('2026-09-15T14:30:00Z'),
-  },
+export interface SeedMovement {
+  productRef: string;
+  type: StockMovementType;
+  /** As the stock module takes it: positive for receive / ship, signed for an adjustment. */
+  quantity: number;
+  note: string | null;
+  userRef: string;
+  occurredAt: Date;
+}
 
-  // USB-C Cables
-  {
-    productRef: 'ELEC-USBC-002',
-    type: STOCK_MOVEMENT_TYPES.RECEIVE,
-    quantity: 500,
-    resultingQuantity: 500,
-    note: 'Bulk order arrival',
-    userRef: 'admin@inventory.local',
-    createdAt: new Date('2026-08-20T10:00:00Z'),
-  },
-  {
-    productRef: 'ELEC-USBC-002',
-    type: STOCK_MOVEMENT_TYPES.SHIP,
-    quantity: 150,
-    resultingQuantity: 350,
-    note: 'Retail distribution',
-    userRef: 'john.staff@inventory.local',
-    createdAt: new Date('2026-09-10T11:15:00Z'),
-  },
-  {
-    productRef: 'ELEC-USBC-002',
-    type: STOCK_MOVEMENT_TYPES.SHIP,
-    quantity: 50,
-    resultingQuantity: 300,
-    note: 'Office supply order',
-    userRef: 'emily.staff@inventory.local',
-    createdAt: new Date('2026-09-20T15:45:00Z'),
-  },
+/** How far back the opening balances are. */
+const SEED_HISTORY_DAYS = 90;
 
-  // Laptop Stand - low stock example
-  {
-    productRef: 'ELEC-LS-003',
-    type: STOCK_MOVEMENT_TYPES.RECEIVE,
-    quantity: 100,
-    resultingQuantity: 100,
-    note: 'New product line',
-    userRef: 'admin@inventory.local',
-    createdAt: new Date('2026-08-15T09:30:00Z'),
-  },
-  {
-    productRef: 'ELEC-LS-003',
-    type: STOCK_MOVEMENT_TYPES.SHIP,
-    quantity: 55,
-    resultingQuantity: 45,
-    note: 'Multiple small orders',
-    userRef: 'sarah.manager@inventory.local',
-    createdAt: new Date('2026-09-18T13:20:00Z'),
-  },
+const DAY_MS = 86_400_000;
+const HOUR_MS = 3_600_000;
+const MINUTE_MS = 60_000;
 
-  // Webcam - very low stock
-  {
-    productRef: 'ELEC-WC-004',
-    type: STOCK_MOVEMENT_TYPES.RECEIVE,
-    quantity: 50,
-    resultingQuantity: 50,
-    note: 'Initial inventory',
-    userRef: 'admin@inventory.local',
-    createdAt: new Date('2026-08-10T08:00:00Z'),
-  },
-  {
-    productRef: 'ELEC-WC-004',
-    type: STOCK_MOVEMENT_TYPES.SHIP,
-    quantity: 30,
-    resultingQuantity: 20,
-    note: 'Remote work equipment package',
-    userRef: 'john.staff@inventory.local',
-    createdAt: new Date('2026-09-05T10:30:00Z'),
-  },
-  {
-    productRef: 'ELEC-WC-004',
-    type: STOCK_MOVEMENT_TYPES.SHIP,
-    quantity: 10,
-    resultingQuantity: 10,
-    note: 'Conference room setup',
-    userRef: 'sarah.manager@inventory.local',
-    createdAt: new Date('2026-09-22T14:00:00Z'),
-  },
-  {
-    productRef: 'ELEC-WC-004',
-    type: STOCK_MOVEMENT_TYPES.ADJUSTMENT,
-    quantity: -2,
-    resultingQuantity: 8,
-    note: 'Damaged units - water damage in storage',
-    userRef: 'admin@inventory.local',
-    createdAt: new Date('2026-09-24T16:30:00Z'),
-  },
+const OPENING_BALANCE_USER = seedUsers.find((user) => user.role === USER_ROLES.ADMIN)!.email;
+const STOCK_KEEPERS = seedUsers.filter((user) => user.status === ACCOUNT_STATUS.ACTIVE).map((user) => user.email);
 
-  // Mechanical Keyboard - out of stock scenario
-  {
-    productRef: 'ELEC-KB-005',
-    type: STOCK_MOVEMENT_TYPES.RECEIVE,
-    quantity: 75,
-    resultingQuantity: 75,
-    note: 'Premium product line launch',
-    userRef: 'admin@inventory.local',
-    createdAt: new Date('2026-08-01T09:00:00Z'),
-  },
-  {
-    productRef: 'ELEC-KB-005',
-    type: STOCK_MOVEMENT_TYPES.SHIP,
-    quantity: 75,
-    resultingQuantity: 0,
-    note: 'Sold out - high demand product',
-    userRef: 'sarah.manager@inventory.local',
-    createdAt: new Date('2026-09-20T11:00:00Z'),
-  },
-
-  // A4 Paper - high volume item
-  {
-    productRef: 'OFF-A4-001',
-    type: STOCK_MOVEMENT_TYPES.RECEIVE,
-    quantity: 1000,
-    resultingQuantity: 1000,
-    note: 'Monthly bulk order',
-    userRef: 'admin@inventory.local',
-    createdAt: new Date('2026-09-01T07:00:00Z'),
-  },
-  {
-    productRef: 'OFF-A4-001',
-    type: STOCK_MOVEMENT_TYPES.SHIP,
-    quantity: 300,
-    resultingQuantity: 700,
-    note: 'Office distribution',
-    userRef: 'john.staff@inventory.local',
-    createdAt: new Date('2026-09-10T09:00:00Z'),
-  },
-  {
-    productRef: 'OFF-A4-001',
-    type: STOCK_MOVEMENT_TYPES.SHIP,
-    quantity: 200,
-    resultingQuantity: 500,
-    note: 'School supply order',
-    userRef: 'emily.staff@inventory.local',
-    createdAt: new Date('2026-09-20T10:30:00Z'),
-  },
-
-  // Office Desk
-  {
-    productRef: 'FURN-DESK-001',
-    type: STOCK_MOVEMENT_TYPES.RECEIVE,
-    quantity: 20,
-    resultingQuantity: 20,
-    note: 'Quarterly furniture shipment',
-    userRef: 'admin@inventory.local',
-    createdAt: new Date('2026-08-25T08:00:00Z'),
-  },
-  {
-    productRef: 'FURN-DESK-001',
-    type: STOCK_MOVEMENT_TYPES.SHIP,
-    quantity: 8,
-    resultingQuantity: 12,
-    note: 'New office setup',
-    userRef: 'sarah.manager@inventory.local',
-    createdAt: new Date('2026-09-12T13:00:00Z'),
-  },
-
-  // Cordless Drill Kit
-  {
-    productRef: 'TOOL-DR-001',
-    type: STOCK_MOVEMENT_TYPES.RECEIVE,
-    quantity: 50,
-    resultingQuantity: 50,
-    note: 'Tool inventory restock',
-    userRef: 'admin@inventory.local',
-    createdAt: new Date('2026-08-30T09:00:00Z'),
-  },
-  {
-    productRef: 'TOOL-DR-001',
-    type: STOCK_MOVEMENT_TYPES.SHIP,
-    quantity: 20,
-    resultingQuantity: 30,
-    note: 'Construction contractor order',
-    userRef: 'john.staff@inventory.local',
-    createdAt: new Date('2026-09-15T11:30:00Z'),
-  },
-  {
-    productRef: 'TOOL-DR-001',
-    type: STOCK_MOVEMENT_TYPES.SHIP,
-    quantity: 5,
-    resultingQuantity: 25,
-    note: 'Maintenance team requisition',
-    userRef: 'emily.staff@inventory.local',
-    createdAt: new Date('2026-09-23T14:15:00Z'),
-  },
-
-  // Cardboard Boxes - high turnover
-  {
-    productRef: 'PACK-BOX-001',
-    type: STOCK_MOVEMENT_TYPES.RECEIVE,
-    quantity: 2000,
-    resultingQuantity: 2000,
-    note: 'Monthly packaging supply',
-    userRef: 'admin@inventory.local',
-    createdAt: new Date('2026-09-01T08:00:00Z'),
-  },
-  {
-    productRef: 'PACK-BOX-001',
-    type: STOCK_MOVEMENT_TYPES.SHIP,
-    quantity: 500,
-    resultingQuantity: 1500,
-    note: 'Shipping department',
-    userRef: 'john.staff@inventory.local',
-    createdAt: new Date('2026-09-08T10:00:00Z'),
-  },
-  {
-    productRef: 'PACK-BOX-001',
-    type: STOCK_MOVEMENT_TYPES.SHIP,
-    quantity: 500,
-    resultingQuantity: 1000,
-    note: 'Warehouse operations',
-    userRef: 'emily.staff@inventory.local',
-    createdAt: new Date('2026-09-18T09:30:00Z'),
-  },
-
-  // Safety Glasses - inventory adjustment example
-  {
-    productRef: 'SAFE-SG-001',
-    type: STOCK_MOVEMENT_TYPES.RECEIVE,
-    quantity: 60,
-    resultingQuantity: 60,
-    note: 'Safety equipment restock',
-    userRef: 'admin@inventory.local',
-    createdAt: new Date('2026-08-28T09:00:00Z'),
-  },
-  {
-    productRef: 'SAFE-SG-001',
-    type: STOCK_MOVEMENT_TYPES.ADJUSTMENT,
-    quantity: -10,
-    resultingQuantity: 50,
-    note: 'Physical count correction - found broken units',
-    userRef: 'sarah.manager@inventory.local',
-    createdAt: new Date('2026-09-21T15:00:00Z'),
-  },
-
-  // First Aid Kit - low stock alert item
-  {
-    productRef: 'SAFE-FAK-004',
-    type: STOCK_MOVEMENT_TYPES.RECEIVE,
-    quantity: 10,
-    resultingQuantity: 10,
-    note: 'Safety compliance order',
-    userRef: 'admin@inventory.local',
-    createdAt: new Date('2026-08-20T10:00:00Z'),
-  },
-  {
-    productRef: 'SAFE-FAK-004',
-    type: STOCK_MOVEMENT_TYPES.SHIP,
-    quantity: 7,
-    resultingQuantity: 3,
-    note: 'Facility safety stations',
-    userRef: 'sarah.manager@inventory.local',
-    createdAt: new Date('2026-09-16T13:45:00Z'),
-  },
-
-  // Steel Rods
-  {
-    productRef: 'RAW-SR-001',
-    type: STOCK_MOVEMENT_TYPES.RECEIVE,
-    quantity: 200,
-    resultingQuantity: 200,
-    note: 'Raw materials delivery',
-    userRef: 'admin@inventory.local',
-    createdAt: new Date('2026-08-22T07:30:00Z'),
-  },
-  {
-    productRef: 'RAW-SR-001',
-    type: STOCK_MOVEMENT_TYPES.SHIP,
-    quantity: 100,
-    resultingQuantity: 100,
-    note: 'Production floor requisition',
-    userRef: 'john.staff@inventory.local',
-    createdAt: new Date('2026-09-14T09:00:00Z'),
-  },
+const WRITE_OFF_REASONS = [
+  'Cycle count, aisle 4: units found crushed under a collapsed pallet. Written off; photos attached to the damage report.',
+  'Water damage after the roof leak over bay C. Packaging soaked and unsellable; disposed of per the facilities ticket.',
+  'Customer return inspected and failed QA (missing parts). Not resellable, scrapped instead of restocked.',
+  'Quarterly stock take: count came in lower than the system. Likely an unrecorded sample given to a site visit.',
 ];
+const FOUND_REASONS = [
+  'Quarterly stock take: extra units found mislabelled in the overflow bin. Relabelled and added back.',
+  'Supplier over-delivered on the last purchase order; they confirmed in writing that we can keep the extra units.',
+  'Returned demo stock from the sales team, checked complete and in original packaging.',
+];
+
+/** FNV-1a: a stable 32-bit seed from a SKU. */
+const hashSeed = (text: string) => {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193);
+  return hash >>> 0;
+};
+
+/** mulberry32: a small seeded generator of numbers in [0, 1). */
+const seededRandom = (seed: number) => () => {
+  seed = (seed + 0x6d2b79f5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
+};
+
+const startOfUtcDay = (date: Date) => Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+
+const generateLedger = (product: SeedProduct, today: number): SeedMovement[] => {
+  const random = seededRandom(hashSeed(product.sku));
+  const between = (min: number, max: number) => min + Math.floor(random() * (max - min + 1));
+  const pick = <T>(items: readonly T[]) => items[Math.floor(random() * items.length)];
+  /** A time on the given day, inside the given working hours. */
+  const at = (daysAgo: number, fromHour: number, toHour: number) =>
+    new Date(today - daysAgo * DAY_MS + between(fromHour, toHour - 1) * HOUR_MS + between(0, 59) * MINUTE_MS);
+
+  const movements: SeedMovement[] = [];
+  let onHand = 0;
+  const add = (type: StockMovementType, quantity: number, note: string | null, userRef: string, occurredAt: Date) => {
+    movements.push({ productRef: product.sku, type, quantity, note, userRef, occurredAt });
+    onHand += signedDelta(type, quantity);
+  };
+  const salesOrder = () => `Sales order SO-${between(10000, 19999)}`;
+  const purchaseOrder = () => `PO-${between(2400, 2999)}${product.supplierRef ? ` from ${product.supplierRef}` : ', local purchase'}`;
+
+  // A product's usual stock, its daily chance of an order, and how big an order is
+  const usualStock = Math.round(Math.max(product.targetQuantity, 12) * (1.5 + random() * 1.5));
+  const shipChance = 0.25 + random() * 0.35;
+  const largestShip = Math.max(1, Math.round(usualStock * 0.15));
+
+  add(STOCK_MOVEMENT_TYPES.RECEIVE, usualStock, 'Opening balance', OPENING_BALANCE_USER, at(SEED_HISTORY_DAYS, 8, 9));
+
+  for (let daysAgo = SEED_HISTORY_DAYS - 1; daysAgo >= 2; daysAgo--) {
+    if (onHand > 0 && random() < shipChance) {
+      const quantity = Math.min(onHand, between(1, largestShip));
+      add(STOCK_MOVEMENT_TYPES.SHIP, quantity, salesOrder(), pick(STOCK_KEEPERS), at(daysAgo, 9, 13));
+    }
+    if (onHand < usualStock * 0.3 && random() < 0.5) {
+      add(STOCK_MOVEMENT_TYPES.RECEIVE, usualStock - onHand + between(0, largestShip), purchaseOrder(), pick(STOCK_KEEPERS), at(daysAgo, 13, 16));
+    }
+    if (random() < 0.015) {
+      const writeOff = onHand >= 3 && random() < 0.6;
+      const quantity = writeOff ? -between(1, Math.min(3, onHand)) : between(1, 3);
+      add(STOCK_MOVEMENT_TYPES.ADJUSTMENT, quantity, pick(writeOff ? WRITE_OFF_REASONS : FOUND_REASONS), pick(STOCK_KEEPERS), at(daysAgo, 16, 18));
+    }
+  }
+
+  // Yesterday's movement lands the ledger on the target
+  const gap = product.targetQuantity - onHand;
+  if (gap < 0) add(STOCK_MOVEMENT_TYPES.SHIP, -gap, salesOrder(), pick(STOCK_KEEPERS), at(1, 9, 17));
+  if (gap > 0) add(STOCK_MOVEMENT_TYPES.RECEIVE, gap, purchaseOrder(), pick(STOCK_KEEPERS), at(1, 9, 17));
+
+  return movements;
+};
+
+/** Every product's ledger, oldest first per product. Never-stocked products have none. */
+export const generateSeedMovements = (products: readonly SeedProduct[], now: Date): SeedMovement[] => {
+  const today = startOfUtcDay(now);
+  return products.filter((product) => !product.neverStocked).flatMap((product) => generateLedger(product, today));
+};

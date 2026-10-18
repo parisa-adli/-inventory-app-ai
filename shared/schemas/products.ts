@@ -1,6 +1,8 @@
 import { z } from 'zod';
+import { STOCK_STATUSES } from '../constants/stock-status';
 import { UNITS_OF_MEASURE } from '../constants/units';
 import { formField, objectId, requiredText } from './catalog';
+import { SORT_ORDERS } from './sort';
 
 export const PRODUCT_TITLE_MAX = 120;
 export const PRODUCT_SKU_MAX = 32;
@@ -76,12 +78,32 @@ export const productFormSchema = z.object({
   imageUrl: formField(imageUrl),
 });
 
+export const PRODUCT_SORTS = ['title', 'sku', 'quantity', 'costPrice', 'salePrice', 'createdAt'] as const;
+export type ProductSort = (typeof PRODUCT_SORTS)[number];
+export const PRODUCT_SORT_DEFAULT: ProductSort = 'title';
+
+/** The list tabs; a product's `status` is derived from `archivedAt` (`docs/adr/0003`). */
+export const PRODUCT_STATUSES = ['active', 'archived'] as const;
+
+/** The `supplier` filter value for products without a supplier. */
+export const UNASSIGNED_SUPPLIER = 'unassigned';
+
 /** Query string of GET /api/products. Values arrive as strings. */
 export const listProductsQuerySchema = z.object({
   /** Case-insensitive substring of the title or SKU; an empty string means no search. */
   search: z.string().trim().max(PRODUCT_SEARCH_MAX).optional(),
+  category: objectId('Invalid category id').optional(),
+  /** A supplier id, or `unassigned` for products without one. */
+  supplier: z.union([z.literal(UNASSIGNED_SUPPLIER), objectId('Invalid supplier id')]).optional(),
+  /** Derived from `archivedAt` (`docs/adr/0003`). */
+  status: z.enum(PRODUCT_STATUSES).default('active'),
+  stockStatus: z.enum(STOCK_STATUSES).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(PRODUCTS_PAGE_SIZE_MAX).default(PRODUCTS_PAGE_SIZE_DEFAULT),
+  /** Title A→Z by default. */
+  sort: z.enum(PRODUCT_SORTS).default(PRODUCT_SORT_DEFAULT),
+  /** Defaults to `defaultSortOrder(sort)`. */
+  order: z.enum(SORT_ORDERS).optional(),
 });
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;

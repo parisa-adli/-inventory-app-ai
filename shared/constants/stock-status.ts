@@ -15,3 +15,13 @@ export const getStockStatus = (quantity: number): StockStatus => {
   if (quantity <= LOW_STOCK_THRESHOLD) return STOCK_STATUSES.LOW;
   return STOCK_STATUSES.IN;
 };
+
+/**
+ * The quantities each status covers, for filtering in the database (`min`/`max` inclusive, whole units).
+ * Mirrors `getStockStatus`; the stock-status test checks the two agree at every boundary.
+ */
+export const STOCK_STATUS_RANGES: Record<StockStatus, { min?: number; max?: number }> = {
+  [STOCK_STATUSES.OUT]: { max: 0 },
+  [STOCK_STATUSES.LOW]: { min: 1, max: LOW_STOCK_THRESHOLD },
+  [STOCK_STATUSES.IN]: { min: LOW_STOCK_THRESHOLD + 1 },
+};

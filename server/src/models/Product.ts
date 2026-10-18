@@ -1,5 +1,6 @@
 import { Schema, model, type InferSchemaType } from 'mongoose';
 import { UNITS_OF_MEASURE } from '@inventory/shared';
+import { NAME_COLLATION } from '../utils/text.js';
 
 const productSchema = new Schema(
   {
@@ -21,7 +22,11 @@ const productSchema = new Schema(
 );
 
 productSchema.index({ sku: 1 }, { unique: true });
-productSchema.index({ archivedAt: 1, title: 1 });
+// The list filters on archivedAt (the tab) and sorts by one field; title and SKU sort case-insensitively
+// Named: a database from before #34 still has the uncollated `archivedAt_1_title_1`, and reusing that name would conflict
+productSchema.index({ archivedAt: 1, title: 1 }, { collation: NAME_COLLATION, name: 'archivedAt_title_ci' });
+productSchema.index({ archivedAt: 1, quantity: 1 });
+productSchema.index({ archivedAt: 1, createdAt: 1 });
 productSchema.index({ category: 1 });
 productSchema.index({ supplier: 1 });
 

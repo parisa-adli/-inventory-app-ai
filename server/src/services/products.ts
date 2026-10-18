@@ -1,4 +1,5 @@
-import type { CreateProductInput, ListProductsQuery, Product as ProductDto, ProductsPage } from '@inventory/shared';
+import { STOCK_STATUS_RANGES, UNASSIGNED_SUPPLIER, defaultSortOrder } from '@inventory/shared';
+import type { CreateProductInput, ListProductsQuery, Product as ProductDto, ProductsPage, StockStatus } from '@inventory/shared';
 import { Category } from '../models/Category.js';
 import { Product } from '../models/Product.js';
 import { Supplier } from '../models/Supplier.js';
@@ -67,18 +68,35 @@ export const createProduct = async (input: CreateProductInput): Promise<ProductD
   }
 };
 
-/** GET: active products, title A→Z (case-insensitive), paged, with an escaped search. Filters and sorts arrive in #34. */
-export const listProducts = async ({ search, page, limit }: ListProductsQuery): Promise<ProductsPage> => {
-  const filter: Record<string, unknown> = { archivedAt: null };
-  if (search) {
-    const pattern = new RegExp(escapeRegex(search), 'i');
-    filter.$or = [{ title: pattern }, { sku: pattern }];
-  }
+/** The `quantity` condition of a stock status, from the shared ranges (`getStockStatus` in database form). */
+const quantityRange = (stockStatus: StockStatus) => {
+  const { min, max } = STOCK_STATUS_RANGES[stockStatus];
+  return { ...(min !== undefined && { $gte: min }), ...(max !== undefined && { $lte: max }) };
+};
+
+/**
+ * GET: one tab (active or archived), filtered by an escaped search, category, supplier (`unassigned` = none)
+ * and stock status, then sorted (title A→Z by default, case-insensitive) with an `_id` tie-break in the same
+ * direction, so paging never repeats or skips a row.
+ */
+export const listProducts = async (query: ListProductsQuery): Promise<ProductsPage> => {
+  const { search, category, supplier, status, stockStatus, page, limit, sort } = query;
+  const direction = (query.order ?? defaultSortOrder(sort)) === 'asc' ? 1 : -1;
+  const pattern = search ? new RegExp(escapeRegex(search), 'i') : null;
+  // One literal, no property assignments: architecture.test.ts treats assigning a quantity as a stock write
+  const filter = {
+    archivedAt: status === 'archived' ? { $ne: null } : null,
+    ...(pattern && { $or: [{ title: pattern }, { sku: pattern }] }),
+    ...(category && { category }),
+    ...(supplier && { supplier: supplier === UNASSIGNED_SUPPLIER ? null : supplier }),
+    ...(stockStatus && { quantity: quantityRange(stockStatus) }),
+  };
   const [total, rows] = await Promise.all([
     Product.countDocuments(filter),
     Product.find(filter)
-      .sort({ title: 1, _id: 1 })
-      .collation(NAME_COLLATION)
+      .sort({ [sort]: direction, _id: direction })
+      // Case-insensitive for text only, so number and date sorts can use their plain indexes
+      .collation(sort === 'title' || sort === 'sku' ? NAME_COLLATION : { locale: 'simple' })
       .skip((page - 1) * limit)
       .limit(limit)
       .populate(POPULATE)

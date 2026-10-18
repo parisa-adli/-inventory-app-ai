@@ -193,7 +193,7 @@ Where the PRD and the agreed Q&A conflict, the Q&A wins (`docs/adr/0001`). C17â€
 
 ## C18. Product stores `archivedAt` instead of `status`
 
-*Applied in #29 (the Product model, the derived `status` in responses, and the category/supplier delete guard counting `archivedAt` as archived). The `status` filter lands with #34.*
+*Applied in #29 (the Product model, the derived `status` in responses, and the category/supplier delete guard counting `archivedAt` as archived). The `status` filter applied in #34: `GET /api/products?status=active|archived` (default `active`) matches `archivedAt` null / set.*
 
 - PRD: stored `status: active | archived`. Agreed: `archivedAt` (date or null). Responses carry a derived `status`, and `GET /api/products` still accepts `status` as a filter (`docs/adr/0003`).
 

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
+import { Types } from 'mongoose';
 import { createApp } from '../app.js';
 import { Category } from '../models/Category.js';
 import { Product } from '../models/Product.js';
@@ -175,5 +176,163 @@ describe('GET /api/products', () => {
   it('shows an unassigned supplier as null', async () => {
     await seed(['Loose screws'], { supplier: undefined });
     expect((await list()).body.items[0].supplier).toBeNull();
+  });
+});
+
+// #34: filters, sorts and the archived tab
+describe('GET /api/products filters and sorts', () => {
+  interface Listed {
+    id: string;
+    title: string;
+    sku: string;
+    quantity: number;
+    costPrice: number;
+    salePrice: number;
+    createdAt: string;
+    supplier: { id: string } | null;
+    category: { id: string };
+    status: string;
+  }
+
+  const add = async (title: string, extra: object = {}) => {
+    const res = await create(validProduct({ title, sku: `SKU-${title.replace(/\W/g, '')}`, ...extra }));
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    return res.body as Listed;
+  };
+  /** Test setup only: the app changes quantity through the stock module alone. */
+  const setQuantity = (id: string, quantity: number) => Product.updateOne({ _id: id }, { quantity });
+  const titles = async (query: string) => {
+    const res = await list(query);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    return (res.body.items as Listed[]).map((p) => p.title);
+  };
+
+  it('buckets stock status at 0, 1, 10 and 11 with the shared threshold', async () => {
+    for (const quantity of [0, 1, 10, 11]) await setQuantity((await add(`Qty ${quantity}`)).id, quantity);
+
+    expect(await titles('?stockStatus=out')).toEqual(['Qty 0']);
+    expect(await titles('?stockStatus=low')).toEqual(['Qty 1', 'Qty 10']);
+    expect(await titles('?stockStatus=in')).toEqual(['Qty 11']);
+    expect(await titles('')).toEqual(['Qty 0', 'Qty 1', 'Qty 10', 'Qty 11']);
+  });
+
+  it('filters by supplier, where "unassigned" is exactly the products without one', async () => {
+    const otherSupplier = String((await Supplier.create({ name: 'Other Co.' }))._id);
+    await add('Has supplier');
+    await add('Other supplier', { supplier: otherSupplier });
+    await add('No supplier A', { supplier: undefined });
+    await add('No supplier B', { supplier: undefined });
+
+    expect(await titles('?supplier=unassigned')).toEqual(['No supplier A', 'No supplier B']);
+    expect(await titles(`?supplier=${supplierId}`)).toEqual(['Has supplier']);
+    expect(await titles(`?supplier=${otherSupplier}`)).toEqual(['Other supplier']);
+  });
+
+  it('filters by category', async () => {
+    const tools = String((await Category.create({ title: 'Tools' }))._id);
+    await add('Mouse');
+    await add('Hammer', { category: tools });
+
+    expect(await titles(`?category=${tools}`)).toEqual(['Hammer']);
+    expect(await titles(`?category=${categoryId}`)).toEqual(['Mouse']);
+  });
+
+  it('shows active products by default and archived ones under status=archived', async () => {
+    await add('Current');
+    const retired = await add('Retired');
+    await Product.updateOne({ _id: retired.id }, { archivedAt: new Date() });
+
+    expect(await titles('')).toEqual(['Current']);
+    expect(await titles('?status=active')).toEqual(['Current']);
+    const archived = await list('?status=archived');
+    expect(archived.body).toMatchObject({ total: 1, items: [{ title: 'Retired', status: 'archived' }] });
+  });
+
+  it('combines search and filters', async () => {
+    await setQuantity((await add('Blue Mouse')).id, 5);
+    await setQuantity((await add('Red Mouse', { supplier: undefined })).id, 5);
+    await setQuantity((await add('Green Mouse')).id, 50);
+
+    expect(await titles(`?search=mouse&stockStatus=low&supplier=${supplierId}`)).toEqual(['Blue Mouse']);
+  });
+
+  it.each(['title', 'sku', 'quantity', 'costPrice', 'salePrice', 'createdAt'] as const)(
+    'sorts by %s in both directions, ties broken by id in the same direction',
+    async (sort) => {
+      // Two of each value, so every sort has ties to break; titles and SKUs differ only in case
+      const values = [
+        { title: 'b', sku: 'B', quantity: 3, costPrice: 2, salePrice: 9 },
+        { title: 'A', sku: 'a', quantity: 1, costPrice: 1, salePrice: 5 },
+        { title: 'a', sku: 'A', quantity: 1, costPrice: 1, salePrice: 5 },
+        { title: 'B', sku: 'b', quantity: 3, costPrice: 2, salePrice: 9 },
+      ];
+      const created: Listed[] = [];
+      for (const [i, value] of values.entries()) {
+        const res = await create(
+          validProduct({ title: value.title, sku: `${value.sku}-${i % 2}`, costPrice: value.costPrice, salePrice: value.salePrice })
+        );
+        expect(res.status, JSON.stringify(res.body)).toBe(201);
+        await setQuantity(res.body.id, value.quantity);
+        created.push({ ...res.body, quantity: value.quantity });
+      }
+      // createdAt ties too: give pairs the same timestamp
+      if (sort === 'createdAt') {
+        const stamps = [new Date('2026-01-02'), new Date('2026-01-01')];
+        for (const [i, product] of created.entries()) {
+          const createdAt = stamps[i % 2]!;
+          await Product.collection.updateOne({ _id: new Types.ObjectId(product.id) }, { $set: { createdAt } });
+          product.createdAt = createdAt.toISOString();
+        }
+      }
+
+      const key = (p: Listed): string | number => {
+        if (sort === 'title' || sort === 'sku') return p[sort].toLowerCase();
+        if (sort === 'createdAt') return Date.parse(p.createdAt);
+        return p[sort];
+      };
+      for (const order of ['asc', 'desc'] as const) {
+        const sign = order === 'asc' ? 1 : -1;
+        const expected = [...created]
+          .sort((x, y) => {
+            const a = key(x);
+            const b = key(y);
+            if (a !== b) return (a < b ? -1 : 1) * sign;
+            return (x.id < y.id ? -1 : 1) * sign;
+          })
+          .map((p) => p.id);
+        const res = await list(`?sort=${sort}&order=${order}`);
+        expect(res.status).toBe(200);
+        expect((res.body.items as Listed[]).map((p) => p.id), `${sort} ${order}`).toEqual(expected);
+
+        // Stable across pages: one row a page walks the same order
+        const paged: string[] = [];
+        for (let page = 1; page <= created.length; page++) {
+          paged.push(...(await list(`?sort=${sort}&order=${order}&limit=1&page=${page}`)).body.items.map((p: Listed) => p.id));
+        }
+        expect(paged).toEqual(expected);
+      }
+    }
+  );
+
+  it('defaults to A→Z for title and SKU and to highest/newest first otherwise', async () => {
+    await setQuantity((await add('Alpha')).id, 1);
+    await setQuantity((await add('Beta')).id, 2);
+
+    expect(await titles('?sort=title')).toEqual(['Alpha', 'Beta']);
+    expect(await titles('?sort=sku')).toEqual(['Alpha', 'Beta']);
+    expect(await titles('?sort=quantity')).toEqual(['Beta', 'Alpha']);
+  });
+
+  it.each([
+    ['an unknown sort', '?sort=category'],
+    ['an unknown order', '?order=up'],
+    ['an unknown stock status', '?stockStatus=empty'],
+    ['an unknown status', '?status=deleted'],
+    ['a malformed supplier', '?supplier=nobody'],
+    ['a malformed category', '?category=nope'],
+  ])('rejects %s with 400', async (_case, query) => {
+    const res = await list(query);
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 });

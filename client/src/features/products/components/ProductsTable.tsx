@@ -1,25 +1,30 @@
 import { createContext, use, type ReactNode } from 'react';
-import { ArrowLeftRight, History, ImageIcon, Minus, Plus } from 'lucide-react';
-import { createColumnHelper, tableFeatures, useTable } from '@tanstack/react-table';
+import { ArrowDown, ArrowLeftRight, ArrowUp, ChevronsUpDown, History, ImageIcon, Minus, Plus } from 'lucide-react';
+import { createColumnHelper, rowSortingFeature, tableFeatures, useTable, type SortingState, type Updater } from '@tanstack/react-table';
 import {
   PERMISSIONS,
+  PRODUCT_SORTS,
   STOCK_MOVEMENT_TYPES,
   STOCK_STATUSES,
   getStockStatus,
   type Product,
+  type ProductSort,
   type ProductStatus,
+  type SortOrder,
 } from '@inventory/shared';
 import { useCan } from '@/features/auth/hooks/useCan';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useRecordMovement } from '../hooks/useRecordMovement';
 
 const money = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' });
 
-// Module scope: TanStack Table v9 wants stable features and columns
-const features = tableFeatures({});
+// Module scope: TanStack Table v9 wants stable features and columns. Sorting is the feature's state and
+// header APIs only: the server sorts (manualSorting), and the sort lives in the URL.
+const features = tableFeatures({ rowSortingFeature });
 const column = createColumnHelper<typeof features, Product>();
 
 const STATUS_BADGES: Record<ProductStatus, { label: string; variant: BadgeProps['variant'] }> = {
@@ -46,22 +51,36 @@ const columns = column.columns([
   column.accessor((product) => product.category.name, {
     id: 'category',
     header: 'Category',
+    enableSorting: false,
     cell: (info) => <Badge variant="secondary">{info.getValue()}</Badge>,
   }),
   column.accessor((product) => product.supplier?.name ?? null, {
     id: 'supplier',
     header: 'Supplier',
+    enableSorting: false,
     cell: (info) => info.getValue() ?? <Badge variant="outline" className="text-muted-foreground">Unassigned</Badge>,
   }),
-  column.accessor('costPrice', { header: 'Cost', cell: (info) => money.format(info.getValue()) }),
-  column.accessor('salePrice', { header: 'Sale', cell: (info) => money.format(info.getValue()) }),
+  // Numbers and dates sort highest/newest first on the first click, like the API's default order
+  column.accessor('costPrice', { header: 'Cost', sortDescFirst: true, cell: (info) => money.format(info.getValue()) }),
+  column.accessor('salePrice', { header: 'Sale', sortDescFirst: true, cell: (info) => money.format(info.getValue()) }),
   column.accessor('quantity', {
     header: 'Quantity',
+    sortDescFirst: true,
     cell: ({ row }) => <QuantityCell product={row.original} />,
   }),
-  column.accessor('unitOfMeasure', { header: 'Unit', cell: (info) => <span className="text-muted-foreground">{info.getValue()}</span> }),
+  column.accessor('unitOfMeasure', {
+    header: 'Unit',
+    enableSorting: false,
+    cell: (info) => <span className="text-muted-foreground">{info.getValue()}</span>,
+  }),
+  column.accessor('createdAt', {
+    header: 'Created',
+    sortDescFirst: true,
+    cell: (info) => <span className="whitespace-nowrap text-muted-foreground">{formatDate(info.getValue())}</span>,
+  }),
   column.accessor('status', {
     header: 'Status',
+    enableSorting: false,
     cell: (info) => {
       const { label, variant } = STATUS_BADGES[info.getValue()];
       return <Badge variant={variant}>{label}</Badge>;
@@ -170,9 +189,45 @@ function RowActions({ product }: { product: Product }) {
   );
 }
 
-/** The products list as a TanStack Table. Paging is server-side (the page's Pager); sorting arrives in #34. Quantity has inline −/+ (#30); Actions has Adjust stock (#31) and Stock history (#32). */
-export function ProductsTable({ products, ...actions }: { products: Product[] } & ProductRowActions) {
-  const table = useTable({ features, columns, data: products, getRowId: (product) => product.id });
+const SORT_ICONS = { asc: ArrowUp, desc: ArrowDown } as const;
+const ARIA_SORT = { asc: 'ascending', desc: 'descending' } as const;
+
+const isProductSort = (id: string): id is ProductSort => (PRODUCT_SORTS as readonly string[]).includes(id);
+
+/** The server-side sort the table shows and changes; the page keeps it in the URL. */
+export interface ProductsSort {
+  sort: ProductSort;
+  order: SortOrder;
+  onSort: (sort: ProductSort, order: SortOrder) => void;
+}
+
+/**
+ * The products list as a TanStack Table. Sorting and paging are server-side: a sortable header asks for a new
+ * sort (one column at a time, never unsorted) and the page refetches. Quantity has inline −/+ (#30); Actions has
+ * Adjust stock (#31) and Stock history (#32).
+ */
+export function ProductsTable({
+  products,
+  sort,
+  order,
+  onSort,
+  ...actions
+}: { products: Product[] } & ProductsSort & ProductRowActions) {
+  const sorting: SortingState = [{ id: sort, desc: order === 'desc' }];
+  const table = useTable({
+    features,
+    columns,
+    data: products,
+    getRowId: (product) => product.id,
+    manualSorting: true,
+    enableMultiSort: false,
+    enableSortingRemoval: false,
+    state: { sorting },
+    onSortingChange: (updater: Updater<SortingState>) => {
+      const [next] = typeof updater === 'function' ? updater(sorting) : updater;
+      if (next && isProductSort(next.id)) onSort(next.id, next.desc ? 'desc' : 'asc');
+    },
+  });
 
   return (
     <RowActionsContext value={actions}>
@@ -181,11 +236,34 @@ export function ProductsTable({ products, ...actions }: { products: Product[] } 
           <TableHeader>
             {table.getHeaderGroups().map((group) => (
               <TableRow key={group.id}>
-                {group.headers.map((header) => (
-                  <TableHead key={header.id} className={cn(RIGHT_ALIGNED.has(header.column.id) && 'text-right')}>
-                    {header.isPlaceholder ? null : <table.FlexRender header={header} />}
-                  </TableHead>
-                ))}
+                {group.headers.map((header) => {
+                  const { column } = header;
+                  const sorted = column.getIsSorted();
+                  const SortIcon = sorted ? SORT_ICONS[sorted] : ChevronsUpDown;
+                  return (
+                    <TableHead
+                      key={header.id}
+                      className={cn(RIGHT_ALIGNED.has(column.id) && 'text-right')}
+                      aria-sort={column.getCanSort() ? (sorted ? ARIA_SORT[sorted] : 'none') : undefined}
+                    >
+                      {header.isPlaceholder ? null : column.getCanSort() ? (
+                        <button
+                          type="button"
+                          className={cn(
+                            'inline-flex items-center gap-1 hover:text-foreground',
+                            RIGHT_ALIGNED.has(column.id) && 'flex-row-reverse'
+                          )}
+                          onClick={column.getToggleSortingHandler()}
+                        >
+                          <table.FlexRender header={header} />
+                          <SortIcon className={cn('size-3.5', !sorted && 'text-muted-foreground')} aria-hidden />
+                        </button>
+                      ) : (
+                        <table.FlexRender header={header} />
+                      )}
+                    </TableHead>
+                  );
+                })}
               </TableRow>
             ))}
           </TableHeader>

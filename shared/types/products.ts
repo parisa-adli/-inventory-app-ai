@@ -1,4 +1,5 @@
 import type { UnitOfMeasure } from '../constants/units';
+import type { PRODUCT_STATUSES } from '../schemas/products';
 import type { Paginated } from './catalog';
 
 /** A category or supplier as a product carries it. A category's name is its title. */
@@ -8,7 +9,7 @@ export interface ProductRef {
 }
 
 /** Derived from `archivedAt` (`docs/adr/0003`); never stored. */
-export type ProductStatus = 'active' | 'archived';
+export type ProductStatus = (typeof PRODUCT_STATUSES)[number];
 
 export interface Product {
   id: string;

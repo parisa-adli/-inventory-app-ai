@@ -173,6 +173,9 @@ test.describe('stock changes (stubbed API)', () => {
     await page.route('**/api/auth/me', (route) => route.fulfill({ json: user }));
     // An admin's nav asks for the pending-users count; unstubbed, its 401 would end the session
     await page.route('**/api/users?*', (route) => route.fulfill({ json: pageOf([], 1) }));
+    // The toolbar's category and supplier filters
+    await page.route(/\/api\/categories(\?.*)?$/, (route) => route.fulfill({ json: pageOf([ELECTRONICS], 100) }));
+    await page.route(/\/api\/suppliers(\?.*)?$/, (route) => route.fulfill({ json: pageOf([TECHSUPPLY], 100) }));
     await page.route(/\/api\/products(\?.*)?$/, (route) =>
       route.fulfill({ json: pageOf([{ ...MOUSE, quantity: state.quantity }], 20) })
     );

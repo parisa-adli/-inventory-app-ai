@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { paginationFields } from './pagination';
 import { SORT_ORDERS } from './sort';
 
 // Shared by the category and supplier schemas (and later products): list query and optional text fields.
@@ -15,8 +16,7 @@ export type CatalogSort = (typeof CATALOG_SORTS)[number];
 export const catalogListQuerySchema = z.object({
   /** Case-insensitive substring; an empty string means no search. */
   search: z.string().trim().max(CATALOG_SEARCH_MAX).optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(CATALOG_PAGE_SIZE_MAX).default(CATALOG_PAGE_SIZE_DEFAULT),
+  ...paginationFields(CATALOG_PAGE_SIZE_DEFAULT, CATALOG_PAGE_SIZE_MAX),
   /** Newest first by default. */
   sort: z.enum(CATALOG_SORTS).default('createdAt'),
   /** Defaults to `defaultSortOrder(sort)`. */

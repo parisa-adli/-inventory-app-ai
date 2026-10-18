@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ACCOUNT_STATUS } from '../constants/account-status';
 import { USER_ROLES } from '../constants/roles';
+import { paginationFields } from './pagination';
 import { SORT_ORDERS } from './sort';
 
 export const USERS_PAGE_SIZE_DEFAULT = 20;
@@ -21,8 +22,7 @@ export const listUsersQuerySchema = z.object({
   verified: z.stringbool().optional(),
   /** Case-insensitive substring of the name or email. */
   search: z.string().trim().max(USER_SEARCH_MAX).optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(USERS_PAGE_SIZE_MAX).default(USERS_PAGE_SIZE_DEFAULT),
+  ...paginationFields(USERS_PAGE_SIZE_DEFAULT, USERS_PAGE_SIZE_MAX),
   /** Newest first by default. */
   sort: z.enum(USER_SORTS).default('createdAt'),
   /** Defaults to `defaultSortOrder(sort)`. */

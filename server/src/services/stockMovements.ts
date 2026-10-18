@@ -1,6 +1,7 @@
 import type { ListStockMovementsQuery, StockMovement as StockMovementDto, StockMovementsPage } from '@inventory/shared';
 import type { HydratedDocument } from 'mongoose';
 import { StockMovement, type StockMovementDoc } from '../models/StockMovement.js';
+import { pageSkip, toPage } from '../utils/pagination.js';
 
 interface PopulatedRefs {
   product: { _id: unknown; title: string; sku: string; archivedAt?: Date | null };
@@ -33,14 +34,8 @@ export const presentMovement = async (movement: HydratedDocument<StockMovementDo
 };
 
 /** GET: newest `occurredAt` first (ties newest written first), paged. Archived products' movements are included and flagged. */
-export const listMovements = async ({
-  product,
-  type,
-  dateFrom,
-  dateTo,
-  page,
-  limit,
-}: ListStockMovementsQuery): Promise<StockMovementsPage> => {
+export const listMovements = async (query: ListStockMovementsQuery): Promise<StockMovementsPage> => {
+  const { product, type, dateFrom, dateTo } = query;
   const filter = {
     ...(product && { product }),
     ...(type && { type }),
@@ -50,16 +45,10 @@ export const listMovements = async ({
     StockMovement.countDocuments(filter),
     StockMovement.find(filter)
       .sort({ occurredAt: -1, _id: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit)
+      .skip(pageSkip(query))
+      .limit(query.limit)
       .populate(POPULATE)
       .lean<MovementLike[]>(),
   ]);
-  return {
-    items: rows.map(toStockMovement),
-    page,
-    limit,
-    total,
-    totalPages: Math.max(1, Math.ceil(total / limit)),
-  };
+  return toPage(rows.map(toStockMovement), total, query);
 };

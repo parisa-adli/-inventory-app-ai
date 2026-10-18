@@ -3,6 +3,7 @@ import { defaultSortOrder } from '@inventory/shared';
 import type { CatalogListQuery, Paginated } from '@inventory/shared';
 import { AppError, NotFoundError, isDuplicateKeyError } from '../utils/errors.js';
 import { NAME_COLLATION, escapeRegex } from '../utils/text.js';
+import { pageSkip, toPage } from '../utils/pagination.js';
 import { countProductsReferencing, productCountStages, type ProductRefField } from './productRefs.js';
 
 // Categories and suppliers share one set of rules: search + sort + paging with product counts,
@@ -50,7 +51,7 @@ export const createCatalogService = <TDoc, TDto>(config: CatalogConfig<TDoc, TDt
 
   /** GET list: escaped case-insensitive search, sort with a name tie-break, pages with product counts. */
   const list = async (query: CatalogListQuery): Promise<Paginated<TDto & { productCount: number }>> => {
-    const { search, page, limit, sort } = query;
+    const { search, sort } = query;
     const direction = (query.order ?? defaultSortOrder(sort)) === 'asc' ? 1 : -1;
     const filter: Record<string, unknown> = {};
     if (search) {
@@ -67,21 +68,15 @@ export const createCatalogService = <TDoc, TDto>(config: CatalogConfig<TDoc, TDt
       { $match: filter },
       ...productCountStages(productField),
       { $sort: sortStage },
-      { $skip: (page - 1) * limit },
-      { $limit: limit },
+      { $skip: pageSkip(query) },
+      { $limit: query.limit },
     ];
 
     const [total, rows] = await Promise.all([
       model.countDocuments(filter),
       model.aggregate<TDoc & { productCount: number }>(pipeline).collation(NAME_COLLATION),
     ]);
-    return {
-      items: rows.map((row) => ({ ...config.toDto(row), productCount: row.productCount })),
-      page,
-      limit,
-      total,
-      totalPages: Math.max(1, Math.ceil(total / limit)),
-    };
+    return toPage(rows.map((row) => ({ ...config.toDto(row), productCount: row.productCount })), total, query);
   };
 
   const create = async (input: object) => save(new model(input) as HydratedDocument<TDoc>);

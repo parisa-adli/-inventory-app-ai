@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { STOCK_MOVEMENT_TYPES, type StockMovementType } from '../constants/stock-movement-types';
+import { paginationFields } from './pagination';
 import { objectId } from './catalog';
 
 export const STOCK_MOVEMENT_NOTE_MAX = 500;
@@ -96,8 +97,7 @@ export const listStockMovementsQuerySchema = z.object({
   type: type.optional(),
   dateFrom: instant('dateFrom').optional(),
   dateTo: instant('dateTo').optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(STOCK_MOVEMENTS_PAGE_SIZE_MAX).default(STOCK_MOVEMENTS_PAGE_SIZE_DEFAULT),
+  ...paginationFields(STOCK_MOVEMENTS_PAGE_SIZE_DEFAULT, STOCK_MOVEMENTS_PAGE_SIZE_MAX),
 }).refine(({ dateFrom, dateTo }) => !dateFrom || !dateTo || dateFrom <= dateTo, {
   path: ['dateTo'],
   error: 'dateTo cannot be before dateFrom',

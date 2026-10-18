@@ -14,6 +14,7 @@ import { StockMovement } from '../models/StockMovement.js';
 import { Supplier } from '../models/Supplier.js';
 import { AppError, NotFoundError, ValidationError, isDuplicateKeyError } from '../utils/errors.js';
 import { NAME_COLLATION, escapeRegex } from '../utils/text.js';
+import { pageSkip, toPage } from '../utils/pagination.js';
 
 interface ProductLike {
   _id: unknown;
@@ -158,7 +159,7 @@ const quantityRange = (stockStatus: StockStatus) => {
  * direction, so paging never repeats or skips a row.
  */
 export const listProducts = async (query: ListProductsQuery): Promise<ProductsPage> => {
-  const { search, category, supplier, status, stockStatus, page, limit, sort } = query;
+  const { search, category, supplier, status, stockStatus, sort } = query;
   const direction = (query.order ?? defaultSortOrder(sort)) === 'asc' ? 1 : -1;
   const pattern = search ? new RegExp(escapeRegex(search), 'i') : null;
   // One literal, no property assignments: architecture.test.ts treats assigning a quantity as a stock write
@@ -175,16 +176,10 @@ export const listProducts = async (query: ListProductsQuery): Promise<ProductsPa
       .sort({ [sort]: direction, _id: direction })
       // Case-insensitive for text only, so number and date sorts can use their plain indexes
       .collation(sort === 'title' || sort === 'sku' ? NAME_COLLATION : { locale: 'simple' })
-      .skip((page - 1) * limit)
-      .limit(limit)
+      .skip(pageSkip(query))
+      .limit(query.limit)
       .populate(POPULATE)
       .lean<ProductLike[]>(),
   ]);
-  return {
-    items: rows.map(toProduct),
-    page,
-    limit,
-    total,
-    totalPages: Math.max(1, Math.ceil(total / limit)),
-  };
+  return toPage(rows.map(toProduct), total, query);
 };

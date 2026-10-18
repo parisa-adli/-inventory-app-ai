@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { STOCK_STATUSES } from '../constants/stock-status';
 import { UNITS_OF_MEASURE } from '../constants/units';
+import { paginationFields } from './pagination';
 import { formField, objectId, requiredText } from './catalog';
 import { SORT_ORDERS } from './sort';
 
@@ -128,8 +129,7 @@ export const listProductsQuerySchema = z.object({
   /** Derived from `archivedAt` (`docs/adr/0003`). */
   status: z.enum(PRODUCT_STATUSES).default('active'),
   stockStatus: z.enum(STOCK_STATUSES).optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(PRODUCTS_PAGE_SIZE_MAX).default(PRODUCTS_PAGE_SIZE_DEFAULT),
+  ...paginationFields(PRODUCTS_PAGE_SIZE_DEFAULT, PRODUCTS_PAGE_SIZE_MAX),
   /** Title A→Z by default. */
   sort: z.enum(PRODUCT_SORTS).default(PRODUCT_SORT_DEFAULT),
   /** Defaults to `defaultSortOrder(sort)`. */

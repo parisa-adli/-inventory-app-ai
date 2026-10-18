@@ -1,4 +1,4 @@
-// Sort direction shared by every paginated list query (catalog, users, and later products and movements).
+// Sort direction shared by every paginated list query.
 
 export const SORT_ORDERS = ['asc', 'desc'] as const;
 export type SortOrder = (typeof SORT_ORDERS)[number];

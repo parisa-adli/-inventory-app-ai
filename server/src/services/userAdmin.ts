@@ -9,6 +9,7 @@ import { endAllSessions, revokeAllUserTokens } from './jwt.js';
 import { hashPassword } from './password.js';
 import { randomPassword } from '../utils/crypto.js';
 import { NAME_COLLATION, escapeRegex } from '../utils/text.js';
+import { pageSkip, toPage } from '../utils/pagination.js';
 import { AppError, ConflictError, ForbiddenError, NotFoundError } from '../utils/errors.js';
 
 /** A User document or an aggregate row: the fields the admin view needs. */
@@ -62,7 +63,7 @@ const lastAdminError = () => new ForbiddenError('At least one active admin must 
  * By last sign-in, accounts that never signed in come last in both directions.
  */
 export const listUsers = async (query: ListUsersQuery): Promise<UsersPage> => {
-  const { status, role, verified, search, page, limit, sort } = query;
+  const { status, role, verified, search, sort } = query;
   const direction = (query.order ?? defaultSortOrder(sort)) === 'asc' ? 1 : -1;
   const filter: Record<string, unknown> = {};
   if (status) filter.status = status;
@@ -80,18 +81,12 @@ export const listUsers = async (query: ListUsersQuery): Promise<UsersPage> => {
       ? [{ $addFields: { neverSignedIn: { $eq: [{ $ifNull: ['$lastLoginAt', null] }, null] } } }]
       : []),
     { $sort: { ...(neverSignedInLast ? { neverSignedIn: 1 } : {}), [sort]: direction, _id: direction } },
-    { $skip: (page - 1) * limit },
-    { $limit: limit },
+    { $skip: pageSkip(query) },
+    { $limit: query.limit },
   ];
 
   const [total, users] = await Promise.all([User.countDocuments(filter), User.aggregate<UserLike>(pipeline).collation(NAME_COLLATION)]);
-  return {
-    items: users.map(toAdminUser),
-    page,
-    limit,
-    total,
-    totalPages: Math.max(1, Math.ceil(total / limit)),
-  };
+  return toPage(users.map(toAdminUser), total, query);
 };
 
 const countActiveAdmins = () => User.countDocuments({ role: USER_ROLES.ADMIN, status: ACCOUNT_STATUS.ACTIVE });

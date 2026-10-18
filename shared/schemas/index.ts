@@ -1,5 +1,6 @@
 export * from './auth';
 export * from './sort';
+export * from './pagination';
 export * from './users';
 export * from './catalog';
 export * from './categories';

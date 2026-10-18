@@ -213,7 +213,7 @@ Where the PRD and the agreed Q&A conflict, the Q&A wins (`docs/adr/0001`). C17â€
 
 ## C21. Product edit is `PATCH`
 
-*Partly applied in #29: creation rejects a non-zero `quantity` (400 `VALIDATION_ERROR`). The `PATCH` itself lands with #35.*
+*Applied: #29 made creation reject a non-zero `quantity` (400 `VALIDATION_ERROR`); #35 added the `PATCH`, whose schema is strict, so `quantity` and any other unknown field are a 400; an empty body is a 400 too ("Send at least one field to change", as in Phase 2). Archived products stay editable (confirmed by the user, 2026-10-18): archiving freezes stock only.*
 
 - PRD: `PUT /api/products/:id`. Agreed: `PATCH /api/products/:id`, following the Phase 2 convention (an absent field is unchanged, `null` clears supplier / image URL). `quantity` is rejected as unknown on edit, and product creation rejects any non-zero quantity: every product starts at 0.
 

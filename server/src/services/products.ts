@@ -1,9 +1,17 @@
+import { isValidObjectId, type HydratedDocument } from 'mongoose';
 import { STOCK_STATUS_RANGES, UNASSIGNED_SUPPLIER, defaultSortOrder } from '@inventory/shared';
-import type { CreateProductInput, ListProductsQuery, Product as ProductDto, ProductsPage, StockStatus } from '@inventory/shared';
+import type {
+  CreateProductInput,
+  ListProductsQuery,
+  Product as ProductDto,
+  ProductsPage,
+  StockStatus,
+  UpdateProductInput,
+} from '@inventory/shared';
 import { Category } from '../models/Category.js';
-import { Product } from '../models/Product.js';
+import { Product, type ProductDoc } from '../models/Product.js';
 import { Supplier } from '../models/Supplier.js';
-import { AppError, ValidationError, isDuplicateKeyError } from '../utils/errors.js';
+import { AppError, NotFoundError, ValidationError, isDuplicateKeyError } from '../utils/errors.js';
 import { NAME_COLLATION, escapeRegex } from '../utils/text.js';
 
 interface ProductLike {
@@ -50,22 +58,56 @@ const assertExists = async (exists: (id: string) => Promise<unknown>, id: string
   if (id !== undefined && !(await exists(id))) throw new ValidationError(`${label.toLowerCase()}: ${label} not found`);
 };
 
-/** POST: always starts at quantity 0 (the shared schema rejects anything else). */
-export const createProduct = async (input: CreateProductInput): Promise<ProductDto> => {
-  await Promise.all([
+const assertRefsExist = (input: { category?: string; supplier?: string | null }) =>
+  Promise.all([
     assertExists((id) => Category.exists({ _id: id }), input.category, 'Category'),
-    assertExists((id) => Supplier.exists({ _id: id }), input.supplier, 'Supplier'),
+    assertExists((id) => Supplier.exists({ _id: id }), input.supplier ?? undefined, 'Supplier'),
   ]);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- quantity is never written from a request
-  const { quantity, ...fields } = input;
+
+/** Saves a new or edited product; the unique SKU index turns a clash into a 409. */
+const save = async (product: HydratedDocument<ProductDoc>): Promise<ProductDto> => {
   try {
-    const product = await Product.create(fields);
-    await product.populate(POPULATE);
-    return toProduct(product.toObject() as unknown as ProductLike);
+    await product.save();
   } catch (err) {
-    if (isDuplicateKeyError(err)) throw new AppError(409, 'DUPLICATE_SKU', `A product with SKU ${input.sku} already exists.`);
+    if (isDuplicateKeyError(err)) throw new AppError(409, 'DUPLICATE_SKU', `A product with SKU ${product.sku} already exists.`);
     throw err;
   }
+  await product.populate(POPULATE);
+  return toProduct(product.toObject() as unknown as ProductLike);
+};
+
+/** POST: always starts at quantity 0 (the shared schema rejects anything else). */
+export const createProduct = async (input: CreateProductInput): Promise<ProductDto> => {
+  await assertRefsExist(input);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- quantity is never written from a request
+  const { quantity, ...fields } = input;
+  return save(new Product(fields));
+};
+
+/** What an edit may write. Listed here as well as in the strict schema, so no request can reach `quantity`. */
+const EDITABLE_FIELDS = [
+  'title',
+  'sku',
+  'category',
+  'supplier',
+  'costPrice',
+  'salePrice',
+  'unitOfMeasure',
+  'imageUrl',
+] as const satisfies readonly (keyof UpdateProductInput)[];
+
+/**
+ * PATCH: absent fields stay, `null` clears the supplier or image URL (stored as null, the model's default).
+ * Archived products stay editable, confirmed by the user: only their stock is frozen.
+ */
+export const updateProduct = async (id: string, patch: UpdateProductInput): Promise<ProductDto> => {
+  const product = isValidObjectId(id) ? await Product.findById(id) : null;
+  if (!product) throw new NotFoundError('Product not found');
+  await assertRefsExist(patch);
+  for (const field of EDITABLE_FIELDS) {
+    if (patch[field] !== undefined) product.set(field, patch[field]);
+  }
+  return save(product);
 };
 
 /** The `quantity` condition of a stock status, from the shared ranges (`getStockStatus` in database form). */

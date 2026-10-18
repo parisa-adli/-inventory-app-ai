@@ -10,6 +10,7 @@ import {
   registerSchema,
   resetPasswordSchema,
   stockMovementFormSchema,
+  updateProductSchema,
 } from '@inventory/shared';
 
 describe('shared auth schemas (Zod 4)', () => {
@@ -85,6 +86,12 @@ describe('shared product schemas', () => {
     const parsed = productFormSchema.parse(form);
     expect(parsed).toEqual({ ...form, title: 'Mouse', sku: 'ELE-001', costPrice: 12.5, salePrice: 0 });
     expect(createProductSchema.safeParse({ ...parsed, supplier: undefined, imageUrl: undefined }).success).toBe(true);
+    // The edit dialog sends every field, an emptied supplier or image URL as null
+    expect(updateProductSchema.parse({ ...parsed, supplier: null, imageUrl: null })).toEqual({
+      ...parsed,
+      supplier: null,
+      imageUrl: null,
+    });
   });
 
   it.each([

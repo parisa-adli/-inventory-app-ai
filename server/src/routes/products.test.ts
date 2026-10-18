@@ -9,7 +9,7 @@ import { User } from '../models/User.js';
 import { ACCESS_COOKIE, signAccessToken } from '../services/jwt.js';
 import { MEMORY_DB_START_TIMEOUT_MS, clearMemoryDb, connectMemoryDb, disconnectMemoryDb } from '../test/memoryDb.js';
 
-// Products over HTTP (#29): create, and the basic list (active only, title A→Z, 20 a page).
+// Products over HTTP (#29, #34, #35): create, edit (PATCH), and the list with its filters and sorts.
 
 const app = createApp();
 
@@ -128,6 +128,132 @@ describe('POST /api/products', () => {
     const res = await create(validProduct({ costPrice: 10, salePrice: 0.5 }));
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({ costPrice: 10, salePrice: 0.5 });
+  });
+});
+
+describe('PATCH /api/products/:id', () => {
+  const edit = (id: string, body: object, cookie = staff) =>
+    request(app).patch(`/api/products/${id}`).set('Cookie', cookie).send(body);
+  const createdId = async (extra: object = {}) => {
+    const res = await create(validProduct(extra));
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    return res.body.id as string;
+  };
+
+  it('lets staff and admins edit every field but quantity, and the list shows the change', async () => {
+    const id = await createdId({ imageUrl: 'https://cdn.example.com/mouse.png' });
+    const office = String((await Category.create({ title: 'Office' }))._id);
+    const other = String((await Supplier.create({ name: 'Paper Partners' }))._id);
+
+    const res = await edit(id, {
+      title: 'Ergonomic Mouse',
+      sku: ' ele-100 ',
+      category: office,
+      supplier: other,
+      costPrice: 15,
+      salePrice: 29.5,
+      unitOfMeasure: 'box',
+      imageUrl: 'https://cdn.example.com/ergo.png',
+    });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body).toMatchObject({
+      id,
+      title: 'Ergonomic Mouse',
+      sku: 'ELE-100',
+      category: { id: office, name: 'Office' },
+      supplier: { id: other, name: 'Paper Partners' },
+      costPrice: 15,
+      salePrice: 29.5,
+      quantity: 0,
+      unitOfMeasure: 'box',
+      imageUrl: 'https://cdn.example.com/ergo.png',
+      status: 'active',
+    });
+    expect((await list()).body.items).toEqual([res.body]);
+
+    const byAdmin = await edit(id, { title: 'Admin Mouse' }, await sessionAs('admin'));
+    expect(byAdmin.status).toBe(200);
+    expect(byAdmin.body.title).toBe('Admin Mouse');
+  });
+
+  it('keeps absent fields and clears the supplier and image with null, so the product is Unassigned', async () => {
+    const id = await createdId({ imageUrl: 'https://cdn.example.com/mouse.png' });
+
+    const res = await edit(id, { supplier: null, imageUrl: null });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body).toMatchObject({
+      title: 'Wireless Mouse',
+      sku: 'ELE-001',
+      category: { id: categoryId, name: 'Electronics' },
+      supplier: null,
+      imageUrl: null,
+      costPrice: 12.5,
+    });
+    const unassigned = await list('?supplier=unassigned');
+    expect(unassigned.body.items.map((p: { id: string }) => p.id)).toEqual([id]);
+  });
+
+  it('rejects quantity, even alongside other fields, and changes nothing', async () => {
+    const id = await createdId();
+
+    for (const body of [{ quantity: 5 }, { title: 'Sneaky', quantity: 0 }]) {
+      const res = await edit(id, body);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatchObject({
+        code: 'VALIDATION_ERROR',
+        message: 'body: Quantity cannot be edited; record a stock movement instead',
+      });
+    }
+    expect((await list()).body.items[0]).toMatchObject({ title: 'Wireless Mouse', quantity: 0 });
+  });
+
+  it('rejects any other unknown field', async () => {
+    const res = await edit(await createdId(), { title: 'Mouse', status: 'archived' });
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toContain('Unrecognized key');
+  });
+
+  it('answers a clear 409 when the new SKU belongs to another product, ignoring case', async () => {
+    await createdId({ sku: 'ELE-002' });
+    const id = await createdId();
+
+    const res = await edit(id, { sku: ' ele-002' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatchObject({ code: 'DUPLICATE_SKU', message: 'A product with SKU ELE-002 already exists.' });
+    // Saving a product's own SKU again is not a clash
+    expect((await edit(id, { sku: 'ELE-001', title: 'Same SKU' })).status).toBe(200);
+  });
+
+  it.each([
+    ['an empty body', {}, 'Send at least one field to change'],
+    ['a cleared title', { title: '' }, 'title: Title is required'],
+    ['a cleared category', { category: null }, 'category:'],
+    ['an unknown category', { category: '000000000000000000000000' }, 'category: Category not found'],
+    ['an unknown supplier', { supplier: '000000000000000000000000' }, 'supplier: Supplier not found'],
+    ['a bad SKU', { sku: 'ELE 1' }, 'sku: SKU may only contain letters, digits and dashes'],
+    ['a negative price', { salePrice: -1 }, 'salePrice: Sale price cannot be negative'],
+  ])('rejects %s with 400', async (_case, body, message) => {
+    const res = await edit(await createdId(), body);
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    expect(res.body.error.message).toContain(message);
+  });
+
+  it('edits an archived product, which stays archived (only its stock is frozen)', async () => {
+    const id = await createdId();
+    await Product.updateOne({ _id: id }, { archivedAt: new Date() });
+
+    const res = await edit(id, { title: 'Retired Mouse' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ title: 'Retired Mouse', status: 'archived' });
+  });
+
+  it('answers 404 for a product that does not exist', async () => {
+    for (const id of [String(new Types.ObjectId()), 'not-an-id']) {
+      const res = await edit(id, { title: 'Ghost' });
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('NOT_FOUND');
+    }
   });
 });
 

@@ -30,6 +30,7 @@ export default function Products() {
   const { status, page, setPage } = list;
   const view = STATUS_VIEWS[status];
   const [creating, setCreating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [adjustingId, setAdjustingId] = useState<string | null>(null);
   const [historyProductId, setHistoryProductId] = useState<string | null>(null);
   const query = useProducts(list.params);
@@ -40,6 +41,7 @@ export default function Products() {
     if (data && !query.isPlaceholderData && page > data.totalPages) setPage(data.totalPages, { replace: true });
   }, [data, query.isPlaceholderData, page, setPage]);
   // Looked up in the live list, so the on-hand count in the dialogs follows every refetch
+  const editing = data?.items.find((product) => product.id === editingId) ?? null;
   const adjusting = data?.items.find((product) => product.id === adjustingId);
   const showingHistory = data?.items.find((product) => product.id === historyProductId) ?? null;
 
@@ -97,6 +99,7 @@ export default function Products() {
             sort={list.sort}
             order={list.order}
             onSort={list.setSort}
+            onEdit={(product) => setEditingId(product.id)}
             onAdjustStock={(product) => setAdjustingId(product.id)}
             onStockHistory={(product) => setHistoryProductId(product.id)}
           />
@@ -105,6 +108,7 @@ export default function Products() {
       )}
 
       <ProductFormDialog open={creating} onOpenChange={setCreating} />
+      <ProductFormDialog open={!!editing} product={editing} onOpenChange={(open) => !open && setEditingId(null)} />
       <AdjustStockDialog product={adjusting} onOpenChange={(open) => !open && setAdjustingId(null)} />
       <StockHistoryDialog product={showingHistory} onOpenChange={(open) => !open && setHistoryProductId(null)} />
     </div>

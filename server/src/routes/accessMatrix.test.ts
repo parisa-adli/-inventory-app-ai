@@ -116,9 +116,11 @@ const ROUTES: RouteCase[] = [
   accountRoute('patch', '/api/suppliers/:id', [404, 'NOT_FOUND'], { name: 'Acme' }),
   adminRoute('delete', '/api/suppliers/:id', [404, 'NOT_FOUND']),
 
-  // Products (#29): reads and create for every active user. An incomplete body proves the guard let it through
+  // Products (#29, #35): reads, create and edit for every active user. An incomplete body proves the guard let it through;
+  // `:id` is a user id, so not found
   accountRoute('get', '/api/products', 200),
   accountRoute('post', '/api/products', [400, 'VALIDATION_ERROR'], { title: 'Widget' }),
+  accountRoute('patch', '/api/products/:id', [404, 'NOT_FOUND'], { title: 'Widget' }),
   // Stock history (#32): every active user (INVENTORY_VIEW)
   accountRoute('get', '/api/stock-movements', 200),
   // Stock changes (#30): every active user (STOCK_ADJUST); the product does not exist

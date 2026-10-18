@@ -1,5 +1,5 @@
 import { createContext, use, type ReactNode } from 'react';
-import { ArrowDown, ArrowLeftRight, ArrowUp, ChevronsUpDown, History, ImageIcon, Minus, Plus } from 'lucide-react';
+import { ArrowDown, ArrowLeftRight, ArrowUp, ChevronsUpDown, History, ImageIcon, Minus, Pencil, Plus } from 'lucide-react';
 import { createColumnHelper, rowSortingFeature, tableFeatures, useTable, type SortingState, type Updater } from '@tanstack/react-table';
 import {
   PERMISSIONS,
@@ -37,6 +37,7 @@ const RIGHT_ALIGNED = new Set(['costPrice', 'salePrice', 'quantity', 'actions'])
 
 /** What the row actions open. The columns live at module scope, so the page hands its handlers down this way. */
 interface ProductRowActions {
+  onEdit: (product: Product) => void;
   onAdjustStock: (product: Product) => void;
   onStockHistory: (product: Product) => void;
 }
@@ -168,15 +169,21 @@ function QuantityStepper({ product, children }: { product: Product; children: Re
 }
 
 /**
- * Ghost icon buttons (DESIGN.md): Adjust stock (#31) and Stock history (#32). Archived products are frozen,
- * so they get no Adjust stock, but their history stays readable.
+ * Ghost icon buttons (DESIGN.md): Edit (#35), Adjust stock (#31) and Stock history (#32). Archived products are
+ * frozen, so they get no Adjust stock, but they stay editable and their history stays readable.
  */
 function RowActions({ product }: { product: Product }) {
   const actions = use(RowActionsContext);
+  const canEdit = useCan(PERMISSIONS.PRODUCTS_WRITE);
   const canChangeStock = useCanChangeStock(product);
   if (!actions) return null;
   return (
     <div className="flex justify-end gap-1">
+      {canEdit && (
+        <Button variant="ghost" size="icon" aria-label={`Edit ${product.title}`} onClick={() => actions.onEdit(product)}>
+          <Pencil />
+        </Button>
+      )}
       {canChangeStock && (
         <Button variant="ghost" size="icon" aria-label={`Adjust stock of ${product.title}`} onClick={() => actions.onAdjustStock(product)}>
           <ArrowLeftRight />
@@ -204,7 +211,7 @@ export interface ProductsSort {
 /**
  * The products list as a TanStack Table. Sorting and paging are server-side: a sortable header asks for a new
  * sort (one column at a time, never unsorted) and the page refetches. Quantity has inline −/+ (#30); Actions has
- * Adjust stock (#31) and Stock history (#32).
+ * Edit (#35), Adjust stock (#31) and Stock history (#32).
  */
 export function ProductsTable({
   products,

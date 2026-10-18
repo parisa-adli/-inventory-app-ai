@@ -3,6 +3,8 @@ import { toast } from 'sonner';
 import type { ProductListParams } from '@inventory/shared';
 import { getApiError } from '@/lib/apiError';
 import { categoriesKeys } from '@/features/categories/hooks/useCategories';
+import { dashboardKeys } from '@/features/dashboard/hooks/useDashboard';
+import { movementsKeys } from '@/features/movements/hooks/useMovements';
 import { suppliersKeys } from '@/features/suppliers/hooks/useSuppliers';
 import * as productsApi from '../api/productsApi';
 
@@ -18,18 +20,38 @@ export const useProducts = (params: ProductListParams) =>
     placeholderData: keepPreviousData,
   });
 
-export const useCreateProduct = () => {
+const useInvalidate = (keys: readonly (readonly string[])[]) => {
   const queryClient = useQueryClient();
+  return () => Promise.all(keys.map((queryKey) => queryClient.invalidateQueries({ queryKey })));
+};
+
+export const useCreateProduct = () => {
+  // The category and supplier cards show product counts
+  const invalidate = useInvalidate([productsKeys.all, categoriesKeys.all, suppliersKeys.all]);
   return useMutation({
     mutationFn: productsApi.createProduct,
     onSuccess: (product) => {
       toast.success(`${product.title} was created`);
-      // The category and supplier cards show product counts
-      return Promise.all(
-        [productsKeys.all, categoriesKeys.all, suppliersKeys.all].map((queryKey) =>
-          queryClient.invalidateQueries({ queryKey })
-        )
-      );
+      return invalidate();
+    },
+    onError: (err) => toast.error(getApiError(err).message),
+  });
+};
+
+/** Also refetches movements (they show the title and SKU) and the dashboard (stock value uses the prices). */
+export const useUpdateProduct = () => {
+  const invalidate = useInvalidate([
+    productsKeys.all,
+    categoriesKeys.all,
+    suppliersKeys.all,
+    movementsKeys.all,
+    dashboardKeys.all,
+  ]);
+  return useMutation({
+    mutationFn: productsApi.updateProduct,
+    onSuccess: (product) => {
+      toast.success(`${product.title} was saved`);
+      return invalidate();
     },
     onError: (err) => toast.error(getApiError(err).message),
   });

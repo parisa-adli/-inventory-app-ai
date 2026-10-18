@@ -56,6 +56,36 @@ export const createProductSchema = z.object({
   quantity: z.literal(0, { error: 'Products start with 0 in stock; receive stock after creating it' }).optional(),
 });
 
+/**
+ * Body of PATCH /api/products/:id (C21): absent = unchanged, `null` clears the supplier or image URL, and the
+ * SKU is normalised as on create. Unknown fields are rejected, so is `quantity`: stock only changes through a
+ * recorded movement.
+ */
+export const updateProductSchema = z
+  .strictObject(
+    {
+      title: title.optional(),
+      sku: sku.optional(),
+      category: category.optional(),
+      supplier: supplier.nullable().optional(),
+      costPrice: price('Cost price').optional(),
+      salePrice: price('Sale price').optional(),
+      unitOfMeasure: unitOfMeasure.optional(),
+      imageUrl: imageUrl.nullable().optional(),
+    },
+    {
+      error: (issue) =>
+        issue.code === 'unrecognized_keys' && issue.keys.includes('quantity')
+          ? 'Quantity cannot be edited; record a stock movement instead'
+          : undefined,
+    }
+  )
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    error: 'Send at least one field to change',
+    // A body of only `quantity` is reported as that, not also as empty
+    when: (payload) => payload.issues.length === 0,
+  });
+
 /** A price typed into an input: required, plain decimal digits (not `1e2` or `0x10`), then the same rules as the API. */
 const formPrice = (label: string) =>
   z
@@ -107,6 +137,7 @@ export const listProductsQuerySchema = z.object({
 });
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;
+export type UpdateProductInput = z.infer<typeof updateProductSchema>;
 export type ProductFormInput = z.input<typeof productFormSchema>;
 export type ProductFormValues = z.output<typeof productFormSchema>;
 export type ListProductsQuery = z.infer<typeof listProductsQuerySchema>;

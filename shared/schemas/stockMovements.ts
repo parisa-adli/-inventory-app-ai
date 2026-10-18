@@ -105,3 +105,10 @@ export const listStockMovementsQuerySchema = z.object({
 
 export type ListStockMovementsQuery = z.infer<typeof listStockMovementsQuerySchema>;
 export type StockMovementListParams = z.input<typeof listStockMovementsQuerySchema>;
+
+/** Query string of GET /api/admin/reconcile. `fix=true` repairs what the check finds. */
+export const reconcileQuerySchema = z.object({
+  fix: z.stringbool().default(false),
+});
+
+export type ReconcileQuery = z.infer<typeof reconcileQuerySchema>;

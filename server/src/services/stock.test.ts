@@ -4,7 +4,7 @@ import { Product } from '../models/Product.js';
 import { StockMovement } from '../models/StockMovement.js';
 import { User } from '../models/User.js';
 import { MEMORY_DB_START_TIMEOUT_MS, clearMemoryDb, connectMemoryDb, disconnectMemoryDb } from '../test/memoryDb.js';
-import { recordMovement } from './stock.js';
+import { reconcile, recordMovement } from './stock.js';
 
 // The stock module called directly (#30): what HTTP can't reach, or what the #27 Q&A specified directly.
 
@@ -237,5 +237,93 @@ describe('StockMovement is append-only', () => {
     await expect(movement.deleteOne()).rejects.toThrow(/immutable/);
 
     expect(await movementsOf(productId)).toMatchObject([{ delta: 5 }]);
+  });
+});
+
+describe('reconcile', () => {
+  /** A fixed-seed generator, so a failure replays the same history. */
+  const seededRandom = (seed: number) => () => {
+    seed = (seed * 1_103_515_245 + 12_345) % 2 ** 31;
+    return seed / 2 ** 31;
+  };
+
+  it('finds no mismatch after 200 random movements across several products', async () => {
+    const products = await Promise.all(Array.from({ length: 5 }, () => newProduct()));
+    const next = seededRandom(37);
+    for (let i = 0; i < 200; i++) {
+      const productId = products[Math.floor(next() * products.length)];
+      const amount = 1 + Math.floor(next() * 5);
+      const roll = next();
+      const input =
+        roll < 0.5
+          ? ({ type: 'receive', quantity: amount } as const)
+          : roll < 0.85
+            ? ({ type: 'ship', quantity: amount } as const)
+            : ({ type: 'adjustment', quantity: next() < 0.5 ? amount : -amount, note: 'Recount' } as const);
+      // A ship or write-off past what is on hand is refused and leaves no trace; that is part of the history too
+      await recordMovement({ productId, userId, ...input }).catch(() => undefined);
+    }
+    await newProduct(); // never moved: its quantity 0 agrees with an empty ledger
+
+    expect(await reconcile()).toEqual({ checked: 6, mismatches: [] });
+  });
+
+  it('reports a corrupted quantity, repairs it to the ledger sum with fix, and is clean on the next run', async () => {
+    const healthy = await newProduct();
+    await recordMovement({ productId: healthy, type: 'receive', quantity: 4, userId });
+    const corrupted = await newProduct({ sku: 'ELE-DRIFT' });
+    await recordMovement({ productId: corrupted, type: 'receive', quantity: 10, userId });
+    await recordMovement({ productId: corrupted, type: 'ship', quantity: 3, userId });
+    await Product.updateOne({ _id: corrupted }, { quantity: 12 }); // drift: the ledger says 7
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const mismatch = { productId: corrupted, sku: 'ELE-DRIFT', quantity: 12, ledgerSum: 7 };
+    expect(await reconcile()).toEqual({ checked: 2, mismatches: [mismatch] });
+    expect(await quantityOf(corrupted)).toBe(12);
+
+    expect(await reconcile({ fix: true })).toEqual({ checked: 2, mismatches: [{ ...mismatch, fixed: true }] });
+    expect(await quantityOf(corrupted)).toBe(7);
+    // The repair writes no movement and logs one warning naming the product
+    expect(await movementsOf(corrupted)).toHaveLength(2);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(corrupted));
+
+    expect(await reconcile()).toEqual({ checked: 2, mismatches: [] });
+  });
+
+  it('repairs a product whose quantity is ahead of an empty ledger back to 0', async () => {
+    const productId = await newProduct({ sku: 'ELE-GHOST' });
+    await Product.updateOne({ _id: productId }, { quantity: 3 });
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(await reconcile({ fix: true })).toEqual({
+      checked: 1,
+      mismatches: [{ productId, sku: 'ELE-GHOST', quantity: 3, ledgerSum: 0, fixed: true }],
+    });
+    expect(await quantityOf(productId)).toBe(0);
+  });
+
+  it('leaves a movement in flight alone: its quantity is ahead of the ledger only until the insert lands', async () => {
+    const productId = await newProduct();
+    await recordMovement({ productId, type: 'receive', quantity: 5, userId });
+    const create = StockMovement.create.bind(StockMovement);
+    let incremented!: () => void;
+    const reachedInsert = new Promise<void>((resolve) => (incremented = resolve));
+    vi.spyOn(StockMovement, 'create').mockImplementationOnce((async (...args: Parameters<typeof create>) => {
+      incremented();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      return create(...args);
+    }) as never);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const shipping = recordMovement({ productId, type: 'ship', quantity: 2, userId });
+    await reachedInsert; // quantity is 3, the ledger still says 5
+    const report = await reconcile({ fix: true });
+    await shipping;
+
+    expect(report).toEqual({ checked: 1, mismatches: [] });
+    expect(await quantityOf(productId)).toBe(3);
+    expect(warn).not.toHaveBeenCalled();
+    expect(await reconcile()).toEqual({ checked: 1, mismatches: [] });
   });
 });

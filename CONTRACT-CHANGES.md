@@ -219,6 +219,8 @@ Where the PRD and the agreed Q&A conflict, the Q&A wins (`docs/adr/0001`). C17â€
 
 ## C22. Admin reconciliation endpoint and `STOCK_RECONCILE` (new)
 
+*Applied in #37 (`routes/admin.ts`, `reconcile` in `services/stock.ts`). A mismatch is re-checked once, after a 500 ms pause that lets a movement in flight land, before it is reported; the repair sets the quantity only if it still equals the re-checked value (else `fixed: false`), writes no movement and logs one warning per fixed product. `fixed` is present only with `fix=true`; a `fix` value other than `true` / `false` (or `1` / `0`, `yes` / `no`, ...) is 400 `VALIDATION_ERROR`.*
+
 - `GET /api/admin/reconcile[?fix=true]` â†’ `{ checked, mismatches: [{ productId, sku, quantity, ledgerSum, fixed? }] }`, behind the admin-only `STOCK_RECONCILE` permission (added in #28).
 - Known wording conflict, accepted from the Q&A: it is a GET that writes when `fix=true`.
 

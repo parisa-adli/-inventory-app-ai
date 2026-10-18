@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { env } from '../config/env.js';
 import { TELEGRAM_WEBHOOK_PATH, isTelegramConfigured, telegramWebhookHandler } from '../services/telegram.js';
+import adminRouter from './admin.js';
 import authRouter from './auth.js';
 import categoriesRouter from './categories.js';
 import healthRouter from './health.js';
@@ -18,6 +19,7 @@ router.use('/api/categories', categoriesRouter);
 router.use('/api/suppliers', suppliersRouter);
 router.use('/api/products', productsRouter);
 router.use('/api/stock-movements', stockMovementsRouter);
+router.use('/api/admin', adminRouter);
 
 // Telegram pushes updates here in webhook mode only; polling needs no inbound route.
 // grammY rejects requests whose secret_token header does not match TELEGRAM_WEBHOOK_SECRET.

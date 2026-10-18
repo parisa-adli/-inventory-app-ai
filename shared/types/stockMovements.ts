@@ -19,3 +19,19 @@ export interface StockMovement {
 
 /** GET /api/stock-movements */
 export type StockMovementsPage = Paginated<StockMovement>;
+
+/** A product whose quantity disagrees with the sum of its movement deltas. */
+export interface ReconcileMismatch {
+  productId: string;
+  sku: string;
+  quantity: number;
+  ledgerSum: number;
+  /** Only with `fix=true`: whether the quantity was set to the ledger sum. */
+  fixed?: boolean;
+}
+
+/** GET /api/admin/reconcile */
+export interface ReconcileReport {
+  checked: number;
+  mismatches: ReconcileMismatch[];
+}

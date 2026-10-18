@@ -108,7 +108,7 @@ export const seedStockMovements = [
   },
   {
     productRef: 'ELEC-WC-004',
-    type: STOCK_MOVEMENT_TYPES.ADJUST,
+    type: STOCK_MOVEMENT_TYPES.ADJUSTMENT,
     quantity: -2,
     resultingQuantity: 8,
     note: 'Damaged units - water damage in storage',
@@ -255,7 +255,7 @@ export const seedStockMovements = [
   },
   {
     productRef: 'SAFE-SG-001',
-    type: STOCK_MOVEMENT_TYPES.ADJUST,
+    type: STOCK_MOVEMENT_TYPES.ADJUSTMENT,
     quantity: -10,
     resultingQuantity: 50,
     note: 'Physical count correction - found broken units',

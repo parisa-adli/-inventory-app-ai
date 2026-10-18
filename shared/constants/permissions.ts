@@ -12,6 +12,8 @@ export const PERMISSIONS = {
   PRODUCTS_WRITE: 'products.write',
   /** Receive, ship and manual adjustment, including the inline +/- buttons. */
   STOCK_ADJUST: 'stock.adjust',
+  /** Compare every product's quantity with its movement history and, on request, repair mismatches. */
+  STOCK_RECONCILE: 'stock.reconcile',
   PRODUCTS_ARCHIVE: 'products.archive',
   PRODUCTS_DELETE: 'products.delete',
   /** Create and edit categories. */

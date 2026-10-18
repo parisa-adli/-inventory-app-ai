@@ -180,6 +180,41 @@ PRD §2 changed: staff may create and edit categories and suppliers; delete stay
 
 **Shared:** `USER_SORTS`, `UserSort`, `defaultUserSortOrder`, `AdminUser.lastLoginAt`. `User` model gains `lastLoginAt` (index `{ lastLoginAt: -1, _id: -1 }`).
 
+## Products & stock ledger (P3/P4, spec #27; agreed in the design Q&A, 2026-10-18)
+
+Where the PRD and the agreed Q&A conflict, the Q&A wins (`docs/adr/0001`). C17–C23 are agreed but not yet applied; each is marked applied when the #27 commit that implements it lands. Already applied in the prefactor (#28): the movement type `adjustment` (was `adjust`), `LOW_STOCK_THRESHOLD = 10` with `getStockStatus` (out = 0, low = 1–10, in = more than 10), and the `STOCK_RECONCILE` permission.
+
+## C17. StockMovement stores a signed delta and snapshots
+
+- PRD: magnitude `quantity` and `resultingQuantity`. Agreed: signed **`delta`** (non-zero integer), **`quantityAfter`**, the price snapshots **`unitCost` / `unitPrice`** (new) and **`occurredAt`** (defaults to now; only the seed backdates it). Date filtering and newest-first sorting use `occurredAt`.
+- Movements cannot be updated or deleted (model hooks).
+
+## C18. Product stores `archivedAt` instead of `status`
+
+- PRD: stored `status: active | archived`. Agreed: `archivedAt` (date or null). Responses carry a derived `status`, and `GET /api/products` still accepts `status` as a filter (`docs/adr/0003`).
+
+## C19. Stock changes and history go through `/api/stock-movements`
+
+- `POST /api/stock-movements` `{ productId, type, quantity, note? }` **replaces** `PATCH /api/products/:id/quantity` and `POST /api/products/:id/adjust-stock`. Receive and ship take a positive `quantity`; adjustment takes a signed non-zero one and requires a `note`. The inline +/- buttons post a receive or ship of 1.
+- `GET /api/stock-movements?product=` **replaces** `GET /api/products/:id/stock-movements` (the Stock History dialog filters by product).
+
+## C20. Shipping more than is on hand is 409 `INSUFFICIENT_STOCK`
+
+- PRD: 400. Agreed: 409 `INSUFFICIENT_STOCK` with `details: { onHand }`. Any stock change on an archived product is 409 `PRODUCT_ARCHIVED`; archived is reported before insufficient.
+
+## C21. Product edit is `PATCH`
+
+- PRD: `PUT /api/products/:id`. Agreed: `PATCH /api/products/:id`, following the Phase 2 convention (an absent field is unchanged, `null` clears supplier / image URL). `quantity` is rejected as unknown on edit, and product creation rejects any non-zero quantity: every product starts at 0.
+
+## C22. Admin reconciliation endpoint and `STOCK_RECONCILE` (new)
+
+- `GET /api/admin/reconcile[?fix=true]` → `{ checked, mismatches: [{ productId, sku, quantity, ledgerSum, fixed? }] }`, behind the admin-only `STOCK_RECONCILE` permission (added in #28).
+- Known wording conflict, accepted from the Q&A: it is a GET that writes when `fix=true`.
+
+## C23. Seed: about 60 generated products
+
+- The seed replaces the 32 hand-written products with about 60 generated ones across 6 of the 8 categories. Quantities are no longer stored in the seed data: they come from replayed movements (an opening balance about 90 days ago, then a fixed-seed history), and the seed fails if reconciliation reports any mismatch.
+
 ## Not applicable (nothing to change)
 
 - Stale JWT: the access token carries only `sub`; `/me` and `requireAuth` read the DB.

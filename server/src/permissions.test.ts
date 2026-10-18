@@ -6,6 +6,7 @@ const MATRIX: [Permission, { staff: boolean; admin: boolean }][] = [
   [PERMISSIONS.INVENTORY_VIEW, { staff: true, admin: true }],
   [PERMISSIONS.PRODUCTS_WRITE, { staff: true, admin: true }],
   [PERMISSIONS.STOCK_ADJUST, { staff: true, admin: true }],
+  [PERMISSIONS.STOCK_RECONCILE, { staff: false, admin: true }],
   [PERMISSIONS.PRODUCTS_ARCHIVE, { staff: false, admin: true }],
   [PERMISSIONS.PRODUCTS_DELETE, { staff: false, admin: true }],
   [PERMISSIONS.CATEGORIES_WRITE, { staff: true, admin: true }],

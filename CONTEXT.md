@@ -56,3 +56,28 @@ The same steps as **Telegram signup**, for a chat that already has a **Telegram 
 **Verification code**
 A 6-digit code the bot sends to a chat after Start so the person at the browser proves they hold that Telegram account. Valid for 2 minutes, 5 wrong entries, at most 3 new codes and one per minute. Shown to people as "code" or "verification code".
 _Avoid_: "OTP" in user-facing text, "PIN", "login code" (it is also used for signup).
+
+## Stock
+
+**Stock movement**
+One recorded change to a product's stock: a receive (goods arrive), a ship (goods leave) or an adjustment (a correction up or down, always with a reason). It records the signed change, the quantity after it, the prices at that moment, when it happened and who made it. Movements are never edited or deleted; a mistake is corrected by a new adjustment.
+_Avoid_: "transaction", "stock change" for the record itself, "adjust" (the type is `adjustment`).
+
+**Ledger**
+All **Stock movements** of a product, taken together. A product's quantity must always equal the sum of its ledger; the ledger is the truth and the stored quantity follows it.
+_Avoid_: "history" for the data itself ("Stock History" is the name of the dialog that shows it), "log".
+
+**Opening balance**
+The first receive in a product's **Ledger**, bringing in the stock it already had when tracking began. A new product starts at zero, so its stock enters only through movements.
+
+**Reconciliation**
+An admin check that compares every product's quantity with the sum of its **Ledger** and lists the products that disagree. On request it repairs them by setting the quantity to the ledger sum; it never writes a movement.
+_Avoid_: "audit", "recount" (nothing is physically counted).
+
+**Archived product**
+A product retired from the active catalog. It keeps its **Ledger**, stays visible in history, and is frozen: no **Stock movement** of any kind. Archiving is reversible by an admin.
+_Avoid_: "deleted", "inactive", "disabled". Deleting is a separate action, possible only for a product with no movements.
+
+**Stock status**
+How much of a product is on hand, in three buckets that never overlap: out of stock (0), low stock (1 to 10) and in stock (more than 10).
+_Avoid_: "status" alone (a product's status is active or archived).

@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
@@ -19,6 +20,8 @@ export default defineConfig({
       TELEGRAM_MODE: 'polling',
       // A made-up handle (matches the TELEGRAM_BOT_USERNAME format): the deep link of /telegram/start needs one
       TELEGRAM_BOT_USERNAME: 'inventory_test_bot',
+      // mongodb-memory-server (src/test/memoryDb.ts): one mongod cache for the repo, wherever vitest is started from
+      MONGOMS_DOWNLOAD_DIR: fileURLToPath(new URL('../node_modules/.cache/mongodb-memory-server', import.meta.url)),
     },
   },
 });

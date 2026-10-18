@@ -1,6 +1,6 @@
 # Design System
 
-> Reference: inventory-app-claude.vercel.app (screenshots in `docs/design/`)
+> Reference: https://ai.fronthooks.ir/app (screenshots in `docs/design/`)
 > Stack: shadcn/ui (style: new-york, base color: neutral) + Tailwind CSS + lucide-react icons
 
 This file is the single source of truth for UI. Every page and component must follow it.
@@ -19,18 +19,18 @@ Tokens live in `app/globals.css` (shadcn CSS variables). **Use the semantic Tail
 
 ### 2.1 Tokens (shadcn neutral, light mode)
 
-| Token | Value | ≈ Hex | Tailwind class | Usage |
-|---|---|---|---|---|
-| `--background` | oklch(1 0 0) | #ffffff | `bg-background` | page background |
-| `--foreground` | oklch(0.145 0 0) | #0a0a0a | `text-foreground` | main text |
-| `--card` | oklch(1 0 0) | #ffffff | `bg-card` | cards, tables |
-| `--primary` | oklch(0.205 0 0) | #171717 | `bg-primary` | primary buttons only |
-| `--primary-foreground` | oklch(0.985 0 0) | #fafafa | `text-primary-foreground` | text on primary |
-| `--secondary` / `--muted` / `--accent` | oklch(0.97 0 0) | #f5f5f5 | `bg-secondary`, `bg-muted`, `bg-accent` | badges, tab lists, hover, active nav |
-| `--muted-foreground` | oklch(0.556 0 0) | #737373 | `text-muted-foreground` | subtitles, SKU, dates, helper text |
-| `--border` / `--input` | oklch(0.922 0 0) | #e5e5e5 | `border`, `border-input` | all borders |
-| `--ring` | oklch(0.708 0 0) | #a1a1a1 | `ring-ring` | focus ring |
-| `--destructive` | shadcn default | red | `bg-destructive`, `text-destructive` | delete, errors |
+| Token                                  | Value            | ≈ Hex   | Tailwind class                          | Usage                                |
+| -------------------------------------- | ---------------- | ------- | --------------------------------------- | ------------------------------------ |
+| `--background`                         | oklch(1 0 0)     | #ffffff | `bg-background`                         | page background                      |
+| `--foreground`                         | oklch(0.145 0 0) | #0a0a0a | `text-foreground`                       | main text                            |
+| `--card`                               | oklch(1 0 0)     | #ffffff | `bg-card`                               | cards, tables                        |
+| `--primary`                            | oklch(0.205 0 0) | #171717 | `bg-primary`                            | primary buttons only                 |
+| `--primary-foreground`                 | oklch(0.985 0 0) | #fafafa | `text-primary-foreground`               | text on primary                      |
+| `--secondary` / `--muted` / `--accent` | oklch(0.97 0 0)  | #f5f5f5 | `bg-secondary`, `bg-muted`, `bg-accent` | badges, tab lists, hover, active nav |
+| `--muted-foreground`                   | oklch(0.556 0 0) | #737373 | `text-muted-foreground`                 | subtitles, SKU, dates, helper text   |
+| `--border` / `--input`                 | oklch(0.922 0 0) | #e5e5e5 | `border`, `border-input`                | all borders                          |
+| `--ring`                               | oklch(0.708 0 0) | #a1a1a1 | `ring-ring`                             | focus ring                           |
+| `--destructive`                        | shadcn default   | red     | `bg-destructive`, `text-destructive`    | delete, errors                       |
 
 Dark-mode values come from shadcn's neutral `.dark` block in `globals.css`. Do not hand-write them.
 
@@ -72,21 +72,21 @@ Dark-mode values come from shadcn's neutral `.dark` block in `globals.css`. Do n
 
 ## 5. Components (use shadcn, add with `npx shadcn@latest add <name>`)
 
-| Need | Component & variant |
-|---|---|
-| Main action ("Add product", "Sign in") | `Button` default, with an optional leading lucide icon (`Plus`) |
-| Secondary action, pagination, steppers | `Button variant="outline"`; use `size="icon"` for icon-only buttons |
-| Row actions (edit, history, move), header icons | `Button variant="ghost" size="icon"` |
-| Text fields | `Input` + `Label` (label above, `gap-2`) |
-| Search | `Input` with a leading `Search` icon (absolute, `pl-8`) |
-| Filters | `Select` (all on one row with the search; the search uses `flex-1`) |
-| Mode switch (Sign in / Sign up) | `Tabs` + `TabsList` (full width) |
-| Category | `Badge variant="secondary"` |
-| Role | `Badge variant="outline"` |
-| Lists of records | `Table` wrapped in `rounded-xl border` (see below) |
-| Dialogs and forms in a popup | `Dialog`; use `AlertDialog` for destructive confirmation |
-| Notifications | `sonner` toast |
-| Empty and loading states | `Skeleton`; for empty, use muted text centered inside the table or card |
+| Need                                            | Component & variant                                                     |
+| ----------------------------------------------- | ----------------------------------------------------------------------- |
+| Main action ("Add product", "Sign in")          | `Button` default, with an optional leading lucide icon (`Plus`)         |
+| Secondary action, pagination, steppers          | `Button variant="outline"`; use `size="icon"` for icon-only buttons     |
+| Row actions (edit, history, move), header icons | `Button variant="ghost" size="icon"`                                    |
+| Text fields                                     | `Input` + `Label` (label above, `gap-2`)                                |
+| Search                                          | `Input` with a leading `Search` icon (absolute, `pl-8`)                 |
+| Filters                                         | `Select` (all on one row with the search; the search uses `flex-1`)     |
+| Mode switch (Sign in / Sign up)                 | `Tabs` + `TabsList` (full width)                                        |
+| Category                                        | `Badge variant="secondary"`                                             |
+| Role                                            | `Badge variant="outline"`                                               |
+| Lists of records                                | `Table` wrapped in `rounded-xl border` (see below)                      |
+| Dialogs and forms in a popup                    | `Dialog`; use `AlertDialog` for destructive confirmation                |
+| Notifications                                   | `sonner` toast                                                          |
+| Empty and loading states                        | `Skeleton`; for empty, use muted text centered inside the table or card |
 
 ### Table pattern
 
@@ -129,6 +129,7 @@ Dark-mode values come from shadcn's neutral `.dark` block in `globals.css`. Do n
 ## 6. Rules
 
 **DO**
+
 - Check `components/ui` first; if a component is missing, add it with `npx shadcn@latest add <name>`. Never hand-write a component shadcn provides.
 - Build with shadcn components first. Compose them; don't restyle them.
 - Use semantic token classes (`bg-primary`, `text-muted-foreground`, `border`), so dark mode works for free.
@@ -137,6 +138,7 @@ Dark-mode values come from shadcn's neutral `.dark` block in `globals.css`. Do n
 - When a new pattern is needed, match the closest screenshot in `docs/design/`, then document the pattern here.
 
 **DON'T**
+
 - Hardcode colors (`#000`, `bg-black`, `text-gray-500`). The status colors in §2.2 are the only exception.
 - Introduce new colors, fonts, shadows or radius values.
 - Edit `components/ui/*` for one-off styling. Pass a `className` or add a variant instead.

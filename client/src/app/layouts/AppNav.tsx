@@ -43,17 +43,40 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { to: PATHS.dashboard, label: 'Dashboard', icon: LayoutDashboard, permission: PERMISSIONS.INVENTORY_VIEW },
+  {
+    to: PATHS.dashboard,
+    label: 'Dashboard',
+    icon: LayoutDashboard,
+    permission: PERMISSIONS.INVENTORY_VIEW,
+  },
   { to: PATHS.products, label: 'Products', icon: Package, permission: PERMISSIONS.INVENTORY_VIEW },
-  { to: PATHS.categories, label: 'Categories', icon: FolderTree, permission: PERMISSIONS.INVENTORY_VIEW },
+  {
+    to: PATHS.categories,
+    label: 'Categories',
+    icon: FolderTree,
+    permission: PERMISSIONS.INVENTORY_VIEW,
+  },
   { to: PATHS.suppliers, label: 'Suppliers', icon: Truck, permission: PERMISSIONS.INVENTORY_VIEW },
-  { to: PATHS.movements, label: 'Movements', icon: ArrowLeftRight, permission: PERMISSIONS.INVENTORY_VIEW },
-  { to: PATHS.users, label: 'Users', icon: Users, permission: PERMISSIONS.USERS_MANAGE, badge: PendingCountBadge },
+  {
+    to: PATHS.movements,
+    label: 'Movements',
+    icon: ArrowLeftRight,
+    permission: PERMISSIONS.INVENTORY_VIEW,
+  },
+  {
+    to: PATHS.users,
+    label: 'Users',
+    icon: Users,
+    permission: PERMISSIONS.USERS_MANAGE,
+    badge: PendingCountBadge,
+  },
 ]
 
 const useNavItems = () => {
   const { data: user } = useAuthUser()
-  return NAV_ITEMS.filter((item) => !item.permission || (user && hasPermission(user.role, item.permission)))
+  return NAV_ITEMS.filter(
+    (item) => !item.permission || (user && hasPermission(user.role, item.permission))
+  )
 }
 
 function Logo() {

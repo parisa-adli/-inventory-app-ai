@@ -106,15 +106,16 @@ function DropdownMenuCheckboxItem({
     <DropdownMenuPrimitive.CheckboxItem
       data-slot="dropdown-menu-checkbox-item"
       className={cn(
-        "relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-hidden transition-colors focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50",
+        "group relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-9 pr-2 text-sm outline-hidden transition-colors focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50",
         className
       )}
       checked={checked}
       {...props}
     >
-      <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+      {/* Drawn like the Checkbox: an empty square, filled with the primary color when checked */}
+      <span className="absolute left-2 flex size-[18px] items-center justify-center rounded-[4px] border border-input group-data-[state=checked]:border-primary group-data-[state=checked]:bg-primary group-data-[state=checked]:text-primary-foreground">
         <DropdownMenuPrimitive.ItemIndicator>
-          <Check className="h-4 w-4" />
+          <Check strokeWidth={3} className="size-3.5" />
         </DropdownMenuPrimitive.ItemIndicator>
       </span>
       {children}

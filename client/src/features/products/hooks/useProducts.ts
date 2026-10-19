@@ -57,6 +57,21 @@ export const useUpdateProduct = () => {
   });
 };
 
+/** The selection bar's "Assign supplier": the supplier cards count products. */
+export const useAssignSupplier = () => {
+  const invalidate = useInvalidate([productsKeys.all, suppliersKeys.all]);
+  return useMutation({
+    mutationFn: productsApi.assignSupplier,
+    onSuccess: ({ updated }, { supplier }) => {
+      const products = `${updated} product${updated === 1 ? '' : 's'}`;
+      toast.success(supplier ? `Supplier assigned to ${products}` : `${products} unassigned`);
+    },
+    onError: (err) => toast.error(getApiError(err).message),
+    // Also on error: a 404 means the selection on screen was stale
+    onSettled: () => invalidate(),
+  });
+};
+
 /** Archive or unarchive (#36). Movements carry an "Archived" tag and the dashboard's stock value leaves archived stock out. */
 export const useSetProductArchived = () => {
   const invalidate = useInvalidate([productsKeys.all, movementsKeys.all, dashboardKeys.all]);

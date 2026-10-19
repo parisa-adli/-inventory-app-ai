@@ -284,10 +284,10 @@ test.describe('stock changes (stubbed API)', () => {
 
     const selectAll = page.getByRole('checkbox', { name: 'Select all products on this page' });
     await row.getByRole('checkbox', { name: 'Select Wireless Mouse' }).click();
-    await expect(page.getByText('1 of 1 selected')).toBeVisible();
+    await expect(page.getByText('1 selected', { exact: true })).toBeVisible();
     await expect(selectAll).toBeChecked();
     await selectAll.click();
-    await expect(page.getByText('1 of 1 selected')).toHaveCount(0);
+    await expect(page.getByText('1 selected', { exact: true })).toHaveCount(0);
 
     const toggleSupplier = async () => {
       await page.getByRole('button', { name: 'Columns' }).click();
@@ -302,6 +302,38 @@ test.describe('stock changes (stubbed API)', () => {
     await expect(page.getByRole('columnheader', { name: 'Supplier' })).toHaveCount(0);
     await toggleSupplier();
     await expect(page.getByRole('columnheader', { name: 'Supplier' })).toBeVisible();
+  });
+
+  test('the selection bar assigns a supplier to the selected products, then clears the selection', async ({ page }) => {
+    await stubStock(page);
+    let supplier: typeof TECHSUPPLY | null = null;
+    const bodies: unknown[] = [];
+    // Registered last, so these win over the stubbed list
+    await page.route(/\/api\/products(\?.*)?$/, (route) =>
+      route.fulfill({
+        json: pageOf([{ ...MOUSE, supplier: supplier && { id: supplier.id, name: supplier.name } }], 20),
+      })
+    );
+    await page.route('**/api/products/supplier', (route, request) => {
+      bodies.push(request.postDataJSON());
+      supplier = TECHSUPPLY;
+      return route.fulfill({ json: { updated: 1 } });
+    });
+    await page.goto('/app/products');
+    const row = page.getByRole('row', { name: /Wireless Mouse/ });
+    await expect(row).toContainText('Unassigned');
+
+    await row.getByRole('checkbox', { name: 'Select Wireless Mouse' }).click();
+    const apply = page.getByRole('button', { name: 'Apply' });
+    await expect(apply).toBeDisabled();
+    await choose(page, 'Assign supplier', 'TechSupply Co.');
+    await apply.click();
+
+    await expect(page.getByText('Supplier assigned to 1 product')).toBeVisible();
+    expect(bodies).toEqual([{ ids: ['p1'], supplier: TECHSUPPLY.id }]);
+    await expect(row).toContainText('TechSupply Co.');
+    await expect(page.getByText('1 selected', { exact: true })).toHaveCount(0);
+    await expect(row.getByRole('checkbox', { name: 'Select Wireless Mouse' })).not.toBeChecked();
   });
 
   const openAdjustStock = async (page: Page, movement: 'Receive' | 'Ship' | 'Adjustment', onHand = 1) => {

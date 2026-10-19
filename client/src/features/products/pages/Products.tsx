@@ -1,10 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Plus } from 'lucide-react';
-import { PERMISSIONS, type Product, type ProductStatus } from '@inventory/shared';
-import { Can } from '@/features/auth/components/Can';
+import type { Product, ProductStatus } from '@inventory/shared';
 import { ListMessage } from '@/components/ListMessage';
 import { Pager } from '@/components/Pager';
-import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AdjustStockDialog } from '../components/AdjustStockDialog';
@@ -14,6 +11,7 @@ import { ProductFormDialog } from '../components/ProductFormDialog';
 import { ProductsTable } from '../components/ProductsTable';
 import { ProductsToolbar } from '../components/ProductsToolbar';
 import { StockHistoryDialog } from '../components/StockHistoryDialog';
+import { useColumnVisibility } from '../hooks/useColumnVisibility';
 import { useProductListParams } from '../hooks/useProductListParams';
 import { useProducts } from '../hooks/useProducts';
 
@@ -38,6 +36,7 @@ export default function Products() {
   const [archiving, setArchiving] = useState<Product | null>(null);
   const [deleting, setDeleting] = useState<Product | null>(null);
   const [historyProductId, setHistoryProductId] = useState<string | null>(null);
+  const columns = useColumnVisibility();
   const query = useProducts(list.params);
   const { data } = query;
 
@@ -52,19 +51,11 @@ export default function Products() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Products</h1>
-          <p className="text-sm text-muted-foreground">
-            {data ? `${data.total} ${view.noun[data.total === 1 ? 0 : 1]}${list.hasFilters ? ' match' : view.where}` : 'Your product catalog.'}
-          </p>
-        </div>
-        <Can permission={PERMISSIONS.PRODUCTS_WRITE}>
-          <Button onClick={() => setCreating(true)}>
-            <Plus className="size-4" />
-            Add product
-          </Button>
-        </Can>
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Products</h1>
+        <p className="text-sm text-muted-foreground">
+          {data ? `${data.total} ${view.noun[data.total === 1 ? 0 : 1]}${list.hasFilters ? ' match' : view.where}` : 'Your product catalog.'}
+        </p>
       </div>
 
       <Tabs value={status} onValueChange={list.setStatus}>
@@ -77,7 +68,7 @@ export default function Products() {
         </TabsList>
       </Tabs>
 
-      <ProductsToolbar list={list} />
+      <ProductsToolbar list={list} columns={columns} onAdd={() => setCreating(true)} />
 
       {query.isPending && (
         <div className="space-y-2" role="status" aria-label="Loading">
@@ -106,6 +97,7 @@ export default function Products() {
             sort={list.sort}
             order={list.order}
             onSort={list.setSort}
+            columnVisibility={columns.columnVisibility}
             onEdit={(product) => setEditingId(product.id)}
             onAdjustStock={setAdjustingSnapshot}
             onStockHistory={(product) => setHistoryProductId(product.id)}

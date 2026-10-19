@@ -1,18 +1,16 @@
-import { createContext, use, useState, type ReactNode } from 'react'
+import { createContext, use, useState } from 'react'
 import {
   Archive,
   ArchiveRestore,
   ArrowDown,
   ArrowLeftRight,
   ArrowUp,
-  ChevronDown,
   ChevronsUpDown,
   History,
   ImageIcon,
   Minus,
   Pencil,
   Plus,
-  Settings2,
   Trash2,
 } from 'lucide-react'
 import {
@@ -31,23 +29,25 @@ import {
   PERMISSIONS,
   PRODUCT_SORTS,
   STOCK_MOVEMENT_TYPES,
+  UNASSIGNED_SUPPLIER,
   type Product,
   type ProductSort,
   type SortOrder,
 } from '@inventory/shared'
 import { Can } from '@/features/auth/components/Can'
 import { useCan } from '@/features/auth/hooks/useCan'
+import { useSuppliers } from '@/features/suppliers/hooks/useSuppliers'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -56,8 +56,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { formatDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { useAssignSupplier } from '../hooks/useProducts'
 import { useRecordMovement } from '../hooks/useRecordMovement'
 import { StockStatusBadge } from './StockStatusBadge'
 
@@ -65,7 +65,7 @@ const money = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'U
 
 // Module scope: TanStack Table v9 wants stable features and columns. Sorting is the feature's state and
 // header APIs only: the server sorts (manualSorting), and the sort lives in the URL. Selection covers the page
-// on screen; nothing acts on it yet.
+// on screen; the selection bar assigns a supplier to it.
 const features = tableFeatures({ rowSortingFeature, rowSelectionFeature, columnVisibilityFeature })
 const column = createColumnHelper<typeof features, Product>()
 
@@ -128,7 +128,7 @@ const columns = column.columns([
         </Badge>
       ),
   }),
-  // Numbers and dates sort highest/newest first on the first click, like the API's default order
+  // Numbers sort highest first on the first click, like the API's default order
   column.accessor('costPrice', {
     header: 'Cost',
     sortDescFirst: true,
@@ -150,13 +150,6 @@ const columns = column.columns([
     enableSorting: false,
     cell: (info) => <StockStatusBadge quantity={info.getValue()} />,
   }),
-  column.accessor('createdAt', {
-    header: 'Created',
-    sortDescFirst: true,
-    cell: (info) => (
-      <span className="whitespace-nowrap text-muted-foreground">{formatDate(info.getValue())}</span>
-    ),
-  }),
   column.display({
     id: 'actions',
     header: 'Actions',
@@ -164,35 +157,6 @@ const columns = column.columns([
     cell: ({ row }) => <RowActions product={row.original} />,
   }),
 ])
-
-/** What the Columns menu calls each column it can hide. */
-const COLUMN_LABELS: Record<string, string> = {
-  category: 'Category',
-  supplier: 'Supplier',
-  costPrice: 'Cost',
-  salePrice: 'Sale',
-  quantity: 'Quantity',
-  stock: 'Stock',
-  createdAt: 'Created',
-}
-
-/** Which columns this viewer hid, kept in their browser only. Storage can be missing or blocked: then all show. */
-const VISIBILITY_KEY = 'products.columns'
-const loadVisibility = (): ColumnVisibilityState => {
-  try {
-    const saved: unknown = JSON.parse(localStorage.getItem(VISIBILITY_KEY) ?? '{}')
-    return saved && typeof saved === 'object' ? (saved as ColumnVisibilityState) : {}
-  } catch {
-    return {}
-  }
-}
-const saveVisibility = (visibility: ColumnVisibilityState) => {
-  try {
-    localStorage.setItem(VISIBILITY_KEY, JSON.stringify(visibility))
-  } catch {
-    // Not remembered; the choice still applies until the page reloads
-  }
-}
 
 function ProductCell({ product }: { product: Product }) {
   return (
@@ -225,14 +189,10 @@ const useCanChangeStock = (product: Product) =>
 
 function QuantityCell({ product }: { product: Product }) {
   return (
-    <div className="flex items-center justify-end">
-      <QuantityStepper product={product}>
-        <span className="min-w-14 text-center whitespace-nowrap tabular-nums">
-          <span>{product.quantity}</span>{' '}
-          <span className="text-muted-foreground">{product.unitOfMeasure}</span>
-        </span>
-      </QuantityStepper>
-    </div>
+    <span className="whitespace-nowrap tabular-nums">
+      <span>{product.quantity}</span>{' '}
+      <span className="text-muted-foreground">{product.unitOfMeasure}</span>
+    </span>
   )
 }
 
@@ -240,28 +200,27 @@ function QuantityCell({ product }: { product: Product }) {
  * Inline −/+ (#30): a ship or a receive of 1, through the same ledger as every other stock change.
  * Not optimistic; both buttons wait while one runs. Archived products are frozen, so they get none.
  */
-function QuantityStepper({ product, children }: { product: Product; children: ReactNode }) {
+function QuantityStepper({ product }: { product: Product }) {
   const canChangeStock = useCanChangeStock(product)
   const record = useRecordMovement()
-  if (!canChangeStock) return children
+  if (!canChangeStock) return null
 
   const step = (type: typeof STOCK_MOVEMENT_TYPES.RECEIVE | typeof STOCK_MOVEMENT_TYPES.SHIP) =>
     record.mutate({ productId: product.id, type, quantity: 1 })
   return (
-    <div className="flex items-center gap-1" aria-busy={record.isPending}>
+    <div className="mr-2 flex items-center gap-1" aria-busy={record.isPending}>
       <Button
         variant="outline"
-        size="icon-xs"
+        size="icon-sm"
         aria-label={`Ship 1 ${product.title}`}
         disabled={record.isPending || product.quantity === 0}
         onClick={() => step(STOCK_MOVEMENT_TYPES.SHIP)}
       >
         <Minus />
       </Button>
-      {children}
       <Button
         variant="outline"
-        size="icon-xs"
+        size="icon-sm"
         aria-label={`Receive 1 ${product.title}`}
         disabled={record.isPending}
         onClick={() => step(STOCK_MOVEMENT_TYPES.RECEIVE)}
@@ -273,9 +232,9 @@ function QuantityStepper({ product, children }: { product: Product; children: Re
 }
 
 /**
- * Ghost icon buttons (DESIGN.md): Edit (#35), Adjust stock (#31), Stock history (#32), then the admin's Archive or
- * Unarchive and Delete (#36). Archived products are frozen, so they get no Adjust stock, but they stay editable and
- * their history stays readable.
+ * The inline −/+ (#30), then ghost icon buttons (DESIGN.md): Edit (#35), Adjust stock (#31), Stock history (#32),
+ * then the admin's Archive or Unarchive and Delete (#36). Archived products are frozen, so they get no −/+ or Adjust
+ * stock, but they stay editable and their history stays readable.
  */
 function RowActions({ product }: { product: Product }) {
   const actions = use(RowActionsContext)
@@ -284,7 +243,8 @@ function RowActions({ product }: { product: Product }) {
   const archived = product.status === 'archived'
   if (!actions) return null
   return (
-    <div className="flex justify-end gap-1">
+    <div className="flex items-center justify-end gap-1">
+      <QuantityStepper product={product} />
       {canEdit && (
         <Button
           variant="ghost"
@@ -337,6 +297,54 @@ function RowActions({ product }: { product: Product }) {
   )
 }
 
+/** Same query as the toolbar's supplier filter, so the two share a cache entry. */
+const SUPPLIER_PICKER_PARAMS = { limit: 100, sort: 'name' } as const
+
+/**
+ * Shown while rows are selected: the count, then (for PRODUCTS_WRITE) "Assign supplier…" + Apply, which sets one
+ * supplier, or Unassigned, on every selected product, and "Clear selection".
+ */
+function SelectionBar({ ids, onClear }: { ids: string[]; onClear: () => void }) {
+  const [picked, setPicked] = useState('')
+  const suppliers = useSuppliers(SUPPLIER_PICKER_PARAMS).data?.items ?? []
+  const assign = useAssignSupplier()
+
+  const apply = () =>
+    assign.mutate(
+      { ids, supplier: picked === UNASSIGNED_SUPPLIER ? null : picked },
+      { onSuccess: onClear }
+    )
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-muted/40 px-3 py-2">
+      <span className="text-sm font-medium" aria-live="polite">
+        {ids.length} selected
+      </span>
+      <Can permission={PERMISSIONS.PRODUCTS_WRITE}>
+        <Select value={picked} onValueChange={setPicked}>
+          <SelectTrigger className="h-9 w-44 gap-2 rounded-lg" aria-label="Assign supplier">
+            <SelectValue placeholder="Assign supplier…" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={UNASSIGNED_SUPPLIER}>Unassigned</SelectItem>
+            {suppliers.length > 0 && <SelectSeparator />}
+            {suppliers.map((supplier) => (
+              <SelectItem key={supplier.id} value={supplier.id}>
+                {supplier.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button size="sm" disabled={!picked || assign.isPending} onClick={apply}>
+          Apply
+        </Button>
+      </Can>
+      <Button variant="ghost" size="sm" onClick={onClear}>
+        Clear selection
+      </Button>
+    </div>
+  )
+}
+
 const SORT_ICONS = { asc: ArrowUp, desc: ArrowDown } as const
 const ARIA_SORT = { asc: 'ascending', desc: 'descending' } as const
 
@@ -352,21 +360,21 @@ export interface ProductsSort {
 
 /**
  * The products list as a TanStack Table. Sorting and paging are server-side: a sortable header asks for a new
- * sort (one column at a time, never unsorted) and the page refetches. Quantity has inline −/+ (#30); Actions has
- * Edit (#35), Adjust stock (#31), Stock history (#32) and the admin's Archive / Unarchive and Delete (#36).
- * Rows can be selected (this page only; the page remounts the table on a new page or filter), and the Columns
- * menu hides columns.
+ * sort (one column at a time, never unsorted) and the page refetches. Actions has the inline −/+ (#30), Edit (#35),
+ * Adjust stock (#31), Stock history (#32) and the admin's Archive / Unarchive and Delete (#36). Rows can be selected
+ * (this page only; the page remounts the table on a new page or filter) for the selection bar, and the toolbar's
+ * Columns menu decides which columns show.
  */
 export function ProductsTable({
   products,
   sort,
   order,
   onSort,
+  columnVisibility,
   ...actions
-}: { products: Product[] } & ProductsSort & ProductRowActions) {
+}: { products: Product[]; columnVisibility: ColumnVisibilityState } & ProductsSort & ProductRowActions) {
   const sorting: SortingState = [{ id: sort, desc: order === 'desc' }]
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
-  const [columnVisibility, setColumnVisibility] = useState(loadVisibility)
   const table = useTable({
     features,
     columns,
@@ -377,56 +385,20 @@ export function ProductsTable({
     enableSortingRemoval: false,
     state: { sorting, rowSelection, columnVisibility },
     onRowSelectionChange: setRowSelection,
-    onColumnVisibilityChange: (updater: Updater<ColumnVisibilityState>) => {
-      const next = typeof updater === 'function' ? updater(columnVisibility) : updater
-      setColumnVisibility(next)
-      saveVisibility(next)
-    },
     onSortingChange: (updater: Updater<SortingState>) => {
       const [next] = typeof updater === 'function' ? updater(sorting) : updater
       if (next && isProductSort(next.id)) onSort(next.id, next.desc ? 'desc' : 'asc')
     },
   })
 
-  const selected = Object.values(rowSelection).filter(Boolean).length
+  const selectedIds = Object.keys(rowSelection).filter((id) => rowSelection[id])
 
   return (
     <RowActionsContext value={actions}>
       <div className="space-y-3">
-        <div className="flex items-center justify-between gap-4">
-          <p className="text-sm text-muted-foreground" aria-live="polite">
-            {selected > 0 && `${selected} of ${products.length} selected`}
-          </p>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Settings2 />
-                Columns
-                <ChevronDown />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuLabel>Show columns</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {table
-                .getAllLeafColumns()
-                .filter((column) => column.getCanHide())
-                .map((column) => (
-                  <DropdownMenuCheckboxItem
-                    key={column.id}
-                    checked={column.getIsVisible()}
-                    onCheckedChange={(checked: boolean | 'indeterminate') =>
-                      column.toggleVisibility(checked === true)
-                    }
-                    // Stay open, so several columns can be switched in one go
-                    onSelect={(event: Event) => event.preventDefault()}
-                  >
-                    {COLUMN_LABELS[column.id] ?? column.id}
-                  </DropdownMenuCheckboxItem>
-                ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        {selectedIds.length > 0 && (
+          <SelectionBar ids={selectedIds} onClear={() => setRowSelection({})} />
+        )}
         <div className="overflow-x-auto rounded-xl border bg-card">
           <Table>
             <TableHeader>

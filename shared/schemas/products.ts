@@ -87,6 +87,18 @@ export const updateProductSchema = z
     when: (payload) => payload.issues.length === 0,
   });
 
+/**
+ * Body of PATCH /api/products/supplier: one supplier (or `null`, Unassigned) for the products selected on a page,
+ * so at most a page's worth of ids.
+ */
+export const assignSupplierSchema = z.strictObject({
+  ids: z
+    .array(objectId('Invalid product id'))
+    .min(1, 'Select at least one product')
+    .max(PRODUCTS_PAGE_SIZE_MAX, `Select at most ${PRODUCTS_PAGE_SIZE_MAX} products`),
+  supplier: supplier.nullable(),
+});
+
 /** A price typed into an input: required, plain decimal digits (not `1e2` or `0x10`), then the same rules as the API. */
 const formPrice = (label: string) =>
   z
@@ -138,6 +150,7 @@ export const listProductsQuerySchema = z.object({
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;
 export type UpdateProductInput = z.infer<typeof updateProductSchema>;
+export type AssignSupplierInput = z.infer<typeof assignSupplierSchema>;
 export type ProductFormInput = z.input<typeof productFormSchema>;
 export type ProductFormValues = z.output<typeof productFormSchema>;
 export type ListProductsQuery = z.infer<typeof listProductsQuerySchema>;

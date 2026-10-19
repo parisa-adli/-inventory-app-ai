@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -10,10 +11,12 @@ interface SearchInputProps {
   /** Called with the typed text once typing pauses. */
   onSearch: (value: string) => void;
   placeholder: string;
+  /** Extra classes for the input (the Products toolbar uses a taller box). */
+  className?: string;
 }
 
 /** A debounced search box that writes to the URL and follows back/forward (DESIGN.md §5 Filters). */
-export function SearchInput({ value, onSearch, placeholder }: SearchInputProps) {
+export function SearchInput({ value, onSearch, placeholder, className }: SearchInputProps) {
   const [draft, setDraft] = useState(value);
   const [shownValue, setShownValue] = useState(value);
   // What this box last wrote to the URL, so our own update never overwrites newer keystrokes
@@ -47,7 +50,7 @@ export function SearchInput({ value, onSearch, placeholder }: SearchInputProps) 
         onChange={(event) => setDraft(event.target.value)}
         placeholder={placeholder}
         aria-label="Search"
-        className="pl-8"
+        className={cn('pl-8', className)}
       />
     </div>
   );

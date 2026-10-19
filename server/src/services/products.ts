@@ -1,6 +1,7 @@
 import { isValidObjectId, type HydratedDocument } from 'mongoose';
 import { STOCK_STATUS_RANGES, UNASSIGNED_SUPPLIER, defaultSortOrder } from '@inventory/shared';
 import type {
+  AssignSupplierInput,
   CreateProductInput,
   ListProductsQuery,
   Product as ProductDto,
@@ -110,6 +111,20 @@ export const updateProduct = async (id: string, patch: UpdateProductInput): Prom
     if (patch[field] !== undefined) product.set(field, patch[field]);
   }
   return save(product);
+};
+
+/**
+ * Bulk PATCH: one supplier (or `null`) for the selected products, archived ones included like a single edit. A
+ * selection that no longer exists in full is a 404 and nothing changes.
+ */
+export const assignSupplier = async ({ ids, supplier }: AssignSupplierInput): Promise<{ updated: number }> => {
+  await assertRefsExist({ supplier });
+  const unique = [...new Set(ids)];
+  if ((await Product.countDocuments({ _id: { $in: unique } })) < unique.length) {
+    throw new NotFoundError('Some of the selected products no longer exist');
+  }
+  await Product.updateMany({ _id: { $in: unique } }, { $set: { supplier } });
+  return { updated: unique.length };
 };
 
 /**

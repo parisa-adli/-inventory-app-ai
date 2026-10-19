@@ -257,6 +257,55 @@ describe('PATCH /api/products/:id', () => {
   });
 });
 
+describe('PATCH /api/products/supplier', () => {
+  const assign = (body: object, cookie = staff) =>
+    request(app).patch('/api/products/supplier').set('Cookie', cookie).send(body);
+  const twoProducts = async () => [
+    (await create(validProduct({ supplier: undefined }))).body.id as string,
+    (await create(validProduct({ sku: 'ele-002' }))).body.id as string,
+  ];
+
+  it('sets one supplier on every selected product', async () => {
+    const otherId = String((await Supplier.create({ name: 'Global Parts' }))._id);
+    const ids = await twoProducts();
+
+    const res = await assign({ ids, supplier: otherId });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body).toEqual({ updated: 2 });
+    const { body } = await list();
+    expect(body.items.map((p: { supplier: { id: string } }) => p.supplier.id)).toEqual([otherId, otherId]);
+  });
+
+  it('makes them Unassigned with null', async () => {
+    const ids = await twoProducts();
+    expect((await assign({ ids, supplier: null })).status).toBe(200);
+    expect((await list('?supplier=unassigned')).body.total).toBe(2);
+  });
+
+  it('refuses an unknown supplier and changes nothing', async () => {
+    const ids = await twoProducts();
+    const res = await assign({ ids, supplier: String(new Types.ObjectId()) });
+    expect(res.status).toBe(400);
+    expect((await list('?supplier=unassigned')).body.total).toBe(1);
+  });
+
+  it('is a 404 when a selected product no longer exists, and changes nothing', async () => {
+    const [id] = await twoProducts();
+    const res = await assign({ ids: [id, String(new Types.ObjectId())], supplier: null });
+    expect(res.status).toBe(404);
+    expect((await list('?supplier=unassigned')).body.total).toBe(1);
+  });
+
+  it.each([
+    ['no ids', { ids: [], supplier: null }],
+    ['a malformed id', { ids: ['nope'], supplier: null }],
+    ['no supplier field', { ids: [String(new Types.ObjectId())] }],
+    ['an unknown field', { ids: [String(new Types.ObjectId())], supplier: null, quantity: 5 }],
+  ])('rejects a body with %s', async (_, body) => {
+    expect((await assign(body)).status).toBe(400);
+  });
+});
+
 describe('GET /api/products', () => {
   const seed = async (titles: string[], extra: object = {}) => {
     for (const [i, title] of titles.entries()) {

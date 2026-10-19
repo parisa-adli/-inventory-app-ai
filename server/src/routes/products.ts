@@ -1,8 +1,14 @@
 import { Router } from 'express';
-import { PERMISSIONS, createProductSchema, listProductsQuerySchema, updateProductSchema } from '@inventory/shared';
+import {
+  PERMISSIONS,
+  assignSupplierSchema,
+  createProductSchema,
+  listProductsQuerySchema,
+  updateProductSchema,
+} from '@inventory/shared';
 import { can } from '../middleware/guards.js';
 import { validate } from '../middleware/validate.js';
-import { createProduct, deleteProduct, listProducts, setArchived, updateProduct } from '../services/products.js';
+import { assignSupplier, createProduct, deleteProduct, listProducts, setArchived, updateProduct } from '../services/products.js';
 
 const router = Router();
 
@@ -12,6 +18,11 @@ router.get('/', ...can(PERMISSIONS.INVENTORY_VIEW), async (req, res) => {
 
 router.post('/', ...can(PERMISSIONS.PRODUCTS_WRITE), validate(createProductSchema), async (req, res) => {
   res.status(201).json(await createProduct(req.body));
+});
+
+// Before '/:id', which would otherwise take "supplier" as an id
+router.patch('/supplier', ...can(PERMISSIONS.PRODUCTS_WRITE), validate(assignSupplierSchema), async (req, res) => {
+  res.json(await assignSupplier(req.body));
 });
 
 router.patch('/:id', ...can(PERMISSIONS.PRODUCTS_WRITE), validate(updateProductSchema), async (req, res) => {

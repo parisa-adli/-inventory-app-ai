@@ -1,31 +1,45 @@
-import type { MovementsChartGranularity, MovementsChartRange } from '../schemas/dashboard';
+import type { DashboardRange, MovementsChartGranularity } from '../schemas/dashboard';
 import type { STOCK_STATUSES, StockStatus } from '../constants/stock-status';
 import type { UnitOfMeasure } from '../constants/units';
 
-/** One day or week of the In-vs-Out chart. Quantities are summed across units (pcs, kg, ...). */
+/** One hour, day, week or month of the In-vs-Out chart. Quantities are summed across units (pcs, kg, ...). */
 export interface MovementsChartBucket {
-  /** The instant the bucket starts: midnight (a Monday's, for weeks) in the requested `tz`, as ISO UTC. */
+  /** The instant the bucket starts: the hour, or midnight (a Monday's for weeks, the 1st's for months) in `tz`, as ISO UTC. */
   bucketStart: string;
   /** Σ received units. */
-  received: number;
+  receivedUnits: number;
   /** Σ shipped units, positive. */
-  shipped: number;
+  shippedUnits: number;
+  /** Σ received units × unit cost, rounded to 2 decimals. */
+  receivedValue: number;
+  /** Σ shipped units × unit price, rounded to 2 decimals. */
+  shippedValue: number;
 }
 
-/** GET /api/dashboard/movements-chart (C26): every bucket of the window, oldest first, today's last; adjustments excluded. */
+/** GET /api/dashboard/movements-chart (C26): every bucket of the window, oldest first, the current one last; adjustments excluded. */
 export interface MovementsChart {
-  range: MovementsChartRange;
+  range: DashboardRange;
   granularity: MovementsChartGranularity;
   buckets: MovementsChartBucket[];
 }
 
-/** GET /api/dashboard/summary (C26): the five stat cards, active products only. Money is rounded to 2 decimals. */
+/** GET /api/dashboard/period-summary: money moved by receives and ships in the range. Rounded to 2 decimals. */
+export interface DashboardPeriodSummary {
+  /** Σ received units × unit cost. */
+  inboundValue: number;
+  /** Σ shipped units × unit price. */
+  income: number;
+  /** Σ shipped units × unit cost (the cost recorded on each shipment). */
+  cogs: number;
+  /** income − cogs. */
+  grossProfit: number;
+}
+
+/** GET /api/dashboard/summary (C26): the "Right now" cards, active products only. Money is rounded to 2 decimals. */
 export interface DashboardSummary {
   totalProducts: number;
   /** Σ costPrice × quantity. */
   totalStockValue: number;
-  /** Σ salePrice × quantity. */
-  totalStockIncome: number;
   /** Quantity 1–threshold (the stored low-stock threshold). */
   lowStockCount: number;
   outOfStockCount: number;
@@ -41,7 +55,7 @@ export interface DashboardAlert {
   status: Exclude<StockStatus, typeof STOCK_STATUSES.IN>;
 }
 
-/** GET /api/dashboard/alerts (C26): out first, then low by quantity ascending, then title; at most 20 `items`, `total` counts all. */
+/** GET /api/dashboard/alerts (C26): out first, then low by quantity ascending, then title; at most 5 `items`, `total` counts all. */
 export interface DashboardAlerts {
   items: DashboardAlert[];
   total: number;

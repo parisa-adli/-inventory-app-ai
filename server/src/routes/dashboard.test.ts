@@ -10,8 +10,8 @@ import { User } from '../models/User.js';
 import { ACCESS_COOKIE, signAccessToken } from '../services/jwt.js';
 import { MEMORY_DB_START_TIMEOUT_MS, clearMemoryDb, connectMemoryDb, disconnectMemoryDb } from '../test/memoryDb.js';
 
-// The dashboard (C26): the In-vs-Out chart (#55), receive vs ship per day or ISO week cut in the viewer's timezone,
-// and the summary cards and reorder alerts (#56).
+// The dashboard (C26): the In-vs-Out chart (#55), receive vs ship per hour, day, week or month cut in the viewer's
+// timezone, the range's money cards, and the "Right now" cards and reorder alerts (#56).
 
 const app = createApp();
 
@@ -67,8 +67,10 @@ describe('GET /api/dashboard/movements-chart', () => {
     expect(res.body.buckets).toEqual(
       [6, 5, 4, 3, 2, 1, 0].map((daysAgo) => ({
         bucketStart: new Date(today.getTime() - daysAgo * DAY_MS).toISOString(),
-        received: 0,
-        shipped: 0,
+        receivedUnits: 0,
+        shippedUnits: 0,
+        receivedValue: 0,
+        shippedValue: 0,
       }))
     );
   });
@@ -88,6 +90,9 @@ describe('GET /api/dashboard/movements-chart', () => {
     ['no range', { tz: 'UTC' }, 'range'],
     ['an invalid tz', { range: '7d', tz: 'Mars/Olympus_Mons' }, 'tz'],
     ['no tz', { range: '7d' }, 'tz'],
+    ['a custom range with no days', { range: 'custom', tz: 'UTC' }, 'from'],
+    ['a custom range ending before it starts', { range: 'custom', tz: 'UTC', from: '2026-10-10', to: '2026-10-09' }, 'to'],
+    ['a day that does not exist', { range: 'custom', tz: 'UTC', from: '2026-02-30', to: '2026-03-01' }, 'from'],
   ])('refuses %s with 400 VALIDATION_ERROR', async (_label, query, field) => {
     const res = await chart(query);
 
@@ -118,7 +123,8 @@ describe('GET /api/dashboard/movements-chart', () => {
     const res = await chart({ range: '7d', tz: 'UTC' });
 
     expect(res.status, JSON.stringify(res.body)).toBe(200);
-    expect(res.body.buckets.map(({ received, shipped }: { received: number; shipped: number }) => [received, shipped])).toEqual([
+    type Bucket = { receivedUnits: number; shippedUnits: number; receivedValue: number; shippedValue: number };
+    expect(res.body.buckets.map(({ receivedUnits, shippedUnits }: Bucket) => [receivedUnits, shippedUnits])).toEqual([
       [0, 0],
       [0, 0],
       [0, 0],
@@ -127,6 +133,92 @@ describe('GET /api/dashboard/movements-chart', () => {
       [12, 3],
       [0, 2],
     ]);
+    // Received at unit cost 1, shipped at unit price 2
+    expect(res.body.buckets.at(-2)).toMatchObject({ receivedValue: 12, shippedValue: 6 });
+  });
+
+  // The exact count with a pinned clock is in services/dashboard.test.ts; here the request may cross an hour
+  it('today is hour buckets from local midnight to the current hour', async () => {
+    const before = new Date();
+    const res = await chart({ range: 'today', tz: 'UTC' });
+
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body.granularity).toBe('hour');
+    const lastHour = new Date(res.body.buckets.at(-1).bucketStart).getTime();
+    expect(lastHour).toBeGreaterThanOrEqual(before.getTime() - HOUR_MS);
+    expect(lastHour).toBeLessThanOrEqual(Date.now());
+    expect(new Date(res.body.buckets[0].bucketStart).getUTCHours()).toBe(0);
+  });
+
+  it('a custom range covers its days inclusive, and a long one is bucketed by week, then by month', async () => {
+    await movement('receive', 4, new Date('2026-03-01T00:00:00Z'));
+    await movement('receive', 6, new Date('2026-03-10T23:59:59Z'));
+    await movement('receive', 99, new Date('2026-03-11T00:00:00Z'));
+
+    const days = await chart({ range: 'custom', tz: 'UTC', from: '2026-03-01', to: '2026-03-10' });
+    expect(days.status, JSON.stringify(days.body)).toBe(200);
+    expect(days.body.granularity).toBe('day');
+    expect(days.body.buckets).toHaveLength(10);
+    expect(days.body.buckets.reduce((sum: number, bucket: { receivedUnits: number }) => sum + bucket.receivedUnits, 0)).toBe(10);
+
+    const weeks = await chart({ range: 'custom', tz: 'UTC', from: '2026-01-01', to: '2026-03-31' });
+    expect(weeks.body.granularity).toBe('week');
+    expect(weeks.body.buckets[0].bucketStart).toBe('2025-12-29T00:00:00.000Z'); // the Monday of Jan 1's week
+
+    const months = await chart({ range: 'custom', tz: 'UTC', from: '2025-01-15', to: '2026-03-31' });
+    expect(months.body.granularity).toBe('month');
+    expect(months.body.buckets).toHaveLength(15);
+    expect(months.body.buckets.at(-1)).toMatchObject({ bucketStart: '2026-03-01T00:00:00.000Z', receivedUnits: 109 });
+  });
+
+  it('all time starts on the day of the first movement', async () => {
+    await movement('receive', 1, new Date(Date.now() - 20 * DAY_MS));
+
+    const res = await chart({ range: 'all', tz: 'UTC' });
+
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body.granularity).toBe('day');
+    expect(res.body.buckets).toHaveLength(21);
+    expect(res.body.buckets[0].receivedUnits).toBe(1);
+  });
+});
+
+describe('GET /api/dashboard/period-summary', () => {
+  const summary = (query: Record<string, string>) =>
+    request(app).get('/api/dashboard/period-summary').query(query).set('Cookie', cookie);
+
+  it('sums inbound value, income and COGS at the recorded prices, leaving adjustments and older movements out', async () => {
+    const at = new Date(Date.now() - HOUR_MS);
+    await StockMovement.create([
+      { product: productId, type: 'receive', delta: 10, quantityAfter: 10, unitCost: 0.1, unitPrice: 9, user: userId, occurredAt: at },
+      { product: productId, type: 'ship', delta: -3, quantityAfter: 7, unitCost: 0.1, unitPrice: 19.99, user: userId, occurredAt: at },
+      { product: productId, type: 'ship', delta: -2, quantityAfter: 5, unitCost: 4, unitPrice: 5, user: userId, occurredAt: at },
+      { product: productId, type: 'adjustment', delta: -1, quantityAfter: 4, unitCost: 4, unitPrice: 5, note: 'Broken', user: userId, occurredAt: at },
+      { product: productId, type: 'receive', delta: 50, quantityAfter: 54, unitCost: 4, unitPrice: 5, user: userId, occurredAt: new Date(Date.now() - 40 * DAY_MS) },
+    ]);
+
+    const res = await summary({ range: '30d', tz: 'UTC' });
+
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body).toEqual({
+      inboundValue: 1, // 10 × 0.10
+      income: 69.97, // 3 × 19.99 + 2 × 5
+      cogs: 8.3, // 3 × 0.10 + 2 × 4
+      grossProfit: 61.67,
+    });
+    expect((await summary({ range: 'all', tz: 'UTC' })).body.inboundValue).toBe(201);
+  });
+
+  it('answers zeros with no movements', async () => {
+    const res = await summary({ range: 'all', tz: 'UTC' });
+
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body).toEqual({ inboundValue: 0, income: 0, cogs: 0, grossProfit: 0 });
+  });
+
+  it('validates the range like the chart', async () => {
+    const res = await summary({ range: 'custom', tz: 'UTC', from: '2026-10-01' });
+    expect(res.status, JSON.stringify(res.body)).toBe(400);
   });
 });
 
@@ -162,7 +254,6 @@ describe('GET /api/dashboard/summary', () => {
     expect(res.body).toEqual({
       totalProducts: 3,
       totalStockValue: 87.8, // 0.30 + 87.50
-      totalStockIncome: 64.87, // 59.97 + 4.90
       lowStockCount: 2,
       outOfStockCount: 1,
     });
@@ -172,7 +263,7 @@ describe('GET /api/dashboard/summary', () => {
     const res = await get('/api/dashboard/summary');
 
     expect(res.status, JSON.stringify(res.body)).toBe(200);
-    expect(res.body).toEqual({ totalProducts: 0, totalStockValue: 0, totalStockIncome: 0, lowStockCount: 0, outOfStockCount: 0 });
+    expect(res.body).toEqual({ totalProducts: 0, totalStockValue: 0, lowStockCount: 0, outOfStockCount: 0 });
   });
 
   it('leaves archived products out of every field', async () => {
@@ -182,7 +273,7 @@ describe('GET /api/dashboard/summary', () => {
 
     const res = await get('/api/dashboard/summary');
 
-    expect(res.body).toEqual({ totalProducts: 1, totalStockValue: 20, totalStockIncome: 40, lowStockCount: 0, outOfStockCount: 0 });
+    expect(res.body).toEqual({ totalProducts: 1, totalStockValue: 20, lowStockCount: 0, outOfStockCount: 0 });
   });
 
   it('counts low and out like the products stock-status filter, under the stored threshold', async () => {
@@ -203,7 +294,6 @@ describe('GET /api/dashboard/summary', () => {
 
 describe('GET /api/dashboard/alerts', () => {
   it('lists out of stock first, then low by quantity ascending, then title, with the row fields', async () => {
-    await product({ title: 'Low 3', quantity: 3 });
     await product({ title: 'banana', quantity: 1 });
     await product({ title: 'Apple', quantity: 1 });
     await product({ title: 'Plenty', quantity: 11 });
@@ -215,15 +305,8 @@ describe('GET /api/dashboard/alerts', () => {
     const res = await get('/api/dashboard/alerts');
 
     expect(res.status, JSON.stringify(res.body)).toBe(200);
-    expect(res.body.total).toBe(6);
-    expect(res.body.items.map((item: { title: string }) => item.title)).toEqual([
-      'zero a',
-      'Zero B',
-      'Apple',
-      'banana',
-      'Low 3',
-      'Edge',
-    ]);
+    expect(res.body.total).toBe(5);
+    expect(res.body.items.map((item: { title: string }) => item.title)).toEqual(['zero a', 'Zero B', 'Apple', 'banana', 'Edge']);
     expect(res.body.items.at(-1)).toEqual({
       id: String(edge._id),
       title: 'Edge',
@@ -235,19 +318,15 @@ describe('GET /api/dashboard/alerts', () => {
     expect(res.body.items[0].status).toBe('out');
   });
 
-  it('caps items at 20 and counts every qualifying product in total', async () => {
+  it('caps items at 5 and counts every qualifying product in total', async () => {
     for (let i = 0; i < 25; i++) await product({ title: `Item ${String(i).padStart(2, '0')}`, quantity: i % 5 });
 
     const res = await get('/api/dashboard/alerts');
 
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(res.body.total).toBe(25);
-    expect(res.body.items).toHaveLength(20);
-    // 5 per quantity 0–4, so the cut falls after all of quantity 3
-    expect(res.body.items.map((item: { quantity: number }) => item.quantity)).toEqual(
-      [0, 1, 2, 3].flatMap((quantity) => Array(5).fill(quantity))
-    );
-    expect(res.body.items.slice(0, 5).map((item: { title: string }) => item.title)).toEqual([
+    // 5 per quantity 0–4, so the cut falls after all of quantity 0
+    expect(res.body.items.map((item: { title: string }) => item.title)).toEqual([
       'Item 00',
       'Item 05',
       'Item 10',

@@ -206,10 +206,11 @@ Deletion blocked (409) if any product references it.
 
 ### 6.1 Dashboard
 
-- Cards: Total Products, Total Stock Value (Σ costPrice × quantity, active products), Total Stock Income potential (Σ salePrice × quantity, active products), Low Stock count, Out of Stock count.
-- Recent Stock Movements feed (latest N, all types).
-- Low/Out-of-Stock alert table (products at or below threshold, or at 0).
-- Chart: stock In vs Out over time (received vs shipped quantities, aggregated by day/week over a selectable range) — Recharts.
+- A time-range dropdown (Today, 7 days, 30 days, This month, All time, Custom) drives the range cards and the chart.
+- Cards, "Right now": Active Products, Stock Value (Σ costPrice × quantity, active products), Low Stock count, Out of Stock count. Cards for the range: Inbound Value (Σ received × unit cost), Income (Σ shipped × unit price), COGS (Σ shipped × unit cost), Gross Profit (Income − COGS). *(Changed 2026-10-19 by the user: Total Stock Income potential dropped, range cards added; Open Question 16.)*
+- Recent Stock Movements feed (latest N, all types), with a link to all movements.
+- Low/Out-of-Stock alert table (products at or below threshold, or at 0; at most 5 rows, with links to the low and out-of-stock product lists).
+- Chart: stock In vs Out over the selected range (received vs shipped, in units or value, aggregated by hour/day/week/month) — Recharts.
 
 ### 6.2 Products
 

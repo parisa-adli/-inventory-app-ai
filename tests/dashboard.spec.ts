@@ -1,11 +1,12 @@
 import { DEFAULT_SETTINGS, expect, stubSettings, test, type Page } from './fixtures';
 
-// The dashboard (#57) against a stubbed API: the cards, the recent movements feed, the alerts table and the
-// In-vs-Out chart, each with its own loading, empty and error states.
+// The dashboard (#57) against a stubbed API: the time-range dropdown, the "Right now" and range cards, the recent
+// movements feed, the alerts table and the In-vs-Out chart (Units / Value), each with its own empty and error states.
 
 const staff = { id: 's1', name: 'Staff', email: 'staff@inventory.local', role: 'staff', status: 'active', emailVerified: true };
 
-const SUMMARY = { totalProducts: 57, totalStockValue: 12345.6, totalStockIncome: 23456.78, lowStockCount: 9, outOfStockCount: 4 };
+const SUMMARY = { totalProducts: 57, totalStockValue: 12345.6, lowStockCount: 9, outOfStockCount: 4 };
+const PERIOD = { inboundValue: 5171650.85, income: 2501998.46, cogs: 1476891.2, grossProfit: 1025107.26 };
 
 const MOUSE = { id: 'a0000000000000000000000a', title: 'Wireless Mouse', sku: 'ELE-001', archived: false };
 const LAMP = { id: 'b0000000000000000000000b', title: 'Desk Lamp', sku: 'HOM-002', archived: true };
@@ -43,12 +44,14 @@ const ALERTS = [
   { id: 'p2', title: 'Coffee Beans', sku: 'FOO-003', quantity: 3, unit: 'kg', status: 'low' },
 ];
 
-/** Tehran-day buckets ending today (2026-10-18), oldest first, with these received / shipped values. */
+/** Tehran-day buckets ending today (2026-10-18), oldest first, with these received / shipped units (values × 10 / × 20). */
 const dayBuckets = (values: [number, number][]) =>
   values.map(([received, shipped], i) => ({
     bucketStart: new Date(Date.UTC(2026, 9, 18 - (values.length - 1 - i)) - 3.5 * 3600 * 1000).toISOString(),
-    received,
-    shipped,
+    receivedUnits: received,
+    shippedUnits: shipped,
+    receivedValue: received * 10,
+    shippedValue: shipped * 20,
   }));
 
 const WEEK: [number, number][] = [
@@ -62,23 +65,28 @@ const WEEK: [number, number][] = [
 ];
 
 type Reply = { status?: number; json: unknown };
-type Replies = { summary: () => Reply; alerts: () => Reply; chart: () => Reply; movements: () => Reply };
+type Replies = { summary: () => Reply; period: () => Reply; alerts: () => Reply; chart: () => Reply; movements: () => Reply };
 
 const fail = { status: 500, json: { error: { code: 'INTERNAL', message: 'Something went wrong' } } };
 
 const DEFAULT_REPLIES: Replies = {
   summary: () => ({ json: SUMMARY }),
+  period: () => ({ json: PERIOD }),
   alerts: () => ({ json: { items: [], total: 0 } }),
   chart: () => ({ json: { range: '30d', granularity: 'day', buckets: [] } }),
   movements: () => ({ json: { items: [], page: 1, limit: 10, total: 0, totalPages: 0 } }),
 };
 
-/** Answers the four dashboard queries (each overridable) and records their query strings. */
+/** Answers the five dashboard queries (each overridable) and records their query strings. */
 const stubApi = async (page: Page, replies: Partial<Replies> = {}) => {
   const answer = { ...DEFAULT_REPLIES, ...replies };
-  const queries = { chart: [] as URLSearchParams[], movements: [] as URLSearchParams[] };
+  const queries = { chart: [] as URLSearchParams[], period: [] as URLSearchParams[], movements: [] as URLSearchParams[] };
   await page.route('**/api/auth/me', (route) => route.fulfill({ json: staff }));
   await page.route('**/api/dashboard/summary', (route) => route.fulfill(answer.summary()));
+  await page.route(/\/api\/dashboard\/period-summary(\?.*)?$/, (route, request) => {
+    queries.period.push(new URL(request.url()).searchParams);
+    return route.fulfill(answer.period());
+  });
   await page.route('**/api/dashboard/alerts', (route) => route.fulfill(answer.alerts()));
   await page.route(/\/api\/dashboard\/movements-chart(\?.*)?$/, (route, request) => {
     queries.chart.push(new URL(request.url()).searchParams);
@@ -88,6 +96,10 @@ const stubApi = async (page: Page, replies: Partial<Replies> = {}) => {
     queries.movements.push(new URL(request.url()).searchParams);
     return route.fulfill(answer.movements());
   });
+  // The Products page a card or row link opens; unstubbed, a 401 from the real API would end the session mid-test
+  await page.route(/\/api\/(products|categories|suppliers)(\?.*)?$/, (route) =>
+    route.fulfill({ json: { items: [], page: 1, limit: 20, total: 0, totalPages: 1 } }),
+  );
   return queries;
 };
 
@@ -97,19 +109,27 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe('dashboard (stubbed API)', () => {
-  test('five cards show the summary, money in the app currency; Low and Out open the filtered Products page', async ({
+  test('"Right now" and range cards show the totals, money in the app currency; Low and Out open the filtered Products page', async ({
     page,
   }) => {
     await stubApi(page);
     await page.goto('/app/dashboard');
 
     await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible();
-    const card = (name: string) => page.getByRole('region', { name });
-    await expect(card('Total products')).toContainText('57');
-    await expect(card('Total stock value')).toContainText('$12,345.60');
-    await expect(card('Total stock income')).toContainText('$23,456.78');
+    const now = page.getByRole('region', { name: 'Right now' });
+    const card = (name: string) => page.getByRole('region', { name, exact: true });
+    await expect(now.getByRole('region')).toHaveCount(4);
+    await expect(card('Active products')).toContainText('57');
+    await expect(card('Stock value')).toContainText('$12,345.60');
     await expect(card('Low stock')).toContainText('9');
     await expect(card('Out of stock')).toContainText('4');
+
+    const period = page.getByRole('region', { name: 'Last 30 days' });
+    await expect(period.getByRole('region')).toHaveCount(4);
+    await expect(card('Inbound value')).toContainText('$5,171,650.85');
+    await expect(card('Income')).toContainText('$2,501,998.46');
+    await expect(card('COGS')).toContainText('$1,476,891.20');
+    await expect(card('Gross profit')).toContainText('$1,025,107.26');
 
     await expect(card('Out of stock').getByRole('link')).toHaveAttribute('href', '/app/products?stockStatus=out');
     // The whole card is the link
@@ -144,6 +164,7 @@ test.describe('dashboard (stubbed API)', () => {
       'href',
       '/app/products?status=archived&search=HOM-002',
     );
+    await expect(feed.getByRole('link', { name: 'View all movements' })).toHaveAttribute('href', '/app/movements');
     await rows.nth(1).getByRole('link', { name: 'Wireless Mouse' }).click();
     await expect(page).toHaveURL(/\/app\/products\?search=ELE-001$/);
   });
@@ -174,14 +195,14 @@ test.describe('dashboard (stubbed API)', () => {
     await expect(page).toHaveURL(/\/app\/products\?search=FOO-003$/);
   });
 
-  test('capped alerts say how many there are and link to each full filtered list', async ({ page }) => {
+  test('capped alerts say how many there are; links under the list open each full filtered list', async ({ page }) => {
     await stubApi(page, { alerts: () => ({ json: { items: ALERTS, total: 31 } }) });
     await page.goto('/app/dashboard');
 
     const alerts = page.getByRole('region', { name: 'Stock alerts' });
     await expect(alerts).toContainText('Showing 2 of 31');
-    await expect(alerts.getByRole('link', { name: 'Out of stock' })).toHaveAttribute('href', '/app/products?stockStatus=out');
-    await expect(alerts.getByRole('link', { name: 'Low stock' })).toHaveAttribute('href', '/app/products?stockStatus=low');
+    await expect(alerts.getByRole('link', { name: 'View out of stock' })).toHaveAttribute('href', '/app/products?stockStatus=out');
+    await expect(alerts.getByRole('link', { name: 'View low stock' })).toHaveAttribute('href', '/app/products?stockStatus=low');
   });
 
   test('no alerts says every product is above the threshold', async ({ page }) => {
@@ -192,7 +213,7 @@ test.describe('dashboard (stubbed API)', () => {
     );
   });
 
-  test('the chart defaults to 30 days in the viewer timezone; the range tabs live in ?range= and survive a refresh', async ({
+  test('the range dropdown defaults to 30 days in the viewer timezone, lives in ?range= and survives a refresh', async ({
     page,
   }) => {
     const queries = await stubApi(page, {
@@ -200,40 +221,194 @@ test.describe('dashboard (stubbed API)', () => {
     });
     await page.goto('/app/dashboard');
 
-    const chart = page.getByRole('region', { name: 'Received vs shipped' });
-    await expect(chart.getByRole('tab', { name: '30 days' })).toHaveAttribute('aria-selected', 'true');
+    const picker = page.getByRole('button', { name: /^Time range/ });
+    await expect(picker).toHaveText('30 days');
     await expect.poll(() => queries.chart.length).toBeGreaterThan(0);
+    await expect.poll(() => queries.period.length).toBeGreaterThan(0);
     expect(queries.chart[0].get('range')).toBe('30d');
     expect(queries.chart[0].get('tz')).toBe('Asia/Tehran');
-    await expect(chart).toContainText('units across all products');
+    expect(queries.period[0].get('range')).toBe('30d');
 
-    await chart.getByRole('tab', { name: '7 days' }).click();
-    await expect(page).toHaveURL(/\/app\/dashboard\?range=7d$/);
-    await expect.poll(() => queries.chart.at(-1)?.get('range')).toBe('7d');
-    await expect(chart.getByLabel('Received in range')).toHaveText('37');
-    await expect(chart.getByLabel('Shipped in range')).toHaveText('15');
+    await picker.click();
+    const items = page.getByRole('menuitemradio');
+    await expect(items).toHaveText(['Today', '7 days', '30 days', 'This month', 'All time', 'Custom']);
+    await expect(page.getByRole('menuitemradio', { name: '30 days', checked: true })).toBeVisible();
+    await expect(page.getByRole('menuitemradio', { checked: true })).toHaveCount(1);
+    await page.getByRole('menuitemradio', { name: 'All time' }).click();
+    await expect(page).toHaveURL(/\/app\/dashboard\?range=all$/);
+    await expect(picker).toHaveText('All time');
+    await expect.poll(() => queries.chart.at(-1)?.get('range')).toBe('all');
+    await expect.poll(() => queries.period.at(-1)?.get('range')).toBe('all');
+    await expect(page.getByRole('region', { name: 'All time' })).toBeVisible();
+
+    // The reload must ask again, for All time
+    const before = queries.chart.length;
+    await page.reload();
+    await expect(picker).toHaveText('All time');
+    await expect.poll(() => queries.chart.length).toBeGreaterThan(before);
+    expect(queries.chart.at(-1)?.get('range')).toBe('all');
+
+    // Back to the default leaves the URL clean
+    await picker.click();
+    await page.getByRole('menuitemradio', { name: '30 days' }).click();
+    await expect(page).toHaveURL(/\/app\/dashboard$/);
+  });
+
+  test('changing the range keeps the chart on Value', async ({ page }) => {
+    await stubApi(page);
+    await page.goto('/app/dashboard?chart=value');
+
+    await page.getByRole('button', { name: /^Time range/ }).click();
+    await page.getByRole('menuitemradio', { name: '7 days' }).click();
+    await expect(page).toHaveURL(/\?chart=value&range=7d$/);
+    await expect(page.getByRole('tab', { name: 'Value' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('Custom opens a range calendar; Apply keeps the days in the URL and names them', async ({ page }) => {
+    const queries = await stubApi(page);
+    await page.goto('/app/dashboard');
+
+    const picker = page.getByRole('button', { name: /^Time range/ });
+    await picker.click();
+    await page.getByRole('menuitemradio', { name: 'Custom' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Custom range' });
+    // Opened with the mouse, focus still moves into the calendar
+    await expect(dialog.locator(':focus')).toHaveCount(1);
+    await expect(dialog.getByRole('button', { name: 'Apply' })).toBeDisabled();
+    // Two months side by side at this width, the future out of reach
+    await expect(dialog.getByRole('grid')).toHaveCount(2);
+    await expect(dialog.getByRole('button', { name: /October 19th, 2026/ })).toBeDisabled();
+    await dialog.getByRole('button', { name: /October 5th, 2026/ }).click();
+    await dialog.getByRole('button', { name: /October 12th, 2026/ }).click();
+    await expect(dialog).toContainText('Oct 5 – 12, 2026');
+    await dialog.getByRole('button', { name: 'Apply' }).click();
+
+    await expect(page).toHaveURL(/\?range=custom&from=2026-10-05&to=2026-10-12$/);
+    await expect(picker).toHaveText('Oct 5 – 12, 2026');
+    await expect(picker).toBeFocused();
+    await expect.poll(() => queries.chart.at(-1)?.get('from')).toBe('2026-10-05');
+    expect(queries.chart.at(-1)?.get('to')).toBe('2026-10-12');
+    await expect.poll(() => queries.period.at(-1)?.get('range')).toBe('custom');
+    await expect(page.getByRole('region', { name: 'Oct 5 – 12, 2026' })).toBeVisible();
+
+    // Reopened, the calendar starts from the kept days and is checked in the menu
+    await picker.click();
+    await expect(page.getByRole('menuitemradio', { name: 'Custom', checked: true })).toBeVisible();
+  });
+
+  test('the custom calendar closes on Cancel and Escape, focus back on the button; Tab stays inside it', async ({ page }) => {
+    await stubApi(page);
+    await page.goto('/app/dashboard');
+    const picker = page.getByRole('button', { name: /^Time range/ });
+    const dialog = page.getByRole('dialog', { name: 'Custom range' });
+    const openCustom = async () => {
+      await picker.click();
+      await page.getByRole('menuitemradio', { name: 'Custom' }).click();
+      await expect(dialog).toBeVisible();
+    };
+
+    await openCustom();
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(picker).toBeFocused();
+    await expect(page).toHaveURL(/\/app\/dashboard$/);
+
+    // Keyboard only
+    await page.keyboard.press('Enter');
+    await page.getByRole('menuitemradio', { name: 'Custom' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(dialog.locator(':focus')).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(picker).toBeFocused();
+
+    await openCustom();
+    // Tab cycles within the open calendar, so it is never left floating open behind the focus
+    await dialog.getByRole('button', { name: /previous month/i }).focus();
+    await page.keyboard.press('Shift+Tab');
+    await expect(dialog.locator(':focus')).toHaveCount(1);
+  });
+
+  test('pressing the button while the calendar is open opens the menu', async ({ page }) => {
+    await stubApi(page);
+    await page.goto('/app/dashboard');
+    const picker = page.getByRole('button', { name: /^Time range/ });
+    await picker.click();
+    await page.getByRole('menuitemradio', { name: 'Custom' }).click();
+    await expect(page.getByRole('dialog', { name: 'Custom range' })).toBeVisible();
+
+    await picker.click();
+    await expect(page.getByRole('dialog', { name: 'Custom range' })).toHaveCount(0);
+    await expect(page.getByRole('menu')).toBeVisible();
+  });
+
+  test('custom days the server would refuse fall back to 30 days', async ({ page }) => {
+    const queries = await stubApi(page);
+    for (const days of ['from=2026-02-30&to=2026-03-05', 'from=1999-12-01&to=2026-01-01', 'from=2026-10-12&to=2026-10-05']) {
+      await page.goto(`/app/dashboard?range=custom&${days}`);
+      await expect(page.getByRole('button', { name: /^Time range/ })).toHaveText('30 days');
+      await expect(page.getByRole('region', { name: 'Last 30 days' })).toBeVisible();
+      await expect.poll(() => queries.chart.at(-1)?.get('range')).toBe('30d');
+      expect(queries.chart.at(-1)?.has('from')).toBe(false);
+    }
+  });
+
+  test('one month at a time below md, so the calendar does not stack two', async ({ page }) => {
+    await page.setViewportSize({ width: 700, height: 900 });
+    await stubApi(page);
+    await page.goto('/app/dashboard');
+    await page.getByRole('button', { name: /^Time range/ }).click();
+    await page.getByRole('menuitemradio', { name: 'Custom' }).click();
+    await expect(page.getByRole('dialog', { name: 'Custom range' }).getByRole('grid')).toHaveCount(1);
+  });
+
+  test('the chart switches between units and value, kept in ?chart=value', async ({ page }) => {
+    await stubApi(page, { chart: () => ({ json: { range: '7d', granularity: 'day', buckets: dayBuckets(WEEK) } }) });
+    await page.goto('/app/dashboard?range=7d');
+
+    const chart = page.getByRole('region', { name: 'Stock in vs out' });
+    await expect(chart.getByRole('tab', { name: 'Units' })).toHaveAttribute('aria-selected', 'true');
+    const hoverToday = async () => {
+      const box = await chart.locator('.recharts-surface').boundingBox();
+      if (!box) throw new Error('no chart');
+      await page.mouse.move(box.x + box.width * (13 / 14), box.y + box.height / 2);
+    };
+    const tooltip = chart.locator('.recharts-tooltip-wrapper');
+    await hoverToday();
+    await expect(tooltip).toContainText('Oct 18');
+    await expect(tooltip).toContainText('In20');
+    await expect(tooltip).toContainText('Out4');
+
+    await chart.getByRole('tab', { name: 'Value' }).click();
+    await expect(page).toHaveURL(/\?range=7d&chart=value$/);
+    // The value axis is in short money
+    await expect(chart.locator('svg text').filter({ hasText: /^\$\d/ }).first()).toBeVisible();
+    await page.mouse.move(0, 0);
+    await hoverToday();
+    await expect(tooltip).toContainText('$200.00');
+    await expect(tooltip).toContainText('$80.00');
 
     await page.reload();
-    await expect(chart.getByRole('tab', { name: '7 days' })).toHaveAttribute('aria-selected', 'true');
-    expect(queries.chart.at(-1)?.get('range')).toBe('7d');
-
-    // The tooltip names the day and both values
-    const box = await chart.locator('.recharts-surface').boundingBox();
-    if (!box) throw new Error('no chart');
-    await page.mouse.move(box.x + box.width * (13 / 14), box.y + box.height / 2);
-    const tooltip = chart.locator('.recharts-tooltip-wrapper');
-    await expect(tooltip).toContainText('Oct 18');
-    await expect(tooltip).toContainText('Received');
-    await expect(tooltip).toContainText('20');
-    await expect(tooltip).toContainText('4');
+    await expect(chart.getByRole('tab', { name: 'Value' })).toHaveAttribute('aria-selected', 'true');
   });
 
   test('a range without receipts or shipments says so', async ({ page }) => {
-    await stubApi(page, { chart: () => ({ json: { range: '90d', granularity: 'week', buckets: [] } }) });
-    await page.goto('/app/dashboard?range=90d');
-    await expect(page.getByRole('region', { name: 'Received vs shipped' })).toContainText(
-      'No receipts or shipments in the last 90 days.',
+    await stubApi(page, { chart: () => ({ json: { range: 'month', granularity: 'day', buckets: dayBuckets([[0, 0]]) } }) });
+    await page.goto('/app/dashboard?range=month');
+    await expect(page.getByRole('region', { name: 'Stock in vs out' })).toContainText(
+      'No receipts or shipments in this range (This month).',
     );
+  });
+
+  test('Value shows the empty text when the movements in range carry no value', async ({ page }) => {
+    const free = dayBuckets([[5, 2]]).map((bucket) => ({ ...bucket, receivedValue: 0, shippedValue: 0 }));
+    await stubApi(page, { chart: () => ({ json: { range: 'today', granularity: 'day', buckets: free } }) });
+    await page.goto('/app/dashboard?range=today&chart=value');
+    const chart = page.getByRole('region', { name: 'Stock in vs out' });
+    await expect(chart).toContainText('No receipts or shipments in this range (Today).');
+
+    await chart.getByRole('tab', { name: 'Units' }).click();
+    await expect(chart.locator('.recharts-surface')).toBeVisible();
   });
 
   test('an empty ledger says so in the feed', async ({ page }) => {
@@ -252,7 +427,7 @@ test.describe('dashboard (stubbed API)', () => {
     await page.goto('/app/dashboard');
 
     await expect(page.getByText('Could not load the stock totals.')).toBeVisible();
-    const chart = page.getByRole('region', { name: 'Received vs shipped' });
+    const chart = page.getByRole('region', { name: 'Stock in vs out' });
     await expect(chart.getByText('Could not load the chart.')).toBeVisible();
     // The others are unaffected
     await expect(page.getByRole('region', { name: 'Recent movements' }).getByRole('listitem')).toHaveCount(2);
@@ -260,7 +435,7 @@ test.describe('dashboard (stubbed API)', () => {
 
     summaryUp = true;
     await page.getByRole('alert').filter({ hasText: 'stock totals' }).getByRole('button', { name: 'Retry' }).click();
-    await expect(page.getByRole('region', { name: 'Total products' })).toContainText('57');
+    await expect(page.getByRole('region', { name: 'Active products' })).toContainText('57');
     await expect(chart.getByText('Could not load the chart.')).toBeVisible();
   });
 
@@ -285,7 +460,7 @@ test.describe('dashboard (stubbed API)', () => {
     const pageOf = (items: unknown[], limit: number) => ({ items, page: 1, limit, total: items.length, totalPages: 1 });
     await stubApi(page, {
       summary: () => ({
-        json: { ...SUMMARY, totalProducts: 1, totalStockValue: state.quantity * 12.5, totalStockIncome: state.quantity * 25 },
+        json: { ...SUMMARY, totalProducts: 1, totalStockValue: state.quantity * 12.5 },
       }),
       movements: () => ({ json: pageOf([...state.movements].reverse(), 10) }),
     });
@@ -306,7 +481,7 @@ test.describe('dashboard (stubbed API)', () => {
     });
 
     await page.goto('/app/dashboard');
-    await expect(page.getByRole('region', { name: 'Total stock value' })).toContainText('$12.50');
+    await expect(page.getByRole('region', { name: 'Stock value' })).toContainText('$12.50');
     await expect(page.getByText('No stock movements yet.')).toBeVisible();
 
     await page.getByRole('link', { name: 'Products' }).first().click();
@@ -314,8 +489,7 @@ test.describe('dashboard (stubbed API)', () => {
     await expect(page.getByText('Received 1 × Wireless Mouse')).toBeVisible();
 
     await page.getByRole('link', { name: 'Dashboard' }).first().click();
-    await expect(page.getByRole('region', { name: 'Total stock value' })).toContainText('$25.00');
-    await expect(page.getByRole('region', { name: 'Total stock income' })).toContainText('$50.00');
+    await expect(page.getByRole('region', { name: 'Stock value' })).toContainText('$25.00');
     const feed = page.getByRole('region', { name: 'Recent movements' });
     await expect(feed.getByRole('listitem')).toHaveCount(1);
     await expect(feed).toContainText('+1');

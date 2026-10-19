@@ -16,8 +16,11 @@ const emptyPage = (limit: number) => ({ items: [], page: 1, limit, total: 0, tot
 const stubDashboard = async (page: Page) => {
   await page.route('**/api/dashboard/summary', (route) =>
     route.fulfill({
-      json: { totalProducts: 0, totalStockValue: 0, totalStockIncome: 0, lowStockCount: 0, outOfStockCount: 0 },
+      json: { totalProducts: 0, totalStockValue: 0, lowStockCount: 0, outOfStockCount: 0 },
     })
+  );
+  await page.route(/\/api\/dashboard\/period-summary(\?.*)?$/, (route) =>
+    route.fulfill({ json: { inboundValue: 0, income: 0, cogs: 0, grossProfit: 0 } })
   );
   await page.route('**/api/dashboard/alerts', (route) => route.fulfill({ json: { items: [], total: 0 } }));
   await page.route(/\/api\/dashboard\/movements-chart(\?.*)?$/, (route) =>

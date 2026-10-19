@@ -9,8 +9,8 @@ import { productsLink } from '../productsLink';
 import { Widget, WidgetEmpty, WidgetError } from './Widget';
 
 /**
- * Active products to reorder (C26): out of stock first, then low by quantity. At most 20 rows; when more qualify, a
- * footer says how many and links to the Products page under each stock-status filter.
+ * Active products to reorder (C26): out of stock first, then low by quantity. At most 5 rows (a muted line says how
+ * many qualify when there are more), then links to the Products page under each stock-status filter.
  */
 export function StockAlerts() {
   const { data, isPending, isError, refetch } = useDashboardAlerts();
@@ -61,17 +61,20 @@ export function StockAlerts() {
           </div>
           {data.total > data.items.length && (
             <p className="text-sm text-muted-foreground">
-              Showing {data.items.length} of {data.total} · View all:{' '}
-              <Link to={productsLink({ stockStatus: STOCK_STATUSES.OUT })} className="font-medium text-foreground hover:underline">
-                Out of stock
-              </Link>{' '}
-              ·{' '}
-              <Link to={productsLink({ stockStatus: STOCK_STATUSES.LOW })} className="font-medium text-foreground hover:underline">
-                Low stock
-              </Link>
+              Showing {data.items.length} of {data.total}
             </p>
           )}
         </>
+      )}
+      {!isPending && !isError && (
+        <p className="flex gap-4 text-sm">
+          <Link to={productsLink({ stockStatus: STOCK_STATUSES.LOW })} className="font-medium hover:underline">
+            View low stock
+          </Link>
+          <Link to={productsLink({ stockStatus: STOCK_STATUSES.OUT })} className="font-medium hover:underline">
+            View out of stock
+          </Link>
+        </p>
       )}
     </Widget>
   );

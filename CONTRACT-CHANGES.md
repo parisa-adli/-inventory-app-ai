@@ -237,6 +237,29 @@ Where the PRD and the agreed Q&A conflict, the Q&A wins (`docs/adr/0001`). C17�
 - `PATCH /api/products/:id/archive` and `/unarchive` (`PRODUCTS_ARCHIVE`) answer 200 with the product. Archiving with stock on hand is allowed; repeating either is a no-op, so the first `archivedAt` is kept.
 - PRD: `DELETE /api/products/:id` with no rule for history (Open Question 7). Agreed (#27): 204 only for a product that never had a movement, otherwise 409 `PRODUCT_HAS_MOVEMENTS` with `details: { movementCount }`; archived products follow the same rule. The delete also requires quantity 0, so a movement landing between the count and the delete makes it refuse instead of orphaning the movement.
 
+## Settings & dashboard (P5, grilling session 2026-10-19)
+
+**Approved by the user (2026-10-19), not built yet;** each entry will name the issue that applies it. The Settings feature is new scope that the PRD does not have; the dashboard entries refine PRD §6.1 and `docs/PRDs/05-dashboard.md`. Where the decision wording says `{ _id, displayName }` for a user, this repo uses `{ id, name }` (the shape of `user` in C19 movement items).
+
+## C25. Settings singleton: editable low-stock threshold and currency (new)
+
+- PRD: a global `LOW_STOCK_THRESHOLD` constant (today `10` in `shared/constants/stock-status.ts`, #28) and no currency (the client hardcodes USD). Agreed: both live in one `Settings` document.
+- **Singleton:** one document under a fixed key. `GET` creates it with the defaults (threshold `10`, currency `USD`, `updatedBy: null`) when it is missing, e.g. the seed was not run. `npm run seed` writes it explicitly, with `updatedBy` set to the seeded admin.
+- `GET /api/settings` → `{ lowStockThreshold, currency, updatedAt, updatedBy: { id, name } | null }`, behind `INVENTORY_VIEW`: every active user reads it (staff need the threshold for badges and the currency for money cells). `updatedBy: null` means "defaults, never edited".
+- `PATCH /api/settings` `{ lowStockThreshold?, currency? }` behind the new **`SETTINGS_EDIT`** permission (admin only). The schema is strict. `lowStockThreshold` is an integer from 1 to 10,000. `currency` is any 3-letter code (the contract is kept as it is). An empty body `{}` is 400 `VALIDATION_ERROR` ("Send at least one field to change", as in Phase 2 and C21). A successful PATCH sets `updatedBy` and `updatedAt` and answers 200 with the `GET` shape. Only the last edit is kept, with no change history.
+- The server reads the document on every request (no cache). The threshold stops being a constant: `getStockStatus(quantity, threshold)` and the stock-status ranges take it as an argument, and the products `stockStatus` filter, the badges and the dashboard all use the stored value. Low still excludes out: out = 0, low = 1–threshold, in = above it.
+- **Changing the currency only relabels.** No stored price, total or movement snapshot (`unitCost` / `unitPrice`) is converted. The Settings page says so under the field and asks for confirmation in a dialog before saving.
+- Client: settings are fetched when the app shell loads, alongside `/auth/me`, so no page renders money or a badge without them (no USD fallback). The currency dropdown offers only `Intl.supportedValuesOf('currency')`. After a save, the settings cache is set from the response, and the products and dashboard queries are invalidated.
+- **Follow-up (logged, not built):** a server-side refinement that rejects a `currency` outside `Intl.supportedValuesOf('currency')` (today `"ABC"` passes).
+
+## C26. Dashboard endpoints
+
+- All three routes are behind `INVENTORY_VIEW`. Archived products are excluded from the cards, the counts and the alerts. Low and out use the C25 threshold.
+- `GET /api/dashboard/summary` → `{ totalProducts, totalStockValue, totalStockIncome, lowStockCount, outOfStockCount }`, active products only. The server rounds the money totals to 2 decimals.
+- `GET /api/dashboard/movements-chart?range=7d|30d|90d&tz=<IANA zone>`: the receive and ship quantities per bucket. **Adjustments are excluded** (Open Question 12). Buckets are days for `7d` and `30d` and ISO weeks (starting Monday) for `90d`. They are cut in the viewer's `tz`, the window includes today's partial bucket, and buckets with no movements are zero-filled. An unknown `range` or invalid `tz` is 400 `VALIDATION_ERROR`. Quantities are summed across units (pcs, kg, ...); the chart labels them "units across all products".
+- `GET /api/dashboard/alerts` → `{ items, total }`: out-of-stock first, then low by quantity ascending, then title. `items` is capped at 20, and `total` is the full count, for a "Showing 20 of N" footer. PRD/05 lists a per-row threshold column; it is dropped because the threshold is global, and the widget header shows it instead ("Low = 1–n units").
+- The recent-movements feed reuses `GET /api/stock-movements?limit=10` (no new endpoint, as in 05-dashboard).
+
 ## Not applicable (nothing to change)
 
 - Stale JWT: the access token carries only `sub`; `/me` and `requireAuth` read the DB.

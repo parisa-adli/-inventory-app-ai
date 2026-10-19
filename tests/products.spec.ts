@@ -270,11 +270,46 @@ test.describe('stock changes (stubbed API)', () => {
     await expect(row.getByRole('button', { name: 'Ship 1 Wireless Mouse' })).toBeDisabled();
   });
 
-  const openAdjustStock = async (page: Page, tab: 'Receive' | 'Ship' | 'Manual Adjustment', onHand = 1) => {
+  test('rows can be selected on the page, and the Columns menu hides a column until shown again', async ({ page }) => {
+    await stubStock(page);
+    await page.goto('/app/products');
+    const row = page.getByRole('row', { name: /Wireless Mouse/ });
+
+    // Title and SKU share a cell; the quantity shows its unit; every status has a badge, and there is no Status column
+    await expect(row).toContainText('ELE-001');
+    await expect(row).toContainText('1 pcs');
+    await expect(row).toContainText('Low stock');
+    await expect(page.getByRole('columnheader', { name: 'Status' })).toHaveCount(0);
+    await expect(page.getByRole('columnheader', { name: 'SKU' })).toHaveCount(0);
+
+    const selectAll = page.getByRole('checkbox', { name: 'Select all products on this page' });
+    await row.getByRole('checkbox', { name: 'Select Wireless Mouse' }).click();
+    await expect(page.getByText('1 of 1 selected')).toBeVisible();
+    await expect(selectAll).toBeChecked();
+    await selectAll.click();
+    await expect(page.getByText('1 of 1 selected')).toHaveCount(0);
+
+    const toggleSupplier = async () => {
+      await page.getByRole('button', { name: 'Columns' }).click();
+      await page.getByRole('menuitemcheckbox', { name: 'Supplier' }).click();
+      await page.keyboard.press('Escape');
+    };
+    await toggleSupplier();
+    await expect(page.getByRole('columnheader', { name: 'Supplier' })).toHaveCount(0);
+    // Remembered in this browser
+    await page.reload();
+    await expect(page.getByRole('row', { name: /Wireless Mouse/ })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Supplier' })).toHaveCount(0);
+    await toggleSupplier();
+    await expect(page.getByRole('columnheader', { name: 'Supplier' })).toBeVisible();
+  });
+
+  const openAdjustStock = async (page: Page, movement: 'Receive' | 'Ship' | 'Adjustment', onHand = 1) => {
     await page.getByRole('button', { name: 'Adjust stock of Wireless Mouse' }).click();
     const dialog = page.getByRole('dialog', { name: 'Adjust stock' });
-    await expect(dialog).toContainText(`Wireless Mouse (ELE-001): ${onHand} pcs on hand.`);
-    await dialog.getByRole('tab', { name: tab }).click();
+    await expect(dialog).toContainText(`Wireless Mouse · ${onHand} pcs on hand`);
+    await dialog.getByRole('button', { name: movement, exact: true }).click();
+    await expect(dialog.getByRole('button', { name: movement, exact: true })).toHaveAttribute('aria-pressed', 'true');
     return dialog;
   };
 
@@ -282,7 +317,7 @@ test.describe('stock changes (stubbed API)', () => {
     const { bodies } = await stubStock(page, admin);
     await page.goto('/app/products');
     const dialog = await openAdjustStock(page, 'Receive');
-    const quantity = dialog.getByLabel('Quantity to receive');
+    const quantity = dialog.getByLabel('Quantity (pcs)');
     const submit = dialog.getByRole('button', { name: 'Receive stock' });
 
     await quantity.fill('5 boxes');
@@ -293,7 +328,9 @@ test.describe('stock changes (stubbed API)', () => {
     await expect(dialog.getByText('Quantity must be a whole number')).toBeVisible();
     expect(bodies).toHaveLength(0);
 
+    await expect(dialog.getByText('On hand after: 1 pcs')).toBeVisible();
     await quantity.fill('5');
+    await expect(dialog.getByText('On hand after: 6 pcs')).toBeVisible();
     await dialog.getByLabel('Note (optional)').fill('  PO-17 ');
     await submit.click();
 
@@ -309,7 +346,7 @@ test.describe('stock changes (stubbed API)', () => {
     const { bodies } = await stubStock(page);
     await page.goto('/app/products');
     const dialog = await openAdjustStock(page, 'Ship');
-    const quantity = dialog.getByLabel('Quantity to ship');
+    const quantity = dialog.getByLabel('Quantity (pcs)');
     const warning = 'Only 1 on hand. This would take stock below 0 and will be refused.';
 
     await quantity.fill('1');
@@ -333,30 +370,44 @@ test.describe('stock changes (stubbed API)', () => {
     ]);
   });
 
-  test('Manual Adjustment: needs a reason and a non-zero change, is refused below 0, and records a signed change', async ({
+  test('Adjustment: a positive amount with a direction and a reason, refused below 0, recorded as a signed change', async ({
     page,
   }) => {
     const { bodies } = await stubStock(page);
     await page.goto('/app/products');
-    const dialog = await openAdjustStock(page, 'Manual Adjustment');
-    const change = dialog.getByLabel('Change');
+    const dialog = await openAdjustStock(page, 'Adjustment');
+    const quantity = dialog.getByLabel('Quantity (pcs)');
+    const decrease = dialog.getByRole('button', { name: 'Decrease', exact: true });
     const submit = dialog.getByRole('button', { name: 'Record adjustment' });
 
-    await change.fill('2');
+    // Increase is chosen first, with its reasons listed
+    await expect(dialog.getByRole('button', { name: 'Increase', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(dialog.getByText('Increase when stock is:')).toBeVisible();
+    await quantity.fill('2');
+    await expect(dialog.getByText('On hand after: 3 pcs')).toBeVisible();
     await submit.click();
     await expect(dialog.getByText('An adjustment needs a reason')).toBeVisible();
     await dialog.getByLabel('Reason').fill('Shelf count');
-    await change.fill('0');
-    await submit.click();
-    await expect(dialog.getByText('An adjustment cannot be 0')).toBeVisible();
+    // The sign comes from the direction, not the number
+    for (const typed of ['0', '-3']) {
+      await quantity.fill(typed);
+      await submit.click();
+      await expect(dialog.getByText('Quantity must be at least 1')).toBeVisible();
+    }
     expect(bodies).toHaveLength(0);
 
-    await change.fill('-4');
+    await decrease.click();
+    await expect(decrease).toHaveAttribute('aria-pressed', 'true');
+    await expect(dialog.getByText('Decrease when stock is:')).toBeVisible();
+    await expect(dialog.getByText('Expired or damaged')).toBeVisible();
+    await quantity.fill('4');
+    await expect(dialog.getByText('On hand after: -3 pcs')).toBeVisible();
     await expect(dialog.getByText('Only 1 on hand. This would take stock below 0 and will be refused.')).toBeVisible();
     await submit.click();
     await expect(page.locator('[data-sonner-toast]').getByText('Only 1 on hand.')).toBeVisible();
 
-    await change.fill('-1');
+    await quantity.fill('1');
+    await expect(dialog.getByText('On hand after: 0 pcs')).toBeVisible();
     await dialog.getByLabel('Reason').fill('Damaged in transit');
     await submit.click();
     await expect(page.getByText('Adjusted 1 × Wireless Mouse')).toBeVisible();
@@ -368,13 +419,13 @@ test.describe('stock changes (stubbed API)', () => {
     ]);
   });
 
-  test('a product archived meanwhile is refused, and the dialog stays open but frozen on every tab', async ({ page }) => {
+  test('a product archived meanwhile is refused, and the dialog stays open but frozen for every movement', async ({ page }) => {
     const { state, bodies } = await stubStock(page);
     await page.goto('/app/products');
     const dialog = await openAdjustStock(page, 'Ship');
 
     state.archived = true;
-    await dialog.getByLabel('Quantity to ship').fill('1');
+    await dialog.getByLabel('Quantity (pcs)').fill('1');
     await dialog.getByRole('button', { name: 'Ship stock' }).click();
     const message = 'This product is archived; its stock cannot change.';
     await expect(page.locator('[data-sonner-toast]').getByText(message)).toBeVisible();
@@ -382,11 +433,11 @@ test.describe('stock changes (stubbed API)', () => {
     await expect(page.getByText('No products yet.')).toBeVisible();
     await expect(dialog.getByRole('alert')).toHaveText(message);
     await expect(dialog.getByRole('button', { name: 'Ship stock' })).toBeDisabled();
-    for (const [tab, submit] of [
+    for (const [movement, submit] of [
       ['Receive', 'Receive stock'],
-      ['Manual Adjustment', 'Record adjustment'],
+      ['Adjustment', 'Record adjustment'],
     ]) {
-      await dialog.getByRole('tab', { name: tab }).click();
+      await dialog.getByRole('button', { name: movement, exact: true }).click();
       await expect(dialog.getByRole('alert')).toHaveText(message);
       await expect(dialog.getByRole('button', { name: submit })).toBeDisabled();
     }
@@ -413,7 +464,7 @@ test.describe('stock changes (stubbed API)', () => {
     await row.getByRole('button', { name: 'Receive 1 Wireless Mouse' }).click();
     await expect(row.getByText('2', { exact: true })).toBeVisible();
     const adjust = await openAdjustStock(page, 'Ship', 2);
-    await adjust.getByLabel('Quantity to ship').fill('2');
+    await adjust.getByLabel('Quantity (pcs)').fill('2');
     await adjust.getByLabel('Note (optional)').fill('Order 1042');
     await adjust.getByRole('button', { name: 'Ship stock' }).click();
     await expect(adjust).toBeHidden();
@@ -444,8 +495,8 @@ test.describe('stock changes (stubbed API)', () => {
     await row.getByRole('button', { name: 'Ship 1 Wireless Mouse' }).click();
     await expect(page.getByText('Shipped 1 × Wireless Mouse')).toBeVisible();
     await expect(row.getByRole('button', { name: 'Ship 1 Wireless Mouse' })).toBeEnabled();
-    const adjust = await openAdjustStock(page, 'Manual Adjustment');
-    await adjust.getByLabel('Change').fill('4');
+    const adjust = await openAdjustStock(page, 'Adjustment');
+    await adjust.getByLabel('Quantity (pcs)').fill('4');
     await adjust.getByLabel('Reason').fill('Shelf count found four more');
     await adjust.getByRole('button', { name: 'Record adjustment' }).click();
     await expect(adjust).toBeHidden();

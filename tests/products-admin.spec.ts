@@ -94,7 +94,7 @@ test('an admin archives a stocked product after a warning, then unarchives it', 
 
   await page.getByRole('tab', { name: 'Archived' }).click();
   const archived = rowOf(page, 'Wireless Mouse');
-  await expect(archived).toContainText('Archived');
+  await expect(archived.getByRole('button', { name: 'Unarchive Wireless Mouse' })).toBeVisible();
   // Frozen: no stock controls on an archived row
   await expect(archived.getByRole('button', { name: /Receive 1|Ship 1|Adjust stock/ })).toHaveCount(0);
 

@@ -145,8 +145,8 @@ test.describe('finding products (stubbed API)', () => {
     // A sort change also starts again on page 1
     await page.getByRole('button', { name: 'Next' }).click();
     await expect.poll(api.last).toMatchObject({ page: '2' });
-    await header(page, 'SKU').getByRole('button').click();
-    await expect.poll(api.last).toMatchObject({ page: '1', sort: 'sku', order: 'asc' });
+    await header(page, 'Cost').getByRole('button').click();
+    await expect.poll(api.last).toMatchObject({ page: '1', sort: 'costPrice', order: 'desc' });
   });
 
   test('an empty filtered list says so', async ({ page }) => {

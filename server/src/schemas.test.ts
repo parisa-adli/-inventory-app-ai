@@ -130,8 +130,12 @@ describe('shared stock movement form schema (the Adjust Stock dialog)', () => {
     expect(createStockMovementSchema.parse({ productId: PRODUCT, ...parsed })).toEqual({ productId: PRODUCT, ...parsed });
   });
 
-  it('reads a signed adjustment and leaves out a blank note', () => {
-    expect(stockMovementFormSchema.parse({ ...form, type: 'adjustment', quantity: '-3', note: 'Damaged' }).quantity).toBe(-3);
+  it('signs an adjustment by its direction and leaves out a blank note', () => {
+    const adjustment = { ...form, type: 'adjustment', quantity: '4', note: 'Damaged' };
+    expect(stockMovementFormSchema.parse({ ...adjustment, direction: 'decrease' })).toEqual({ type: 'adjustment', quantity: -4, note: 'Damaged' });
+    expect(stockMovementFormSchema.parse({ ...adjustment, direction: 'increase' }).quantity).toBe(4);
+    expect(stockMovementFormSchema.parse(adjustment).quantity).toBe(4);
+    expect(stockMovementFormSchema.parse({ ...form, type: 'ship', direction: 'decrease' }).quantity).toBe(5);
     expect(stockMovementFormSchema.parse({ ...form, note: '   ' }).note).toBeUndefined();
   });
 
@@ -139,13 +143,17 @@ describe('shared stock movement form schema (the Adjust Stock dialog)', () => {
     ['a receive of 0', { quantity: '0' }, { quantity: 0 }],
     ['a negative ship', { type: 'ship', quantity: '-2' }, { type: 'ship', quantity: -2 }],
     ['a fractional amount', { quantity: '1.5' }, { quantity: 1.5 }],
-    ['a zero adjustment', { type: 'adjustment', quantity: '0', note: 'Recount' }, { type: 'adjustment', quantity: 0, note: 'Recount' }],
     ['an adjustment without a reason', { type: 'adjustment', quantity: '2', note: ' ' }, { type: 'adjustment', quantity: 2, note: ' ' }],
   ])('reports the same error as the API for %s', (_case, formOverride, apiOverride) => {
     const fromForm = messages(stockMovementFormSchema.safeParse({ ...form, ...formOverride }));
     const fromApi = messages(createStockMovementSchema.safeParse({ productId: PRODUCT, ...form, ...apiOverride }));
     expect(fromForm).toHaveLength(1);
     expect(fromForm).toEqual(fromApi);
+  });
+
+  it.each(['0', '-3'])('takes only a positive amount for an adjustment (%s); the direction carries the sign', (typed) => {
+    const adjustment = { ...form, type: 'adjustment', quantity: typed, note: 'Recount' };
+    expect(messages(stockMovementFormSchema.safeParse(adjustment))).toEqual(['Quantity must be at least 1']);
   });
 
   it.each(['abc', '1e2', '5 boxes', '--1'])('reads only plain numbers as an amount (%s)', (typed) => {

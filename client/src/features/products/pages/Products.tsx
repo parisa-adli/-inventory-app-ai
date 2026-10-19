@@ -100,6 +100,8 @@ export default function Products() {
       {data && data.items.length > 0 && (
         <>
           <ProductsTable
+            // A new page, filter, sort or tab starts with nothing selected
+            key={JSON.stringify(list.params)}
             products={data.items}
             sort={list.sort}
             order={list.order}

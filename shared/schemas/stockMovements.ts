@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { STOCK_MOVEMENT_TYPES, type StockMovementType } from '../constants/stock-movement-types';
+import { ADJUSTMENT_DIRECTIONS, STOCK_MOVEMENT_TYPES, type StockMovementType } from '../constants/stock-movement-types';
 import { paginationFields } from './pagination';
 import { objectId } from './catalog';
 
@@ -59,13 +59,28 @@ export const createStockMovementSchema = z
 export type CreateStockMovementInput = z.infer<typeof createStockMovementSchema>;
 
 /**
- * The Adjust Stock dialog: the amount is typed as text (plain digits with an optional sign, not `1e2`),
- * then the same rules and messages as the API. The dialog adds the product it was opened for, which makes
- * the output a valid POST /api/stock-movements body (no hidden field the user could not fix).
+ * The Adjust Stock form takes a positive amount for every type. An adjustment adds a direction and still needs a
+ * reason. The messages are the API's own.
+ */
+const checkFormRules = (
+  { type, quantity, note }: { type: StockMovementType; quantity: number; note?: string },
+  ctx: z.RefinementCtx
+) => {
+  const broken =
+    stockMovementRuleError(STOCK_MOVEMENT_TYPES.RECEIVE, quantity, note) ??
+    (type === STOCK_MOVEMENT_TYPES.ADJUSTMENT ? stockMovementRuleError(type, quantity, note) : null);
+  if (broken) ctx.addIssue({ code: 'custom', path: [broken.path], message: broken.message });
+};
+
+/**
+ * The Adjust Stock dialog: the amount is typed as text (plain digits, not `1e2`) and an adjustment is an Increase
+ * or a Decrease of it. The output is signed the way the API wants it (a decrease of 4 is `quantity: -4`). The
+ * dialog adds the product it was opened for, which makes the output a valid POST /api/stock-movements body.
  */
 export const stockMovementFormSchema = z
   .object({
     type,
+    direction: z.enum(ADJUSTMENT_DIRECTIONS).default(ADJUSTMENT_DIRECTIONS.INCREASE),
     quantity: z
       .string()
       .trim()
@@ -74,7 +89,12 @@ export const stockMovementFormSchema = z
       .transform(Number),
     note,
   })
-  .superRefine(checkRules);
+  .superRefine(checkFormRules)
+  .transform(({ direction, quantity, ...movement }) => ({
+    ...movement,
+    quantity:
+      movement.type === STOCK_MOVEMENT_TYPES.ADJUSTMENT && direction === ADJUSTMENT_DIRECTIONS.DECREASE ? -quantity : quantity,
+  }));
 
 export type StockMovementFormInput = z.input<typeof stockMovementFormSchema>;
 export type StockMovementFormValues = z.output<typeof stockMovementFormSchema>;

@@ -21,6 +21,7 @@ interface TextFieldProps<T extends FieldValues, TOut = T> {
   /** A Textarea instead of an Input. */
   multiline?: boolean;
   autoComplete?: string;
+  placeholder?: string;
   /** Helper text under the input. */
   hint?: string;
   /** Shown on the right of the label row, e.g. a "Forgot password?" link. */
@@ -34,6 +35,7 @@ export function TextField<T extends FieldValues, TOut = T>({
   type = 'text',
   multiline = false,
   autoComplete,
+  placeholder,
   hint,
   labelAction,
 }: TextFieldProps<T, TOut>) {
@@ -73,9 +75,9 @@ export function TextField<T extends FieldValues, TOut = T>({
           ) : (
             <FormControl>
               {multiline ? (
-                <Textarea autoComplete={autoComplete} rows={3} {...field} />
+                <Textarea autoComplete={autoComplete} placeholder={placeholder} rows={3} {...field} />
               ) : (
-                <Input type={type} autoComplete={autoComplete} {...field} />
+                <Input type={type} autoComplete={autoComplete} placeholder={placeholder} {...field} />
               )}
             </FormControl>
           )}

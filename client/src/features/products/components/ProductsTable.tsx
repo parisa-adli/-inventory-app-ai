@@ -1,23 +1,29 @@
-import { createContext, use, type ReactNode } from 'react'
+import { createContext, use, useState, type ReactNode } from 'react'
 import {
   Archive,
   ArchiveRestore,
   ArrowDown,
   ArrowLeftRight,
   ArrowUp,
+  ChevronDown,
   ChevronsUpDown,
   History,
   ImageIcon,
   Minus,
   Pencil,
   Plus,
+  Settings2,
   Trash2,
 } from 'lucide-react'
 import {
+  columnVisibilityFeature,
   createColumnHelper,
+  rowSelectionFeature,
   rowSortingFeature,
   tableFeatures,
   useTable,
+  type ColumnVisibilityState,
+  type RowSelectionState,
   type SortingState,
   type Updater,
 } from '@tanstack/react-table'
@@ -25,17 +31,23 @@ import {
   PERMISSIONS,
   PRODUCT_SORTS,
   STOCK_MOVEMENT_TYPES,
-  STOCK_STATUSES,
-  getStockStatus,
   type Product,
   type ProductSort,
-  type ProductStatus,
   type SortOrder,
 } from '@inventory/shared'
 import { Can } from '@/features/auth/components/Can'
 import { useCan } from '@/features/auth/hooks/useCan'
-import { Badge, type BadgeProps } from '@/components/ui/badge'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   Table,
   TableBody,
@@ -47,18 +59,15 @@ import {
 import { formatDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useRecordMovement } from '../hooks/useRecordMovement'
+import { StockStatusBadge } from './StockStatusBadge'
 
 const money = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' })
 
 // Module scope: TanStack Table v9 wants stable features and columns. Sorting is the feature's state and
-// header APIs only: the server sorts (manualSorting), and the sort lives in the URL.
-const features = tableFeatures({ rowSortingFeature })
+// header APIs only: the server sorts (manualSorting), and the sort lives in the URL. Selection covers the page
+// on screen; nothing acts on it yet.
+const features = tableFeatures({ rowSortingFeature, rowSelectionFeature, columnVisibilityFeature })
 const column = createColumnHelper<typeof features, Product>()
-
-const STATUS_BADGES: Record<ProductStatus, { label: string; variant: BadgeProps['variant'] }> = {
-  active: { label: 'Active', variant: 'outline' },
-  archived: { label: 'Archived', variant: 'secondary' },
-}
 
 /** Right-aligned columns (DESIGN.md table pattern): the numbers and the actions. */
 const RIGHT_ALIGNED = new Set(['costPrice', 'salePrice', 'quantity', 'actions'])
@@ -75,13 +84,32 @@ interface ProductRowActions {
 const RowActionsContext = createContext<ProductRowActions | null>(null)
 
 const columns = column.columns([
+  column.display({
+    id: 'select',
+    enableHiding: false,
+    header: ({ table }) => (
+      <Checkbox
+        aria-label="Select all products on this page"
+        checked={table.getIsAllRowsSelected() || (table.getIsSomeRowsSelected() && 'indeterminate')}
+        onCheckedChange={(checked: boolean | 'indeterminate') =>
+          table.toggleAllRowsSelected(checked === true)
+        }
+      />
+    ),
+    cell: ({ row }) => (
+      <Checkbox
+        aria-label={`Select ${row.original.title}`}
+        checked={row.getIsSelected()}
+        onCheckedChange={(checked: boolean | 'indeterminate') =>
+          row.toggleSelected(checked === true)
+        }
+      />
+    ),
+  }),
   column.accessor('title', {
     header: 'Title',
+    enableHiding: false,
     cell: ({ row }) => <ProductCell product={row.original} />,
-  }),
-  column.accessor('sku', {
-    header: 'SKU',
-    cell: (info) => <span className="text-xs text-muted-foreground">{info.getValue()}</span>,
   }),
   column.accessor((product) => product.category.name, {
     id: 'category',
@@ -116,10 +144,11 @@ const columns = column.columns([
     sortDescFirst: true,
     cell: ({ row }) => <QuantityCell product={row.original} />,
   }),
-  column.accessor('unitOfMeasure', {
-    header: 'Unit',
+  column.accessor((product) => product.quantity, {
+    id: 'stock',
+    header: 'Stock',
     enableSorting: false,
-    cell: (info) => <span className="text-muted-foreground">{info.getValue()}</span>,
+    cell: (info) => <StockStatusBadge quantity={info.getValue()} />,
   }),
   column.accessor('createdAt', {
     header: 'Created',
@@ -128,20 +157,42 @@ const columns = column.columns([
       <span className="whitespace-nowrap text-muted-foreground">{formatDate(info.getValue())}</span>
     ),
   }),
-  column.accessor('status', {
-    header: 'Status',
-    enableSorting: false,
-    cell: (info) => {
-      const { label, variant } = STATUS_BADGES[info.getValue()]
-      return <Badge variant={variant}>{label}</Badge>
-    },
-  }),
   column.display({
     id: 'actions',
     header: 'Actions',
+    enableHiding: false,
     cell: ({ row }) => <RowActions product={row.original} />,
   }),
 ])
+
+/** What the Columns menu calls each column it can hide. */
+const COLUMN_LABELS: Record<string, string> = {
+  category: 'Category',
+  supplier: 'Supplier',
+  costPrice: 'Cost',
+  salePrice: 'Sale',
+  quantity: 'Quantity',
+  stock: 'Stock',
+  createdAt: 'Created',
+}
+
+/** Which columns this viewer hid, kept in their browser only. Storage can be missing or blocked: then all show. */
+const VISIBILITY_KEY = 'products.columns'
+const loadVisibility = (): ColumnVisibilityState => {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(VISIBILITY_KEY) ?? '{}')
+    return saved && typeof saved === 'object' ? (saved as ColumnVisibilityState) : {}
+  } catch {
+    return {}
+  }
+}
+const saveVisibility = (visibility: ColumnVisibilityState) => {
+  try {
+    localStorage.setItem(VISIBILITY_KEY, JSON.stringify(visibility))
+  } catch {
+    // Not remembered; the choice still applies until the page reloads
+  }
+}
 
 function ProductCell({ product }: { product: Product }) {
   return (
@@ -160,7 +211,10 @@ function ProductCell({ product }: { product: Product }) {
           <ImageIcon className="size-4 text-muted-foreground" />
         </div>
       )}
-      <span className="font-medium">{product.title}</span>
+      <div className="min-w-40">
+        <div className="font-medium">{product.title}</div>
+        <div className="text-xs text-muted-foreground">{product.sku}</div>
+      </div>
     </div>
   )
 }
@@ -170,18 +224,13 @@ const useCanChangeStock = (product: Product) =>
   useCan(PERMISSIONS.STOCK_ADJUST) && product.status !== 'archived'
 
 function QuantityCell({ product }: { product: Product }) {
-  const { quantity } = product
-  const stock = getStockStatus(quantity)
   return (
-    <div className="flex items-center justify-end gap-2">
-      {stock === STOCK_STATUSES.LOW && <Badge variant="warning">Low stock</Badge>}
-      {stock === STOCK_STATUSES.OUT && (
-        <Badge variant="outline" className="text-muted-foreground">
-          Out of stock
-        </Badge>
-      )}
+    <div className="flex items-center justify-end">
       <QuantityStepper product={product}>
-        <span className="min-w-6 text-center tabular-nums">{quantity}</span>
+        <span className="min-w-14 text-center whitespace-nowrap tabular-nums">
+          <span>{product.quantity}</span>{' '}
+          <span className="text-muted-foreground">{product.unitOfMeasure}</span>
+        </span>
       </QuantityStepper>
     </div>
   )
@@ -209,7 +258,7 @@ function QuantityStepper({ product, children }: { product: Product; children: Re
       >
         <Minus />
       </Button>
-      {/* {children} */}
+      {children}
       <Button
         variant="outline"
         size="icon-xs"
@@ -305,6 +354,8 @@ export interface ProductsSort {
  * The products list as a TanStack Table. Sorting and paging are server-side: a sortable header asks for a new
  * sort (one column at a time, never unsorted) and the page refetches. Quantity has inline −/+ (#30); Actions has
  * Edit (#35), Adjust stock (#31), Stock history (#32) and the admin's Archive / Unarchive and Delete (#36).
+ * Rows can be selected (this page only; the page remounts the table on a new page or filter), and the Columns
+ * menu hides columns.
  */
 export function ProductsTable({
   products,
@@ -314,6 +365,8 @@ export function ProductsTable({
   ...actions
 }: { products: Product[] } & ProductsSort & ProductRowActions) {
   const sorting: SortingState = [{ id: sort, desc: order === 'desc' }]
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
+  const [columnVisibility, setColumnVisibility] = useState(loadVisibility)
   const table = useTable({
     features,
     columns,
@@ -322,71 +375,115 @@ export function ProductsTable({
     manualSorting: true,
     enableMultiSort: false,
     enableSortingRemoval: false,
-    state: { sorting },
+    state: { sorting, rowSelection, columnVisibility },
+    onRowSelectionChange: setRowSelection,
+    onColumnVisibilityChange: (updater: Updater<ColumnVisibilityState>) => {
+      const next = typeof updater === 'function' ? updater(columnVisibility) : updater
+      setColumnVisibility(next)
+      saveVisibility(next)
+    },
     onSortingChange: (updater: Updater<SortingState>) => {
       const [next] = typeof updater === 'function' ? updater(sorting) : updater
       if (next && isProductSort(next.id)) onSort(next.id, next.desc ? 'desc' : 'asc')
     },
   })
 
+  const selected = Object.values(rowSelection).filter(Boolean).length
+
   return (
     <RowActionsContext value={actions}>
-      <div className="overflow-x-auto rounded-xl border bg-card">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((group) => (
-              <TableRow key={group.id}>
-                {group.headers.map((header) => {
-                  const { column } = header
-                  const sorted = column.getIsSorted()
-                  const SortIcon = sorted ? SORT_ICONS[sorted] : ChevronsUpDown
-                  return (
-                    <TableHead
-                      key={header.id}
-                      className={cn(RIGHT_ALIGNED.has(column.id) && 'text-right')}
-                      aria-sort={
-                        column.getCanSort() ? (sorted ? ARIA_SORT[sorted] : 'none') : undefined
-                      }
-                    >
-                      {header.isPlaceholder ? null : column.getCanSort() ? (
-                        <button
-                          type="button"
-                          className={cn(
-                            'inline-flex items-center gap-1 hover:text-foreground',
-                            RIGHT_ALIGNED.has(column.id) && 'flex-row-reverse'
-                          )}
-                          onClick={column.getToggleSortingHandler()}
-                        >
-                          <table.FlexRender header={header} />
-                          <SortIcon
-                            className={cn('size-3.5', !sorted && 'text-muted-foreground')}
-                            aria-hidden
-                          />
-                        </button>
-                      ) : (
-                        <table.FlexRender header={header} />
-                      )}
-                    </TableHead>
-                  )
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id}>
-                {row.getAllCells().map((cell) => (
-                  <TableCell
-                    key={cell.id}
-                    className={cn(RIGHT_ALIGNED.has(cell.column.id) && 'text-right tabular-nums')}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-sm text-muted-foreground" aria-live="polite">
+            {selected > 0 && `${selected} of ${products.length} selected`}
+          </p>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Settings2 />
+                Columns
+                <ChevronDown />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuLabel>Show columns</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {table
+                .getAllLeafColumns()
+                .filter((column) => column.getCanHide())
+                .map((column) => (
+                  <DropdownMenuCheckboxItem
+                    key={column.id}
+                    checked={column.getIsVisible()}
+                    onCheckedChange={(checked: boolean | 'indeterminate') =>
+                      column.toggleVisibility(checked === true)
+                    }
+                    // Stay open, so several columns can be switched in one go
+                    onSelect={(event: Event) => event.preventDefault()}
                   >
-                    <table.FlexRender cell={cell} />
-                  </TableCell>
+                    {COLUMN_LABELS[column.id] ?? column.id}
+                  </DropdownMenuCheckboxItem>
                 ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <div className="overflow-x-auto rounded-xl border bg-card">
+          <Table>
+            <TableHeader>
+              {table.getHeaderGroups().map((group) => (
+                <TableRow key={group.id}>
+                  {group.headers.map((header) => {
+                    const { column } = header
+                    const sorted = column.getIsSorted()
+                    const SortIcon = sorted ? SORT_ICONS[sorted] : ChevronsUpDown
+                    return (
+                      <TableHead
+                        key={header.id}
+                        className={cn(RIGHT_ALIGNED.has(column.id) && 'text-right')}
+                        aria-sort={
+                          column.getCanSort() ? (sorted ? ARIA_SORT[sorted] : 'none') : undefined
+                        }
+                      >
+                        {header.isPlaceholder ? null : column.getCanSort() ? (
+                          <button
+                            type="button"
+                            className={cn(
+                              'inline-flex items-center gap-1 hover:text-foreground',
+                              RIGHT_ALIGNED.has(column.id) && 'flex-row-reverse'
+                            )}
+                            onClick={column.getToggleSortingHandler()}
+                          >
+                            <table.FlexRender header={header} />
+                            <SortIcon
+                              className={cn('size-3.5', !sorted && 'text-muted-foreground')}
+                              aria-hidden
+                            />
+                          </button>
+                        ) : (
+                          <table.FlexRender header={header} />
+                        )}
+                      </TableHead>
+                    )
+                  })}
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id} data-state={row.getIsSelected() ? 'selected' : undefined}>
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell
+                      key={cell.id}
+                      className={cn(RIGHT_ALIGNED.has(cell.column.id) && 'text-right tabular-nums')}
+                    >
+                      <table.FlexRender cell={cell} />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </div>
     </RowActionsContext>
   )

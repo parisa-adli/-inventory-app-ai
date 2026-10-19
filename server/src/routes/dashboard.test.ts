@@ -2,12 +2,16 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { Types } from 'mongoose';
 import { createApp } from '../app.js';
+import { Category } from '../models/Category.js';
+import { Product } from '../models/Product.js';
+import { Settings } from '../models/Settings.js';
 import { StockMovement } from '../models/StockMovement.js';
 import { User } from '../models/User.js';
 import { ACCESS_COOKIE, signAccessToken } from '../services/jwt.js';
 import { MEMORY_DB_START_TIMEOUT_MS, clearMemoryDb, connectMemoryDb, disconnectMemoryDb } from '../test/memoryDb.js';
 
-// The dashboard's In-vs-Out chart (#55, C26): receive vs ship per day or ISO week, cut in the viewer's timezone.
+// The dashboard (C26): the In-vs-Out chart (#55), receive vs ship per day or ISO week cut in the viewer's timezone,
+// and the summary cards and reorder alerts (#56).
 
 const app = createApp();
 
@@ -123,5 +127,142 @@ describe('GET /api/dashboard/movements-chart', () => {
       [12, 3],
       [0, 2],
     ]);
+  });
+});
+
+let skuCounter = 0;
+/** Test setup only: the app changes quantity through the stock module alone. */
+const product = async (fields: { title?: string; quantity?: number; costPrice?: number; salePrice?: number; archived?: boolean }) => {
+  const { archived, ...rest } = fields;
+  const category = await Category.findOneAndUpdate({ title: 'Fixtures' }, {}, { upsert: true, new: true });
+  return Product.create({
+    title: 'Product',
+    sku: `SKU-${++skuCounter}`,
+    category: category._id,
+    costPrice: 1,
+    salePrice: 2,
+    unitOfMeasure: 'pcs',
+    ...rest,
+    archivedAt: archived ? new Date() : null,
+  });
+};
+
+const get = (path: string) => request(app).get(path).set('Cookie', cookie);
+
+describe('GET /api/dashboard/summary', () => {
+  it('totals active products, rounding money to cents with no floating-point drift', async () => {
+    // 0.1 × 3 and 19.99 × 3 drift in binary floating point; the totals must not
+    await product({ quantity: 3, costPrice: 0.1, salePrice: 19.99 });
+    await product({ quantity: 7, costPrice: 12.5, salePrice: 0.7 });
+    await product({ quantity: 0, costPrice: 99, salePrice: 99 });
+
+    const res = await get('/api/dashboard/summary');
+
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body).toEqual({
+      totalProducts: 3,
+      totalStockValue: 87.8, // 0.30 + 87.50
+      totalStockIncome: 64.87, // 59.97 + 4.90
+      lowStockCount: 2,
+      outOfStockCount: 1,
+    });
+  });
+
+  it('answers zeros with no products', async () => {
+    const res = await get('/api/dashboard/summary');
+
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body).toEqual({ totalProducts: 0, totalStockValue: 0, totalStockIncome: 0, lowStockCount: 0, outOfStockCount: 0 });
+  });
+
+  it('leaves archived products out of every field', async () => {
+    await product({ quantity: 20, costPrice: 1, salePrice: 2 });
+    await product({ quantity: 0, archived: true });
+    await product({ quantity: 3, costPrice: 50, salePrice: 60, archived: true });
+
+    const res = await get('/api/dashboard/summary');
+
+    expect(res.body).toEqual({ totalProducts: 1, totalStockValue: 20, totalStockIncome: 40, lowStockCount: 0, outOfStockCount: 0 });
+  });
+
+  it('counts low and out like the products stock-status filter, under the stored threshold', async () => {
+    await Settings.create({ lowStockThreshold: 4 });
+    for (const quantity of [0, 0, 1, 4, 5, 30]) await product({ quantity });
+    await product({ quantity: 2, archived: true });
+
+    const res = await get('/api/dashboard/summary');
+    const filtered = async (stockStatus: string) =>
+      (await get('/api/products').query({ stockStatus })).body.total as number;
+
+    expect(res.body.lowStockCount).toBe(2);
+    expect(res.body.outOfStockCount).toBe(2);
+    expect(res.body.lowStockCount).toBe(await filtered('low'));
+    expect(res.body.outOfStockCount).toBe(await filtered('out'));
+  });
+});
+
+describe('GET /api/dashboard/alerts', () => {
+  it('lists out of stock first, then low by quantity ascending, then title, with the row fields', async () => {
+    await product({ title: 'Low 3', quantity: 3 });
+    await product({ title: 'banana', quantity: 1 });
+    await product({ title: 'Apple', quantity: 1 });
+    await product({ title: 'Plenty', quantity: 11 });
+    await product({ title: 'Zero B', quantity: 0 });
+    await product({ title: 'zero a', quantity: 0 });
+    await product({ title: 'Archived', quantity: 0, archived: true });
+    const edge = await product({ title: 'Edge', quantity: 10 });
+
+    const res = await get('/api/dashboard/alerts');
+
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body.total).toBe(6);
+    expect(res.body.items.map((item: { title: string }) => item.title)).toEqual([
+      'zero a',
+      'Zero B',
+      'Apple',
+      'banana',
+      'Low 3',
+      'Edge',
+    ]);
+    expect(res.body.items.at(-1)).toEqual({
+      id: String(edge._id),
+      title: 'Edge',
+      sku: edge.sku,
+      quantity: 10,
+      unit: 'pcs',
+      status: 'low',
+    });
+    expect(res.body.items[0].status).toBe('out');
+  });
+
+  it('caps items at 20 and counts every qualifying product in total', async () => {
+    for (let i = 0; i < 25; i++) await product({ title: `Item ${String(i).padStart(2, '0')}`, quantity: i % 5 });
+
+    const res = await get('/api/dashboard/alerts');
+
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body.total).toBe(25);
+    expect(res.body.items).toHaveLength(20);
+    // 5 per quantity 0–4, so the cut falls after all of quantity 3
+    expect(res.body.items.map((item: { quantity: number }) => item.quantity)).toEqual(
+      [0, 1, 2, 3].flatMap((quantity) => Array(5).fill(quantity))
+    );
+    expect(res.body.items.slice(0, 5).map((item: { title: string }) => item.title)).toEqual([
+      'Item 00',
+      'Item 05',
+      'Item 10',
+      'Item 15',
+      'Item 20',
+    ]);
+  });
+
+  it('follows the stored threshold', async () => {
+    await Settings.create({ lowStockThreshold: 2 });
+    await product({ title: 'Two', quantity: 2 });
+    await product({ title: 'Three', quantity: 3 });
+
+    const res = await get('/api/dashboard/alerts');
+
+    expect(res.body).toMatchObject({ total: 1, items: [{ title: 'Two', status: 'low' }] });
   });
 });

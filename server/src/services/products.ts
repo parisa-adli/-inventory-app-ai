@@ -163,11 +163,17 @@ export const deleteProduct = async (id: string): Promise<void> => {
   }
 };
 
-/** The `quantity` condition of a stock status under the stored threshold (`getStockStatus` in database form). */
-const quantityRange = async (stockStatus: StockStatus) => {
-  const { min, max } = stockStatusRange(stockStatus, await getLowStockThreshold());
+/**
+ * The `quantity` condition of a stock status (`getStockStatus` in database form). The products filter and the
+ * dashboard counts both use it, so they cannot disagree.
+ */
+export const stockStatusQuantity = (stockStatus: StockStatus, threshold: number) => {
+  const { min, max } = stockStatusRange(stockStatus, threshold);
   return { ...(min !== undefined && { $gte: min }), ...(max !== undefined && { $lte: max }) };
 };
+
+/** The `quantity` condition of a stock status under the stored threshold. */
+const quantityRange = async (stockStatus: StockStatus) => stockStatusQuantity(stockStatus, await getLowStockThreshold());
 
 /**
  * GET: one tab (active or archived), filtered by an escaped search, category, supplier (`unassigned` = none)

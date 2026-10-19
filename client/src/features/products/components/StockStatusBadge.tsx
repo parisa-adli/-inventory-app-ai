@@ -11,7 +11,12 @@ const STOCK_BADGES: Record<StockStatus, { label: string; variant: BadgeProps['va
 /** In stock / Low stock / Out of stock, from the quantity and the stored threshold, as a tinted badge with a dot (DESIGN.md §2.2). */
 export function StockStatusBadge({ quantity }: { quantity: number }) {
   const { lowStockThreshold } = useSettings();
-  const { label, variant } = STOCK_BADGES[getStockStatus(quantity, lowStockThreshold)];
+  return <StockBadge status={getStockStatus(quantity, lowStockThreshold)} />;
+}
+
+/** The same badge for a status the server already worked out (the dashboard alerts). */
+export function StockBadge({ status }: { status: StockStatus }) {
+  const { label, variant } = STOCK_BADGES[status];
   return (
     <Badge variant={variant} className="gap-1.5 rounded-md font-medium">
       <span className="size-1.5 rounded-full bg-current" aria-hidden />

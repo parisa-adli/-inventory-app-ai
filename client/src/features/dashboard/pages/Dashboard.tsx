@@ -1,10 +1,25 @@
+import { StockAlerts } from '../components/StockAlerts';
+import { MovementsChartWidget } from '../components/MovementsChartWidget';
+import { RecentMovements } from '../components/RecentMovements';
+import { SummaryCards } from '../components/SummaryCards';
+
+/**
+ * The default landing page (#57): stock on hand now (the cards and the reorder alerts) and what moved lately (the
+ * feed and the In-vs-Out chart). Each widget has its own query, so one loads, fails and retries without the others.
+ */
 export default function Dashboard() {
   return (
-    <div className="px-4 sm:px-0">
-      <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
-      <p className="mt-4 text-gray-600">
-        Dashboard page - Phase 5 implementation
-      </p>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+        <p className="text-sm text-muted-foreground">Stock on hand now, and what moved in the range.</p>
+      </div>
+      <SummaryCards />
+      <MovementsChartWidget />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <StockAlerts />
+        <RecentMovements />
+      </div>
     </div>
   );
 }

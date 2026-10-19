@@ -296,7 +296,7 @@ test.describe('client smoke', () => {
     // An admin approves: the same user now gets the app
     user = { ...user, status: 'active' };
     await page.goto('/');
-    await expect(page.getByRole('heading', { level: 2, name: 'Dashboard' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible();
   });
 
   test('a completed reset ends on sign in with a notice and no session', async ({ page }) => {
@@ -337,7 +337,7 @@ test.describe('client smoke', () => {
     );
 
     await page.goto('/');
-    await expect(page.getByRole('heading', { level: 2, name: 'Dashboard' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible();
 
     const nav = page.getByRole('navigation');
     for (const name of ['Dashboard', 'Products', 'Categories', 'Suppliers', 'Movements', 'Users', 'Settings']) {

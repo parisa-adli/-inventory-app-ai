@@ -65,6 +65,9 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
+  /* The In-vs-Out chart: the receive (emerald-600) and ship (sky-600) colors of the movement badges */
+  --chart-received: oklch(0.596 0.145 163.225);
+  --chart-shipped: oklch(0.588 0.158 241.966);
 }
 
 .dark {
@@ -87,6 +90,8 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
+  --chart-received: oklch(0.696 0.17 162.48);
+  --chart-shipped: oklch(0.685 0.169 237.323);
 }
 
 @layer base {

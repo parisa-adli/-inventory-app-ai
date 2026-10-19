@@ -1,0 +1,78 @@
+import { Link } from 'react-router';
+import { STOCK_STATUSES } from '@inventory/shared';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { StockBadge } from '@/features/products/components/StockStatusBadge';
+import { useSettings } from '@/lib/settings';
+import { useDashboardAlerts } from '../hooks/useDashboard';
+import { productsLink } from '../productsLink';
+import { Widget, WidgetEmpty, WidgetError } from './Widget';
+
+/**
+ * Active products to reorder (C26): out of stock first, then low by quantity. At most 20 rows; when more qualify, a
+ * footer says how many and links to the Products page under each stock-status filter.
+ */
+export function StockAlerts() {
+  const { data, isPending, isError, refetch } = useDashboardAlerts();
+  const { lowStockThreshold } = useSettings();
+  return (
+    <Widget title="Stock alerts" description={`Out of stock, then low. Low = 1–${lowStockThreshold} units.`}>
+      {isPending ? (
+        <div className="space-y-3">
+          {Array.from({ length: 5 }, (_, i) => (
+            <Skeleton key={i} className="h-8 w-full" />
+          ))}
+        </div>
+      ) : isError ? (
+        <WidgetError what="stock alerts" onRetry={() => void refetch()} />
+      ) : data.items.length === 0 ? (
+        <WidgetEmpty>Every product is above the low-stock threshold.</WidgetEmpty>
+      ) : (
+        <>
+          <div className="overflow-x-auto rounded-xl border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Product</TableHead>
+                  <TableHead>SKU</TableHead>
+                  <TableHead className="text-right">Quantity</TableHead>
+                  <TableHead>Unit</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.items.map((alert) => (
+                  <TableRow key={alert.id}>
+                    <TableCell className="font-medium">
+                      <Link to={productsLink({ sku: alert.sku })} className="hover:underline">
+                        {alert.title}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">{alert.sku}</TableCell>
+                    <TableCell className="text-right tabular-nums">{alert.quantity}</TableCell>
+                    <TableCell className="text-muted-foreground">{alert.unit}</TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <StockBadge status={alert.status} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          {data.total > data.items.length && (
+            <p className="text-sm text-muted-foreground">
+              Showing {data.items.length} of {data.total} · View all:{' '}
+              <Link to={productsLink({ stockStatus: STOCK_STATUSES.OUT })} className="font-medium text-foreground hover:underline">
+                Out of stock
+              </Link>{' '}
+              ·{' '}
+              <Link to={productsLink({ stockStatus: STOCK_STATUSES.LOW })} className="font-medium text-foreground hover:underline">
+                Low stock
+              </Link>
+            </p>
+          )}
+        </>
+      )}
+    </Widget>
+  );
+}

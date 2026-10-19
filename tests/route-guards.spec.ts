@@ -203,7 +203,7 @@ test.describe('route guards (stubbed API)', () => {
     test('an unknown URL shows "not found" inside the shell, never the dashboard', async ({ page }) => {
       await stubApi(page, admin);
       const notFound = page.getByText('Page not found');
-      const dashboard = page.getByRole('heading', { level: 2, name: 'Dashboard' });
+      const dashboard = page.getByRole('heading', { level: 1, name: 'Dashboard' });
 
       for (const path of ['/app/dahboardd', '/app/users/extra', '/no-such-page']) {
         await page.goto(path);
@@ -229,7 +229,7 @@ test.describe('route guards (stubbed API)', () => {
       for (const path of ['/', '/app']) {
         await page.goto(path);
         await expect(page).toHaveURL('/app/dashboard');
-        await expect(page.getByRole('heading', { level: 2, name: 'Dashboard' })).toBeVisible();
+        await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible();
       }
     });
 

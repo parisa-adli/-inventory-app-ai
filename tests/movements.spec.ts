@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 // The global Stock Movements page (#33) against a stubbed API: the table, the filters and the states.
 

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 // Editing a product (#35) against a stubbed API: the create form in edit mode, PATCH with null clearing the
 // supplier, "+ New category" selecting what it made, and a duplicate SKU.

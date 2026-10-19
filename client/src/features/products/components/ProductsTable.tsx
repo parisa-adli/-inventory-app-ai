@@ -37,6 +37,7 @@ import {
 import { Can } from '@/features/auth/components/Can'
 import { useCan } from '@/features/auth/hooks/useCan'
 import { useSuppliers } from '@/features/suppliers/hooks/useSuppliers'
+import { Money } from '@/components/Money'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -59,8 +60,6 @@ import { cn } from '@/lib/utils'
 import { useAssignSupplier } from '../hooks/useProducts'
 import { useRecordMovement } from '../hooks/useRecordMovement'
 import { StockStatusBadge } from './StockStatusBadge'
-
-const money = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' })
 
 // Module scope: TanStack Table v9 wants stable features and columns. Sorting is the feature's state and
 // header APIs only: the server sorts (manualSorting), and the sort lives in the URL. Selection covers the page
@@ -126,12 +125,12 @@ const columns = column.columns([
   column.accessor('costPrice', {
     header: 'Cost',
     sortDescFirst: true,
-    cell: (info) => money.format(info.getValue()),
+    cell: (info) => <Money value={info.getValue()} />,
   }),
   column.accessor('salePrice', {
     header: 'Sale',
     sortDescFirst: true,
-    cell: (info) => money.format(info.getValue()),
+    cell: (info) => <Money value={info.getValue()} />,
   }),
   column.accessor('quantity', {
     header: 'Quantity',

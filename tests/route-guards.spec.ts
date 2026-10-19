@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, stubSettings, test, type Page } from './fixtures';
 
 const user = (overrides: Record<string, unknown>) => ({
   id: 'u1',
@@ -29,6 +29,8 @@ const stubApi = async (page: Page, me: unknown) => {
   await page.route('**/api/auth/refresh', (route) => route.fulfill(unauthorized));
   await page.route('**/api/auth/me', (route) => (me ? route.fulfill({ json: me }) : route.fulfill(unauthorized)));
   await page.route('**/api/users?*', (route) => route.fulfill({ json: emptyUsersPage }));
+  // The catch-all above outranks the fixture's settings stub
+  await stubSettings(page);
 };
 
 const appShell = (page: Page) => page.getByRole('button', { name: 'Account' });

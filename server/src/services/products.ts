@@ -1,5 +1,5 @@
 import { isValidObjectId, type HydratedDocument } from 'mongoose';
-import { STOCK_STATUS_RANGES, UNASSIGNED_SUPPLIER, defaultSortOrder } from '@inventory/shared';
+import { UNASSIGNED_SUPPLIER, defaultSortOrder, stockStatusRange } from '@inventory/shared';
 import type {
   AssignSupplierInput,
   CreateProductInput,
@@ -13,6 +13,7 @@ import { Category } from '../models/Category.js';
 import { Product, type ProductDoc } from '../models/Product.js';
 import { StockMovement } from '../models/StockMovement.js';
 import { Supplier } from '../models/Supplier.js';
+import { getLowStockThreshold } from './settings.js';
 import { AppError, NotFoundError, ValidationError, isDuplicateKeyError } from '../utils/errors.js';
 import { NAME_COLLATION, escapeRegex } from '../utils/text.js';
 import { pageSkip, toPage } from '../utils/pagination.js';
@@ -162,9 +163,9 @@ export const deleteProduct = async (id: string): Promise<void> => {
   }
 };
 
-/** The `quantity` condition of a stock status, from the shared ranges (`getStockStatus` in database form). */
-const quantityRange = (stockStatus: StockStatus) => {
-  const { min, max } = STOCK_STATUS_RANGES[stockStatus];
+/** The `quantity` condition of a stock status under the stored threshold (`getStockStatus` in database form). */
+const quantityRange = async (stockStatus: StockStatus) => {
+  const { min, max } = stockStatusRange(stockStatus, await getLowStockThreshold());
   return { ...(min !== undefined && { $gte: min }), ...(max !== undefined && { $lte: max }) };
 };
 
@@ -177,13 +178,14 @@ export const listProducts = async (query: ListProductsQuery): Promise<ProductsPa
   const { search, category, supplier, status, stockStatus, sort } = query;
   const direction = (query.order ?? defaultSortOrder(sort)) === 'asc' ? 1 : -1;
   const pattern = search ? new RegExp(escapeRegex(search), 'i') : null;
+  const quantity = stockStatus && (await quantityRange(stockStatus));
   // One literal, no property assignments: architecture.test.ts treats assigning a quantity as a stock write
   const filter = {
     archivedAt: status === 'archived' ? { $ne: null } : null,
     ...(pattern && { $or: [{ title: pattern }, { sku: pattern }] }),
     ...(category && { category }),
     ...(supplier && { supplier: supplier === UNASSIGNED_SUPPLIER ? null : supplier }),
-    ...(stockStatus && { quantity: quantityRange(stockStatus) }),
+    ...(quantity && { quantity }),
   };
   const [total, rows] = await Promise.all([
     Product.countDocuments(filter),

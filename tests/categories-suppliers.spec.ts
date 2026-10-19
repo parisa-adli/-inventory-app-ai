@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Request } from '@playwright/test';
+import { expect, test, type Page, type Request } from './fixtures';
 
 // Categories and suppliers pages against a stubbed API (Phase 2).
 

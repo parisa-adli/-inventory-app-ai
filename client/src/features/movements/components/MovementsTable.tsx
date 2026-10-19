@@ -1,10 +1,11 @@
 import { createColumnHelper, tableFeatures, useTable } from '@tanstack/react-table';
 import type { StockMovement } from '@inventory/shared';
+import { Money } from '@/components/Money';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatDateTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { formatDelta, formatMoney, movementValue } from '../format';
+import { formatDelta, movementValue } from '../format';
 import { MovementTypeBadge } from './MovementTypeBadge';
 
 // Module scope: TanStack Table v9 wants stable features and columns
@@ -12,8 +13,6 @@ const features = tableFeatures({});
 const column = createColumnHelper<typeof features, StockMovement>();
 
 const RIGHT_ALIGNED = new Set(['delta', 'quantityAfter', 'unitCost', 'unitPrice', 'value']);
-
-const Money = ({ value }: { value: number }) => <span className="whitespace-nowrap">{formatMoney(value)}</span>;
 
 const columns = column.columns([
   column.accessor('occurredAt', {

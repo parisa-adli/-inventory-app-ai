@@ -24,6 +24,8 @@ export const PERMISSIONS = {
   SUPPLIERS_DELETE: 'suppliers.delete',
   /** Activate, reject, revoke and reinstate users, change roles, temporary passwords, credentials. */
   USERS_MANAGE: 'users.manage',
+  /** Change the app-wide settings: the low-stock threshold and the currency (C25). */
+  SETTINGS_EDIT: 'settings.edit',
 } as const;
 
 export type Permission = typeof PERMISSIONS[keyof typeof PERMISSIONS];

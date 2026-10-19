@@ -1,6 +1,7 @@
 import { data, redirect, type MiddlewareFunction } from 'react-router';
 import { ACCOUNT_STATUS, hasPermission, type AuthUser, type Permission } from '@inventory/shared';
 import { queryClient } from '@/app/queryClient';
+import { settingsQuery } from '@/lib/settings';
 import { meQuery } from './hooks/useAuth';
 import { loginRedirect, resolveLandingRoute, safeNext } from './landing';
 
@@ -22,11 +23,16 @@ export const requireGuest: MiddlewareFunction = async ({ request }) => {
   if (user) throw redirect(resolveLandingRoute(user, safeNext(new URL(request.url))));
 };
 
-/** The app shell: a signed-in user with no gate. A guest goes to /login?next=, a gated user to their gate screen. */
+/**
+ * The app shell: a signed-in user with no gate. A guest goes to /login?next=, a gated user to their gate screen.
+ * Also loads the settings (C25), so no page renders money or a stock badge before the stored currency and threshold
+ * are known. The server refuses them on a temporary password, so that user's shell loads without them.
+ */
 export const requireSignedIn: MiddlewareFunction = async ({ request }) => {
   const user = await getMe();
   if (!user) throw redirect(loginRedirect(new URL(request.url)));
   if (hasGate(user)) throw redirect(resolveLandingRoute(user));
+  if (!user.mustChangePassword) await queryClient.ensureQueryData({ ...settingsQuery, revalidateIfStale: true });
 };
 
 /** A gate screen: only while that gate really applies. Anyone else is sent where they belong. */

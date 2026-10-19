@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 // Products page against a stubbed API: create a product (#29), inline -/+ (#30), the Adjust Stock dialog (#31)
 // and the Stock History dialog (#32), and the Movements page those changes feed (#39).

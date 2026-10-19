@@ -79,5 +79,13 @@ A product retired from the active catalog. It keeps its **Ledger**, stays visibl
 _Avoid_: "deleted", "inactive", "disabled". Deleting is a separate action, possible only for a product with no movements.
 
 **Stock status**
-How much of a product is on hand, in three buckets that never overlap: out of stock (0), low stock (1 to 10) and in stock (more than 10).
+How much of a product is on hand, in three buckets that never overlap: out of stock (0), low stock (1 up to the **Low-stock threshold**) and in stock (above it).
 _Avoid_: "status" alone (a product's status is active or archived).
+
+**Low-stock threshold**
+The most units a product can have and still count as low stock; one number for the whole app, 10 until an admin changes it in **Settings** (any whole number from 1 to 10,000). It never makes a product out of stock: that is always 0. Every screen that buckets stock (badges, the stock-status filter, the dashboard) uses the same stored value.
+_Avoid_: "reorder point", "minimum stock" (nothing is ordered automatically, and the threshold is not per product).
+
+**Settings**
+The app-wide values only an admin may change: the **Low-stock threshold** and the currency every amount is shown in. There is one set for everyone, and only the last change is remembered (who and when). Changing the currency only relabels amounts: no price or history is converted.
+_Avoid_: "preferences" (they are not per user), "configuration" (that is the server's environment).

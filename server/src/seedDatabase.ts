@@ -1,4 +1,6 @@
 import {
+  DEFAULT_SETTINGS,
+  USER_ROLES,
   createProductSchema,
   generateSeedMovements,
   seedCategories as seedCategoryData,
@@ -9,6 +11,7 @@ import {
 } from '@inventory/shared';
 import { Category } from './models/Category.js';
 import { Product } from './models/Product.js';
+import { SETTINGS_KEY, Settings } from './models/Settings.js';
 import { StockMovement } from './models/StockMovement.js';
 import { Supplier } from './models/Supplier.js';
 import { User } from './models/User.js';
@@ -139,6 +142,13 @@ const archiveProducts = async (lastMovementAt: Map<string, Date>, productMap: Ma
   return archived.length;
 };
 
+/** The defaults, saved by the seeded admin (C25), so the Settings page shows who set them. */
+const seedSettings = async (userMap: Map<string, UserDoc>) => {
+  const admin = [...userMap.values()].find((user) => user.role === USER_ROLES.ADMIN);
+  await Settings.deleteMany({});
+  await Settings.create({ key: SETTINGS_KEY, ...DEFAULT_SETTINGS, updatedBy: admin?._id ?? null });
+};
+
 export interface SeedSummary {
   users: number;
   categories: number;
@@ -156,6 +166,7 @@ export interface SeedSummary {
 export const seedDatabase = async (now = new Date()): Promise<SeedSummary> => {
   const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const userMap = await seedUsers(now);
+  await seedSettings(userMap);
   const categoryMap = await seedCategories();
   const supplierMap = await seedSuppliers();
 

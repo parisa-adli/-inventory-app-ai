@@ -9,6 +9,7 @@ export const PATHS = {
   movements: `${APP_BASE}/movements`,
   users: `${APP_BASE}/users`,
   profile: `${APP_BASE}/profile`,
+  settings: `${APP_BASE}/settings`,
 } as const;
 
 /** Where a signed-in user with no gate lands by default. */

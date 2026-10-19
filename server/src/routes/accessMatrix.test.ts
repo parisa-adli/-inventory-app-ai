@@ -136,6 +136,9 @@ const ROUTES: RouteCase[] = [
   // Reconciliation (#37): admin only (STOCK_RECONCILE); the matrix has no products, so both forms answer a clean report
   adminRoute('get', '/api/admin/reconcile', 200),
   adminRoute('get', '/api/admin/reconcile?fix=true', 200),
+  // Settings (#54, C25): every active user reads them, only admins change them (SETTINGS_EDIT)
+  accountRoute('get', '/api/settings', 200),
+  adminRoute('patch', '/api/settings', 200, { lowStockThreshold: 5 }),
 
   adminRoute('get', '/api/users', 200),
   adminRoute('patch', '/api/users/:id', 200, { role: 'staff' }),

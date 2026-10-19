@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 // The shared debounced search box (components/SearchInput.tsx), on the Categories page with a stubbed API.
 

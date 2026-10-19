@@ -10,6 +10,7 @@ import {
   LogOut,
   Menu,
   Package,
+  Settings,
   Truck,
   UserRound,
   Users,
@@ -70,6 +71,7 @@ const NAV_ITEMS: NavItem[] = [
     permission: PERMISSIONS.USERS_MANAGE,
     badge: PendingCountBadge,
   },
+  { to: PATHS.settings, label: 'Settings', icon: Settings, permission: PERMISSIONS.SETTINGS_EDIT },
 ]
 
 const useNavItems = () => {

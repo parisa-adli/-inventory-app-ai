@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 // Finding products (#34): search, filters, the Active/Archived tabs and the server-side sort, all kept in the URL.
 // The API is stubbed; the filtering itself is covered by the server's HTTP tests.

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Category } from './models/Category.js';
 import { Product } from './models/Product.js';
+import { Settings } from './models/Settings.js';
 import { StockMovement } from './models/StockMovement.js';
 import { reconcile } from './services/stock.js';
 import { MEMORY_DB_START_TIMEOUT_MS, connectMemoryDb, disconnectMemoryDb } from './test/memoryDb.js';
@@ -16,6 +17,12 @@ afterAll(disconnectMemoryDb);
 
 describe('seedDatabase', () => {
   beforeAll(() => seedDatabase(NOW), SEED_TIMEOUT_MS);
+
+  it('writes the default settings with the seeded admin as the last editor', async () => {
+    const settings = await Settings.find().populate<{ updatedBy: { email: string } }>('updatedBy', 'email').lean();
+    expect(settings).toHaveLength(1);
+    expect(settings[0]).toMatchObject({ lowStockThreshold: 10, currency: 'USD', updatedBy: { email: 'admin@inventory.local' } });
+  });
 
   it('leaves every quantity equal to its ledger sum', async () => {
     const report = await reconcile();

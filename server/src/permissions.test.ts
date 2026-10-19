@@ -14,6 +14,8 @@ const MATRIX: [Permission, { staff: boolean; admin: boolean }][] = [
   [PERMISSIONS.SUPPLIERS_WRITE, { staff: true, admin: true }],
   [PERMISSIONS.SUPPLIERS_DELETE, { staff: false, admin: true }],
   [PERMISSIONS.USERS_MANAGE, { staff: false, admin: true }],
+  // C25: not in the PRD's matrix
+  [PERMISSIONS.SETTINGS_EDIT, { staff: false, admin: true }],
 ];
 
 describe('role permissions (PRD §2)', () => {

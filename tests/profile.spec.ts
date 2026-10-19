@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 // Profile page (CONTRACT-CHANGES C13, docs/design/profile.png) against a mocked API: no backend runs here.
 

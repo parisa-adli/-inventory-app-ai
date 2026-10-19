@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 const unauthorized = { status: 401, json: { error: { code: 'UNAUTHORIZED', message: 'Authentication required' } } };
 
@@ -340,11 +340,11 @@ test.describe('client smoke', () => {
     await expect(page.getByRole('heading', { level: 2, name: 'Dashboard' })).toBeVisible();
 
     const nav = page.getByRole('navigation');
-    for (const name of ['Dashboard', 'Products', 'Categories', 'Suppliers', 'Movements', 'Users']) {
+    for (const name of ['Dashboard', 'Products', 'Categories', 'Suppliers', 'Movements', 'Users', 'Settings']) {
       await expect(nav.getByRole('link', { name })).toBeVisible();
     }
     // Sidebar: one icon per link
-    await expect(nav.locator('a svg')).toHaveCount(6);
+    await expect(nav.locator('a svg')).toHaveCount(7);
     await expect(page.getByRole('link', { name: 'Inventory Manager' })).toHaveAttribute('href', '/app/dashboard');
     await expect(page.getByRole('button', { name: 'Open menu' })).toBeHidden();
 

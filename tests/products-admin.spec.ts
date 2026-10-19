@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 // Admin-only archive, unarchive and delete (#36) against a stubbed API that keeps the server's rules: archived
 // products leave the active list, and a product with movements cannot be deleted.

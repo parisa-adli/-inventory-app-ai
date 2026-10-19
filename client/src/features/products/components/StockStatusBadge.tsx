@@ -1,5 +1,6 @@
 import { STOCK_STATUSES, getStockStatus, type StockStatus } from '@inventory/shared';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
+import { useSettings } from '@/lib/settings';
 
 const STOCK_BADGES: Record<StockStatus, { label: string; variant: BadgeProps['variant'] }> = {
   [STOCK_STATUSES.IN]: { label: 'In stock', variant: 'success' },
@@ -7,9 +8,10 @@ const STOCK_BADGES: Record<StockStatus, { label: string; variant: BadgeProps['va
   [STOCK_STATUSES.OUT]: { label: 'Out of stock', variant: 'destructive' },
 };
 
-/** In stock / Low stock / Out of stock, from the quantity, as a tinted badge with a dot (DESIGN.md §2.2). */
+/** In stock / Low stock / Out of stock, from the quantity and the stored threshold, as a tinted badge with a dot (DESIGN.md §2.2). */
 export function StockStatusBadge({ quantity }: { quantity: number }) {
-  const { label, variant } = STOCK_BADGES[getStockStatus(quantity)];
+  const { lowStockThreshold } = useSettings();
+  const { label, variant } = STOCK_BADGES[getStockStatus(quantity, lowStockThreshold)];
   return (
     <Badge variant={variant} className="gap-1.5 rounded-md font-medium">
       <span className="size-1.5 rounded-full bg-current" aria-hidden />

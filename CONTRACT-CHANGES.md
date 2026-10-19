@@ -239,9 +239,11 @@ Where the PRD and the agreed Q&A conflict, the Q&A wins (`docs/adr/0001`). C17�
 
 ## Settings & dashboard (P5, grilling session 2026-10-19)
 
-**Approved by the user (2026-10-19), not built yet;** each entry will name the issue that applies it. The Settings feature is new scope that the PRD does not have; the dashboard entries refine PRD §6.1 and `docs/PRDs/05-dashboard.md`. Where the decision wording says `{ _id, displayName }` for a user, this repo uses `{ id, name }` (the shape of `user` in C19 movement items).
+**Approved by the user (2026-10-19).** C25 is applied (#54); C26 is not built yet. Each entry names the issue that applies it. The Settings feature is new scope that the PRD does not have; the dashboard entries refine PRD §6.1 and `docs/PRDs/05-dashboard.md`. Where the decision wording says `{ _id, displayName }` for a user, this repo uses `{ id, name }` (the shape of `user` in C19 movement items).
 
 ## C25. Settings singleton: editable low-stock threshold and currency (new)
+
+*Applied in #54 (`models/Settings.ts`, `services/settings.ts`, `routes/settings.ts`; `stockStatusRange` / `getStockStatus` take the threshold and `DEFAULT_LOW_STOCK_THRESHOLD` is only the default; client `lib/settings.ts` loaded by `requireSignedIn`, `lib/money.ts`, `features/settings`). A user on a temporary password is refused the settings (403 `PASSWORD_CHANGE_REQUIRED`, like every data route), so their shell loads without them. `currency` must be 3 capital letters (`"eur"` is a 400).*
 
 - PRD: a global `LOW_STOCK_THRESHOLD` constant (today `10` in `shared/constants/stock-status.ts`, #28) and no currency (the client hardcodes USD). Agreed: both live in one `Settings` document.
 - **Singleton:** one document under a fixed key. `GET` creates it with the defaults (threshold `10`, currency `USD`, `updatedBy: null`) when it is missing, e.g. the seed was not run. `npm run seed` writes it explicitly, with `updatedBy` set to the seeded admin.

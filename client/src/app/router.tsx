@@ -21,6 +21,7 @@ import Dashboard from '@/features/dashboard/pages/Dashboard';
 import Movements from '@/features/movements/pages/Movements';
 import Products from '@/features/products/pages/Products';
 import Profile from '@/features/profile/pages/Profile';
+import Settings from '@/features/settings/pages/Settings';
 import Suppliers from '@/features/suppliers/pages/Suppliers';
 import Users from '@/features/users/pages/Users';
 
@@ -104,6 +105,12 @@ export const router = createBrowserRouter([
             loader: runGuards,
             ErrorBoundary: NoAccessBoundary,
             children: [{ path: 'users', Component: Users, handle: { crumb: 'Users' } }],
+          },
+          {
+            middleware: [requirePermission(PERMISSIONS.SETTINGS_EDIT)],
+            loader: runGuards,
+            ErrorBoundary: NoAccessBoundary,
+            children: [{ path: 'settings', Component: Settings, handle: { crumb: 'Settings' } }],
           },
           { path: '*', Component: NotFound },
         ],

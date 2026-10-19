@@ -181,6 +181,11 @@ test.describe('stock changes (stubbed API)', () => {
     await page.route(/\/api\/products(\?.*)?$/, (route) =>
       route.fulfill({ json: pageOf(state.archived ? [] : [{ ...MOUSE, quantity: state.quantity }], 20) })
     );
+    // The Movements page's cards and "By" filter
+    await page.route(/\/api\/stock-movements\/summary(\?.*)?$/, (route) =>
+      route.fulfill({ json: { unitsIn: 0, unitsOut: 0, inboundValue: 0, income: 0 } })
+    );
+    await page.route('**/api/stock-movements/users', (route) => route.fulfill({ json: [] }));
     await page.route(/\/api\/stock-movements(\?.*)?$/, async (route, request) => {
       if (request.method() === 'GET') {
         historyQueries.push(new URL(request.url()).searchParams);
@@ -544,7 +549,7 @@ test.describe('stock changes (stubbed API)', () => {
     await expect(rows.nth(1)).toContainText('Shelf count found four more');
     await expect(rows.nth(2)).toContainText('Ship');
     await expect(rows.nth(2)).toContainText('−1');
-    await expect(rows.nth(2).getByRole('cell').nth(5)).toHaveText('—');
+    await expect(rows.nth(2).getByRole('cell').nth(8)).toHaveText('—');
     await expect(rows.nth(3)).toContainText('Receive');
     await expect(rows.nth(3)).toContainText('+1');
     for (const n of [1, 2, 3]) {

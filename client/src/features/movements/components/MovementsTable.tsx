@@ -4,18 +4,20 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatDateTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { formatDelta } from '../format';
+import { formatDelta, formatMoney, movementValue } from '../format';
 import { MovementTypeBadge } from './MovementTypeBadge';
 
 // Module scope: TanStack Table v9 wants stable features and columns
 const features = tableFeatures({});
 const column = createColumnHelper<typeof features, StockMovement>();
 
-const RIGHT_ALIGNED = new Set(['delta', 'quantityAfter']);
+const RIGHT_ALIGNED = new Set(['delta', 'quantityAfter', 'unitCost', 'unitPrice', 'value']);
+
+const Money = ({ value }: { value: number }) => <span className="whitespace-nowrap">{formatMoney(value)}</span>;
 
 const columns = column.columns([
   column.accessor('occurredAt', {
-    header: 'Date',
+    header: 'When',
     cell: (info) => <span className="whitespace-nowrap text-muted-foreground">{formatDateTime(info.getValue())}</span>,
   }),
   column.accessor('product', {
@@ -39,8 +41,11 @@ const columns = column.columns([
     cell: (info) => <span className="font-medium">{formatDelta(info.getValue())}</span>,
   }),
   column.accessor('quantityAfter', { header: 'After' }),
+  column.accessor('unitCost', { header: 'Unit cost', cell: (info) => <Money value={info.getValue()} /> }),
+  column.accessor('unitPrice', { header: 'Unit price', cell: (info) => <Money value={info.getValue()} /> }),
+  column.accessor(movementValue, { id: 'value', header: 'Value', cell: (info) => <Money value={info.getValue()} /> }),
   column.accessor('note', {
-    header: 'Note',
+    header: 'Reason / note',
     cell: (info) => <span className="block min-w-40 whitespace-normal text-muted-foreground">{info.getValue() ?? '—'}</span>,
   }),
   column.accessor((movement) => movement.user.name, {

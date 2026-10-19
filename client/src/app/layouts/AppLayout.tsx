@@ -1,5 +1,6 @@
 import { ReactNode } from 'react'
 import { Outlet } from 'react-router'
+import { AppBreadcrumbs } from './AppBreadcrumbs'
 import { AppSidebar, AppTopBar } from './AppNav'
 
 interface AppLayoutProps {
@@ -12,7 +13,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
       <AppSidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <AppTopBar />
-        <main className="mx-auto w-full px-4 py-8">{children}</main>
+        <main className="mx-auto w-full px-4 py-8">
+          <AppBreadcrumbs />
+          {children}
+        </main>
       </div>
     </div>
   )

@@ -20,6 +20,25 @@ export interface StockMovement {
 /** GET /api/stock-movements */
 export type StockMovementsPage = Paginated<StockMovement>;
 
+/**
+ * GET /api/stock-movements/summary, over the same filters as the list. Receives bring units in at their unit cost;
+ * ships take units out at their unit price. Adjustments count in neither.
+ */
+export interface StockMovementsSummary {
+  unitsIn: number;
+  unitsOut: number;
+  /** Σ received units × unit cost. */
+  inboundValue: number;
+  /** Σ shipped units × unit price. */
+  income: number;
+}
+
+/** GET /api/stock-movements/users: everyone who has made a movement, by name (the "By" filter). */
+export interface StockMovementUser {
+  id: string;
+  name: string;
+}
+
 /** A product whose quantity disagrees with the sum of its movement deltas. */
 export interface ReconcileMismatch {
   productId: string;

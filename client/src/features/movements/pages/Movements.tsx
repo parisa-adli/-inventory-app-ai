@@ -1,49 +1,57 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { X } from 'lucide-react';
-import type { DateRange } from 'react-day-picker';
 import { STOCK_MOVEMENTS_PAGE_SIZE_DEFAULT, STOCK_MOVEMENT_TYPES, type StockMovementType } from '@inventory/shared';
 import { ListMessage } from '@/components/ListMessage';
 import { Pager } from '@/components/Pager';
+import { SearchInput } from '@/components/SearchInput';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { DateRangePicker } from '../components/DateRangePicker';
+import { DayPicker } from '../components/DayPicker';
+import { MovementsSummary } from '../components/MovementsSummary';
 import { MovementsTable } from '../components/MovementsTable';
-import { ProductCombobox, type PickedProduct } from '../components/ProductCombobox';
 import { toInstantRange } from '../dateRange';
 import { MOVEMENT_TYPE_LABELS } from '../format';
-import { useMovements } from '../hooks/useMovements';
+import { useMovementUsers, useMovements, useMovementsSummary } from '../hooks/useMovements';
 
-/** The "All types" choice (a Select item cannot have an empty value). */
-const ALL_TYPES = 'all';
+/** The "All …" choice of a filter (a Select item cannot have an empty value). */
+const ALL = 'all';
 
 const TYPES: readonly string[] = Object.values(STOCK_MOVEMENT_TYPES);
 const isMovementType = (value: string): value is StockMovementType => TYPES.includes(value);
 
 const TYPE_OPTIONS = [
-  { value: ALL_TYPES, label: 'All types' },
+  { value: ALL, label: 'All types' },
   ...Object.entries(MOVEMENT_TYPE_LABELS).map(([value, label]) => ({ value, label })),
 ];
 
+const FILTER_TRIGGER = 'h-10 w-full gap-3 rounded-lg lg:w-auto';
+
 /**
- * Every stock movement across products, newest first, 20 a page (#33). Read-only. Filters by product,
- * type and a range of local days; every filter is part of the query key, and changing one returns to page 1.
+ * Every stock movement across products, newest first, 20 a page (#33). Read-only. Filters by a product title or SKU
+ * search, type, who made it and a From / To pair of local days; the cards total the same filtered movements. Every
+ * filter is part of the query keys, and changing one returns to page 1.
  */
 export default function Movements() {
-  const [product, setProduct] = useState<PickedProduct | null>(null);
+  const [search, setSearch] = useState('');
   const [type, setType] = useState<StockMovementType | null>(null);
-  const [dayRange, setDayRange] = useState<DateRange | undefined>();
+  const [user, setUser] = useState<string | null>(null);
+  const [from, setFrom] = useState<Date | undefined>();
+  const [to, setTo] = useState<Date | undefined>();
   const [page, setPage] = useState(1);
-  const hasFilters = Boolean(product || type || dayRange?.from);
+  const hasFilters = Boolean(search || type || user || from || to);
 
-  const query = useMovements({
-    page,
-    limit: STOCK_MOVEMENTS_PAGE_SIZE_DEFAULT,
-    ...(product && { product: product.id }),
+  const filters = {
+    ...(search && { search }),
     ...(type && { type }),
-    ...toInstantRange(dayRange),
-  });
+    ...(user && { user }),
+    ...toInstantRange({ from, to }),
+  };
+  const query = useMovements({ page, limit: STOCK_MOVEMENTS_PAGE_SIZE_DEFAULT, ...filters });
+  const summary = useMovementsSummary(filters);
+  const users = useMovementUsers();
   const { data } = query;
+  const today = new Date();
 
   // Any filter change starts again on page 1
   const resettingPage =
@@ -52,10 +60,17 @@ export default function Movements() {
       set(value);
       setPage(1);
     };
+  // Stable, so the search box's debounce is not restarted by every render
+  const onSearch = useCallback((value: string) => {
+    setSearch(value.trim());
+    setPage(1);
+  }, []);
   const clearFilters = () => {
-    setProduct(null);
+    setSearch('');
     setType(null);
-    setDayRange(undefined);
+    setUser(null);
+    setFrom(undefined);
+    setTo(undefined);
     setPage(1);
   };
 
@@ -63,13 +78,15 @@ export default function Movements() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Stock movements</h1>
-        <p className="text-sm text-muted-foreground">Every receive, ship and adjustment, newest first.</p>
+        <p className="text-sm text-muted-foreground">Every receipt, shipment and adjustment, and who made it.</p>
       </div>
 
-      <div className="flex flex-col gap-3 lg:flex-row">
-        <ProductCombobox value={product} onChange={resettingPage(setProduct)} />
-        <Select value={type ?? ALL_TYPES} onValueChange={resettingPage((value: string) => setType(isMovementType(value) ? value : null))}>
-          <SelectTrigger className="h-9 w-full lg:w-44" aria-label="Type">
+      <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
+        <div className="flex lg:w-72">
+          <SearchInput value={search} onSearch={onSearch} placeholder="Product title or SKU" className="h-10 rounded-lg" />
+        </div>
+        <Select value={type ?? ALL} onValueChange={resettingPage((value: string) => setType(isMovementType(value) ? value : null))}>
+          <SelectTrigger className={FILTER_TRIGGER} aria-label="Type">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -80,14 +97,46 @@ export default function Movements() {
             ))}
           </SelectContent>
         </Select>
-        <DateRangePicker value={dayRange} onChange={resettingPage(setDayRange)} />
+        <Select value={user ?? ALL} onValueChange={resettingPage((value: string) => setUser(value === ALL ? null : value))}>
+          <SelectTrigger className={FILTER_TRIGGER} aria-label="User">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>All users</SelectItem>
+            {users.data?.map((option) => (
+              <SelectItem key={option.id} value={option.id}>
+                {option.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="flex items-center gap-2">
+          <span className="w-10 shrink-0 text-sm lg:w-auto">From</span>
+          <DayPicker
+            label="From"
+            value={from}
+            onChange={resettingPage(setFrom)}
+            disabled={[{ after: to ?? today }]}
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-10 shrink-0 text-sm lg:w-auto">To</span>
+          <DayPicker
+            label="To"
+            value={to}
+            onChange={resettingPage(setTo)}
+            disabled={[{ after: today }, ...(from ? [{ before: from }] : [])]}
+          />
+        </div>
         {hasFilters && (
-          <Button variant="ghost" onClick={clearFilters}>
+          <Button variant="ghost" className="h-10" onClick={clearFilters}>
             <X className="size-4" />
             Clear filters
           </Button>
         )}
       </div>
+
+      <MovementsSummary summary={summary.data} />
 
       {query.isPending && (
         <div className="space-y-2" role="status" aria-label="Loading">

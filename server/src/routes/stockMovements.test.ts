@@ -219,6 +219,7 @@ describe('GET /api/stock-movements', () => {
   it.each([
     ['a malformed product id', '?product=nope', 'product: Choose a product'],
     ['an unknown type', '?type=gift', 'type: Type must be receive, ship or adjustment'],
+    ['a malformed user id', '?user=nope', 'user: Choose a user'],
     ['a date without a time', '?dateFrom=2026-10-15', 'dateFrom: dateFrom must be an ISO date-time'],
     ['a limit over 100', '?limit=101', 'limit:'],
     [
@@ -231,5 +232,113 @@ describe('GET /api/stock-movements', () => {
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('VALIDATION_ERROR');
     expect(res.body.error.message).toContain(message);
+  });
+});
+
+describe('GET /api/stock-movements filters: search and user', () => {
+  const list = (query = '') => request(app).get(`/api/stock-movements${query}`).set('Cookie', cookie);
+
+  it('searches product titles and SKUs case-insensitively, with regex characters taken literally', async () => {
+    const other = await Product.create({
+      title: 'USB Hub (4-port)',
+      sku: 'HUB-002',
+      category: (await Category.findOne())!._id,
+      costPrice: 8,
+      salePrice: 15,
+      unitOfMeasure: 'pcs',
+    });
+    await post({ productId, type: 'receive', quantity: 1 });
+    await post({ productId: String(other._id), type: 'receive', quantity: 2 });
+
+    const skus = async (query: string) =>
+      (await list(query)).body.items.map((m: { product: { sku: string } }) => m.product.sku);
+    expect(await skus('?search=wireless')).toEqual(['ELE-001']);
+    expect(await skus('?search=hub-0')).toEqual(['HUB-002']);
+    expect(await skus(`?search=${encodeURIComponent('(4-port)')}`)).toEqual(['HUB-002']);
+    expect(await skus('?search=nothing')).toEqual([]);
+    // With a product scope, the search narrows within it
+    expect(await skus(`?product=${productId}&search=hub`)).toEqual([]);
+  });
+
+  it('filters by who made the movement', async () => {
+    const other = await User.create({
+      name: 'Ann Admin',
+      email: 'ann@inventory.local',
+      role: 'admin',
+      status: 'active',
+      emailVerified: true,
+      passwordHash: 'unused',
+    });
+    await post({ productId, type: 'receive', quantity: 1 });
+    await recordMovement({ productId, type: 'receive', quantity: 2, userId: String(other._id) });
+
+    const res = await list(`?user=${other._id}`);
+    expect(res.body.items).toEqual([expect.objectContaining({ delta: 2, user: { id: String(other._id), name: 'Ann Admin' } })]);
+  });
+});
+
+describe('GET /api/stock-movements/summary', () => {
+  const summary = (query = '') => request(app).get(`/api/stock-movements/summary${query}`).set('Cookie', cookie);
+
+  it('is all zeros with no movements', async () => {
+    const res = await summary();
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body).toEqual({ unitsIn: 0, unitsOut: 0, inboundValue: 0, income: 0 });
+  });
+
+  it('counts receives in at unit cost and ships out at unit price; adjustments count in neither', async () => {
+    await post({ productId, type: 'receive', quantity: 10 });
+    await post({ productId, type: 'ship', quantity: 3 });
+    await post({ productId, type: 'adjustment', quantity: -2, note: 'Damaged' });
+
+    const res = await summary();
+    // 10 × 12.50 in; 3 × 24.99 out
+    expect(res.body).toEqual({ unitsIn: 10, unitsOut: 3, inboundValue: 125, income: 74.97 });
+  });
+
+  it('follows the list filters', async () => {
+    await post({ productId, type: 'receive', quantity: 10 });
+    await post({ productId, type: 'ship', quantity: 3 });
+
+    expect((await summary('?type=ship')).body).toEqual({ unitsIn: 0, unitsOut: 3, inboundValue: 0, income: 74.97 });
+    expect((await summary('?search=nothing')).body).toEqual({ unitsIn: 0, unitsOut: 0, inboundValue: 0, income: 0 });
+    expect((await summary(`?product=${productId}&user=${userId}`)).body).toMatchObject({ unitsIn: 10, unitsOut: 3 });
+    expect((await summary('?dateTo=2000-01-01T00:00:00.000Z')).body).toMatchObject({ unitsIn: 0 });
+  });
+
+  it('rejects a range that ends before it starts with 400', async () => {
+    const res = await summary('?dateFrom=2026-10-16T00:00:00.000Z&dateTo=2026-10-15T23:59:59.999Z');
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toContain('dateTo cannot be before dateFrom');
+  });
+});
+
+describe('GET /api/stock-movements/users', () => {
+  it('lists only the people who have made a movement, A to Z', async () => {
+    const ann = await User.create({
+      name: 'ann Admin',
+      email: 'ann@inventory.local',
+      role: 'admin',
+      status: 'active',
+      emailVerified: true,
+      passwordHash: 'unused',
+    });
+    await User.create({
+      name: 'Idle Staff',
+      email: 'idle@inventory.local',
+      role: 'staff',
+      status: 'active',
+      emailVerified: true,
+      passwordHash: 'unused',
+    });
+    await post({ productId, type: 'receive', quantity: 1 });
+    await recordMovement({ productId, type: 'receive', quantity: 1, userId: String(ann._id) });
+
+    const res = await request(app).get('/api/stock-movements/users').set('Cookie', cookie);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body).toEqual([
+      { id: String(ann._id), name: 'ann Admin' },
+      { id: userId, name: 'John Staff' },
+    ]);
   });
 });

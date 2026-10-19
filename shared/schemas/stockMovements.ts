@@ -108,20 +108,38 @@ const instant = (label: string) =>
     .datetime({ offset: true, error: `${label} must be an ISO date-time` })
     .transform((value) => new Date(value));
 
+export const STOCK_MOVEMENTS_SEARCH_MAX = 100;
+
 /**
- * Query string of GET /api/stock-movements. Values arrive as strings. Both ends of the date range are
- * inclusive: for a whole last day the client sends its final instant (23:59:59.999 local).
+ * The filters of GET /api/stock-movements and its summary. Values arrive as strings. `product` scopes to one product
+ * (the Stock History dialog); `search` matches product titles and SKUs; `user` is who made the movement. Both ends of
+ * the date range are inclusive: for a whole last day the client sends its final instant (23:59:59.999 local).
  */
-export const listStockMovementsQuerySchema = z.object({
+const filterFields = {
   product: productId.optional(),
+  search: z.string().trim().max(STOCK_MOVEMENTS_SEARCH_MAX).optional(),
+  user: objectId('Choose a user').optional(),
   type: type.optional(),
   dateFrom: instant('dateFrom').optional(),
   dateTo: instant('dateTo').optional(),
-  ...paginationFields(STOCK_MOVEMENTS_PAGE_SIZE_DEFAULT, STOCK_MOVEMENTS_PAGE_SIZE_MAX),
-}).refine(({ dateFrom, dateTo }) => !dateFrom || !dateTo || dateFrom <= dateTo, {
-  path: ['dateTo'],
-  error: 'dateTo cannot be before dateFrom',
-});
+};
+
+const checkDateOrder = ({ dateFrom, dateTo }: { dateFrom?: Date; dateTo?: Date }, ctx: z.RefinementCtx) => {
+  if (dateFrom && dateTo && dateFrom > dateTo) {
+    ctx.addIssue({ code: 'custom', path: ['dateTo'], message: 'dateTo cannot be before dateFrom' });
+  }
+};
+
+/** Query string of GET /api/stock-movements/summary: the list's filters, no paging. */
+export const stockMovementsFilterSchema = z.object(filterFields).superRefine(checkDateOrder);
+
+export type StockMovementsFilter = z.infer<typeof stockMovementsFilterSchema>;
+export type StockMovementsFilterParams = z.input<typeof stockMovementsFilterSchema>;
+
+/** Query string of GET /api/stock-movements. */
+export const listStockMovementsQuerySchema = z
+  .object({ ...filterFields, ...paginationFields(STOCK_MOVEMENTS_PAGE_SIZE_DEFAULT, STOCK_MOVEMENTS_PAGE_SIZE_MAX) })
+  .superRefine(checkDateOrder);
 
 export type ListStockMovementsQuery = z.infer<typeof listStockMovementsQuerySchema>;
 export type StockMovementListParams = z.input<typeof listStockMovementsQuerySchema>;

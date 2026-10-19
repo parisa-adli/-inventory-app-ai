@@ -139,6 +139,8 @@ const ROUTES: RouteCase[] = [
   // Settings (#54, C25): every active user reads them, only admins change them (SETTINGS_EDIT)
   accountRoute('get', '/api/settings', 200),
   adminRoute('patch', '/api/settings', 200, { lowStockThreshold: 5 }),
+  // Dashboard (#55, C26): every active user (INVENTORY_VIEW)
+  accountRoute('get', '/api/dashboard/movements-chart?range=7d&tz=UTC', 200),
 
   adminRoute('get', '/api/users', 200),
   adminRoute('patch', '/api/users/:id', 200, { role: 'staff' }),

@@ -8,3 +8,4 @@ export * from './suppliers';
 export * from './products';
 export * from './stockMovements';
 export * from './settings';
+export * from './dashboard';

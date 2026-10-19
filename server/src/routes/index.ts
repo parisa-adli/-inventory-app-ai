@@ -4,6 +4,7 @@ import { TELEGRAM_WEBHOOK_PATH, isTelegramConfigured, telegramWebhookHandler } f
 import adminRouter from './admin.js';
 import authRouter from './auth.js';
 import categoriesRouter from './categories.js';
+import dashboardRouter from './dashboard.js';
 import healthRouter from './health.js';
 import productsRouter from './products.js';
 import settingsRouter from './settings.js';
@@ -21,6 +22,7 @@ router.use('/api/suppliers', suppliersRouter);
 router.use('/api/products', productsRouter);
 router.use('/api/stock-movements', stockMovementsRouter);
 router.use('/api/settings', settingsRouter);
+router.use('/api/dashboard', dashboardRouter);
 router.use('/api/admin', adminRouter);
 
 // Telegram pushes updates here in webhook mode only; polling needs no inbound route.

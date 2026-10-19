@@ -107,7 +107,7 @@ export const useProductListParams = () => {
     (value: number, options?: { replace?: boolean }) => update({ page: value }, options),
     [update]
   );
-  /** Title A→Z writes neither key; another sort in its default direction writes only `sort`. */
+  /** Newest first writes neither key; another sort in its default direction writes only `sort`. */
   const setSort = useCallback(
     (nextSort: ProductSort, nextOrder: SortOrder) =>
       update({

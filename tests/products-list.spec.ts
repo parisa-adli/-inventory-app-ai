@@ -63,18 +63,26 @@ const choose = async (page: Page, label: string, option: string) => {
   await page.getByRole('option', { name: option, exact: true }).click();
 };
 
-const header = (page: Page, name: string) => page.getByRole('columnheader', { name });
+const header = (page: Page, name: string) => page.getByRole('columnheader', { name, exact: true });
 
 test.describe('finding products (stubbed API)', () => {
   test('filters, search, tab and sort go into the URL and the query, and a reload opens the same view', async ({ page }) => {
     const api = await stubApi(page);
     await page.goto('/app/products');
 
-    // Defaults: active tab, title A→Z, nothing in the URL
+    // Defaults: active tab, newest first, nothing in the URL
     await expect(page.getByRole('row', { name: /Drill/ })).toBeVisible();
-    expect(api.last()).toEqual({ status: 'active', page: '1', limit: '20', sort: 'title', order: 'asc' });
-    await expect(header(page, 'Title')).toHaveAttribute('aria-sort', 'ascending');
+    expect(api.last()).toEqual({ status: 'active', page: '1', limit: '20', sort: 'createdAt', order: 'desc' });
+    await expect(header(page, 'Product')).toHaveAttribute('aria-sort', 'none');
     await expect(header(page, 'Category')).not.toHaveAttribute('aria-sort');
+
+    // Product goes A→Z on the first click, then Z→A
+    await header(page, 'Product').getByRole('button').click();
+    await expect(header(page, 'Product')).toHaveAttribute('aria-sort', 'ascending');
+    await expect.poll(api.last).toMatchObject({ sort: 'title', order: 'asc' });
+    await header(page, 'Product').getByRole('button').click();
+    await expect(header(page, 'Product')).toHaveAttribute('aria-sort', 'descending');
+    await expect.poll(api.last).toMatchObject({ sort: 'title', order: 'desc' });
 
     await choose(page, 'Supplier', 'Unassigned');
     await choose(page, 'Stock status', 'Low stock');
@@ -87,7 +95,7 @@ test.describe('finding products (stubbed API)', () => {
     await expect(header(page, 'Quantity')).toHaveAttribute('aria-sort', 'descending');
     await header(page, 'Quantity').getByRole('button').click();
     await expect(header(page, 'Quantity')).toHaveAttribute('aria-sort', 'ascending');
-    await expect(header(page, 'Title')).toHaveAttribute('aria-sort', 'none');
+    await expect(header(page, 'Product')).toHaveAttribute('aria-sort', 'none');
 
     await page.getByRole('tab', { name: 'Archived' }).click();
 

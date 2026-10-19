@@ -20,7 +20,7 @@ interface StockHistoryDialogProps {
 export function StockHistoryDialog({ product, onOpenChange }: StockHistoryDialogProps) {
   return (
     <Dialog open={!!product} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Stock history</DialogTitle>
           {product && (
@@ -64,7 +64,7 @@ function ProductLedger({ productId }: { productId: string }) {
   if (data.items.length === 0) return <ListMessage>No stock movements yet.</ListMessage>;
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       <div className="overflow-x-auto rounded-xl border">
         <Table>
           <TableHeader>
@@ -80,14 +80,14 @@ function ProductLedger({ productId }: { productId: string }) {
           <TableBody>
             {data.items.map((movement) => (
               <TableRow key={movement.id}>
-                <TableCell className="whitespace-nowrap text-muted-foreground">{formatDateTime(movement.occurredAt)}</TableCell>
+                <TableCell className="text-muted-foreground lg:whitespace-nowrap">{formatDateTime(movement.occurredAt)}</TableCell>
                 <TableCell>
                   <MovementTypeBadge type={movement.type} />
                 </TableCell>
                 <TableCell className="text-right font-medium tabular-nums">{formatDelta(movement.delta)}</TableCell>
                 <TableCell className="text-right tabular-nums">{movement.quantityAfter}</TableCell>
-                <TableCell className="min-w-40 whitespace-normal text-muted-foreground">{movement.note ?? '—'}</TableCell>
-                <TableCell className="whitespace-nowrap">{movement.user.name}</TableCell>
+                <TableCell className="min-w-32 whitespace-normal text-muted-foreground wrap-anywhere">{movement.note ?? '—'}</TableCell>
+                <TableCell>{movement.user.name}</TableCell>
               </TableRow>
             ))}
           </TableBody>

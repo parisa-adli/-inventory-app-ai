@@ -37,7 +37,6 @@ import {
 import { Can } from '@/features/auth/components/Can'
 import { useCan } from '@/features/auth/hooks/useCan'
 import { useSuppliers } from '@/features/suppliers/hooks/useSuppliers'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -107,7 +106,7 @@ const columns = column.columns([
     ),
   }),
   column.accessor('title', {
-    header: 'Title',
+    header: 'Product',
     enableHiding: false,
     cell: ({ row }) => <ProductCell product={row.original} />,
   }),
@@ -115,18 +114,13 @@ const columns = column.columns([
     id: 'category',
     header: 'Category',
     enableSorting: false,
-    cell: (info) => <Badge variant="secondary">{info.getValue()}</Badge>,
+    cell: (info) => info.getValue(),
   }),
   column.accessor((product) => product.supplier?.name ?? null, {
     id: 'supplier',
     header: 'Supplier',
     enableSorting: false,
-    cell: (info) =>
-      info.getValue() ?? (
-        <Badge variant="outline" className="text-muted-foreground">
-          Unassigned
-        </Badge>
-      ),
+    cell: (info) => info.getValue() ?? <span className="text-muted-foreground">Unassigned</span>,
   }),
   // Numbers sort highest first on the first click, like the API's default order
   column.accessor('costPrice', {
@@ -152,7 +146,7 @@ const columns = column.columns([
   }),
   column.display({
     id: 'actions',
-    header: 'Actions',
+    header: () => <span className="sr-only">Actions</span>,
     enableHiding: false,
     cell: ({ row }) => <RowActions product={row.original} />,
   }),
@@ -420,16 +414,13 @@ export function ProductsTable({
                           <button
                             type="button"
                             className={cn(
-                              'inline-flex items-center gap-1 hover:text-foreground',
+                              'inline-flex items-center gap-1',
                               RIGHT_ALIGNED.has(column.id) && 'flex-row-reverse'
                             )}
                             onClick={column.getToggleSortingHandler()}
                           >
                             <table.FlexRender header={header} />
-                            <SortIcon
-                              className={cn('size-3.5', !sorted && 'text-muted-foreground')}
-                              aria-hidden
-                            />
+                            <SortIcon className="size-3.5" aria-hidden />
                           </button>
                         ) : (
                           <table.FlexRender header={header} />

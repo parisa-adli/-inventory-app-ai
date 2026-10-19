@@ -123,7 +123,7 @@ export const productFormSchema = z.object({
 
 export const PRODUCT_SORTS = ['title', 'sku', 'quantity', 'costPrice', 'salePrice', 'createdAt'] as const;
 export type ProductSort = (typeof PRODUCT_SORTS)[number];
-export const PRODUCT_SORT_DEFAULT: ProductSort = 'title';
+export const PRODUCT_SORT_DEFAULT: ProductSort = 'createdAt';
 
 /** The list tabs; a product's `status` is derived from `archivedAt` (`docs/adr/0003`). */
 export const PRODUCT_STATUSES = ['active', 'archived'] as const;
@@ -142,7 +142,7 @@ export const listProductsQuerySchema = z.object({
   status: z.enum(PRODUCT_STATUSES).default('active'),
   stockStatus: z.enum(STOCK_STATUSES).optional(),
   ...paginationFields(PRODUCTS_PAGE_SIZE_DEFAULT, PRODUCTS_PAGE_SIZE_MAX),
-  /** Title A→Z by default. */
+  /** Newest first by default. */
   sort: z.enum(PRODUCT_SORTS).default(PRODUCT_SORT_DEFAULT),
   /** Defaults to `defaultSortOrder(sort)`. */
   order: z.enum(SORT_ORDERS).optional(),

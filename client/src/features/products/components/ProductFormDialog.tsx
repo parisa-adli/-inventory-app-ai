@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { useForm, type Control, type FieldPath } from 'react-hook-form';
+import { useForm, useWatch, type Control, type FieldPath } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus } from 'lucide-react';
 import {
@@ -19,6 +19,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getApiError } from '@/lib/apiError';
+import { cn } from '@/lib/utils';
 import { Can } from '@/features/auth/components/Can';
 import { CategoryFormDialog } from '@/features/categories/components/CategoryFormDialog';
 import { useCategories } from '@/features/categories/hooks/useCategories';
@@ -33,12 +34,22 @@ const PICKER_PARAMS = { limit: 100, sort: 'name' } as const;
 const NO_SUPPLIER = 'none';
 
 const UNIT_LABELS: Record<UnitOfMeasure, string> = {
-  pcs: 'Pieces (pcs)',
-  kg: 'Kilograms (kg)',
-  box: 'Boxes (box)',
-  l: 'Litres (l)',
-  m: 'Metres (m)',
+  pcs: 'PCS',
+  kg: 'KG',
+  box: 'BOX',
+  l: 'L',
+  m: 'M',
 };
+
+/** The dialog's inputs and selects match the toolbar's (`docs/design/add or edit product.png`). */
+const FIELD_CLASS = 'h-10 rounded-lg';
+
+/** A label with a muted "(optional)" after it; its accessible name reads "Supplier (optional)". */
+const optional = (label: string) => (
+  <>
+    {label} <span className="font-normal text-muted-foreground">(optional)</span>
+  </>
+);
 
 const EMPTY: ProductFormInput = {
   title: '',
@@ -116,6 +127,7 @@ function ProductForm({ product, onDone }: { product?: Product | null; onDone: (o
     defaultValues: product ? toFormInput(product) : EMPTY,
   });
   const isPending = create.isPending || update.isPending;
+  const imageUrl = useWatch({ control: form.control, name: 'imageUrl' });
   // The record a select shows beyond the fetched list: the product's own, or one just made with "+ New"
   const [extraCategory, setExtraCategory] = useState<Option | null>(
     product ? { value: product.category.id, label: product.category.name } : null
@@ -151,57 +163,59 @@ function ProductForm({ product, onDone }: { product?: Product | null; onDone: (o
             <DialogTitle>{product ? 'Edit product' : 'New product'}</DialogTitle>
             <DialogDescription>
               {product
-                ? 'Stock is not edited here: use Adjust stock to receive, ship or correct it.'
+                ? 'Stock on hand changes through movements, not from this form.'
                 : 'Products start with 0 in stock. Receive stock once the product exists.'}
             </DialogDescription>
           </DialogHeader>
-          <TextField control={form.control} name="title" label="Title" />
-          <TextField control={form.control} name="sku" label="SKU" hint="Letters, digits and dashes. Saved in capitals." />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <SelectField
-              control={form.control}
-              name="category"
-              label="Category"
-              placeholder={categories.isPending ? 'Loading…' : 'Choose a category'}
-              options={includeSelected(
-                (categories.data?.items ?? []).map((c) => ({ value: c.id, label: c.title })),
-                extraCategory
-              )}
-              labelAction={
-                <Can permission={PERMISSIONS.CATEGORIES_WRITE}>
-                  <NewButton onClick={() => setCreatingCategory(true)}>New category</NewButton>
-                </Can>
-              }
-            />
-            <SelectField
-              control={form.control}
-              name="supplier"
-              label="Supplier (optional)"
-              placeholder="No supplier"
-              options={[
-                { value: NO_SUPPLIER, label: 'No supplier' },
-                ...includeSelected(
-                  (suppliers.data?.items ?? []).map((s) => ({ value: s.id, label: s.name })),
-                  extraSupplier
-                ),
-              ]}
-              emptyValue={NO_SUPPLIER}
-              labelAction={
-                <Can permission={PERMISSIONS.SUPPLIERS_WRITE}>
-                  <NewButton onClick={() => setCreatingSupplier(true)}>New supplier</NewButton>
-                </Can>
-              }
-            />
-            <TextField control={form.control} name="costPrice" label="Cost price" />
-            <TextField control={form.control} name="salePrice" label="Sale price" />
+          <TextField control={form.control} name="title" label="Title" inputClassName={FIELD_CLASS} />
+          <TextField control={form.control} name="sku" label="SKU" inputClassName={FIELD_CLASS} />
+          <SelectField
+            control={form.control}
+            name="category"
+            label="Category"
+            placeholder={categories.isPending ? 'Loading…' : 'Choose a category'}
+            options={includeSelected(
+              (categories.data?.items ?? []).map((c) => ({ value: c.id, label: c.title })),
+              extraCategory
+            )}
+            action={
+              <Can permission={PERMISSIONS.CATEGORIES_WRITE}>
+                <NewButton label="New category" onClick={() => setCreatingCategory(true)} />
+              </Can>
+            }
+          />
+          <SelectField
+            control={form.control}
+            name="supplier"
+            label={optional('Supplier')}
+            placeholder="No supplier"
+            options={[
+              { value: NO_SUPPLIER, label: 'No supplier' },
+              ...includeSelected(
+                (suppliers.data?.items ?? []).map((s) => ({ value: s.id, label: s.name })),
+                extraSupplier
+              ),
+            ]}
+            emptyValue={NO_SUPPLIER}
+            action={
+              <Can permission={PERMISSIONS.SUPPLIERS_WRITE}>
+                <NewButton label="New supplier" onClick={() => setCreatingSupplier(true)} />
+              </Can>
+            }
+          />
+          <div className="grid gap-4 sm:grid-cols-3">
             <SelectField
               control={form.control}
               name="unitOfMeasure"
               label="Unit"
               options={UNITS_OF_MEASURE.map((unit) => ({ value: unit, label: UNIT_LABELS[unit] }))}
             />
+            <TextField control={form.control} name="costPrice" label="Cost price" inputClassName={FIELD_CLASS} />
+            <TextField control={form.control} name="salePrice" label="Sale price" inputClassName={FIELD_CLASS} />
           </div>
-          <TextField control={form.control} name="imageUrl" label="Image URL (optional)" hint="An http(s) link to the product photo." />
+          <TextField control={form.control} name="imageUrl" label={optional('Image URL')} inputClassName={FIELD_CLASS} />
+          {/* Keyed so a new URL gets another try after one failed to load */}
+          <ImagePreview key={imageUrl} url={imageUrl ?? ''} />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onDone(false)}>
               Cancel
@@ -227,59 +241,74 @@ function ProductForm({ product, onDone }: { product?: Product | null; onDone: (o
   );
 }
 
-function NewButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+/** "+ New" beside a select: opens the Phase 2 form over the product form. */
+function NewButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <Button type="button" variant="link" size="sm" className="h-auto p-0 text-xs" onClick={onClick}>
-      <Plus className="size-3" />
-      {children}
+    <Button type="button" variant="outline" className={FIELD_CLASS} aria-label={label} onClick={onClick}>
+      <Plus />
+      New
     </Button>
+  );
+}
+
+/** The image the URL points at, once it looks like a link; nothing when it fails to load. */
+function ImagePreview({ url }: { url: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed || !/^https?:\/\/\S+$/i.test(url.trim())) return null;
+  return (
+    <img
+      src={url.trim()}
+      alt="Image preview"
+      className="size-24 rounded-lg border bg-muted object-contain"
+      onError={() => setFailed(true)}
+    />
   );
 }
 
 interface SelectFieldProps {
   control: Control<ProductFormInput, unknown, ProductFormValues>;
   name: FieldPath<ProductFormInput>;
-  label: string;
+  label: ReactNode;
   placeholder?: string;
   options: Option[];
   /** The option that stands for the form's empty string. */
   emptyValue?: string;
-  /** Shown on the right of the label row, e.g. "+ New category". */
-  labelAction?: ReactNode;
+  /** Shown beside the select, e.g. "+ New". */
+  action?: ReactNode;
 }
 
-function SelectField({ control, name, label, placeholder, options, emptyValue, labelAction }: SelectFieldProps) {
+function SelectField({ control, name, label, placeholder, options, emptyValue, action }: SelectFieldProps) {
   return (
     <FormField
       control={control}
       name={name}
       render={({ field }) => (
         <FormItem>
-          <div className="flex items-center justify-between gap-2">
-            <FormLabel>{label}</FormLabel>
-            {labelAction}
+          <FormLabel>{label}</FormLabel>
+          <div className="flex items-center gap-2">
+            <Select
+              value={field.value === '' ? emptyValue ?? '' : String(field.value)}
+              onValueChange={(value: string) => {
+                // No item has the value '': it comes from Radix's hidden native select when the value is set
+                // (e.g. by "+ New category") one render before its option exists, and would wipe the choice
+                if (value !== '') field.onChange(value === emptyValue ? '' : value);
+              }}
+            >
+              <FormControl>
+                <SelectTrigger className={cn('w-full min-w-0 flex-1', FIELD_CLASS)} onBlur={field.onBlur}>
+                  <SelectValue placeholder={placeholder} />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {options.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {action}
           </div>
-          <Select
-            value={field.value === '' ? emptyValue ?? '' : String(field.value)}
-            onValueChange={(value: string) => {
-              // No item has the value '': it comes from Radix's hidden native select when the value is set
-              // (e.g. by "+ New category") one render before its option exists, and would wipe the choice
-              if (value !== '') field.onChange(value === emptyValue ? '' : value);
-            }}
-          >
-            <FormControl>
-              <SelectTrigger className="w-full" onBlur={field.onBlur}>
-                <SelectValue placeholder={placeholder} />
-              </SelectTrigger>
-            </FormControl>
-            <SelectContent>
-              {options.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <FormMessage />
         </FormItem>
       )}

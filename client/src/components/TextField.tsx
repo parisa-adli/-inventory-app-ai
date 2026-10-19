@@ -11,12 +11,13 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 
 /** `TOut` is what the form's resolver outputs, when it differs from the input (e.g. a price typed as text). */
 interface TextFieldProps<T extends FieldValues, TOut = T> {
   control: Control<T, unknown, TOut>;
   name: FieldPath<T>;
-  label: string;
+  label: ReactNode;
   type?: 'text' | 'email' | 'password' | 'tel';
   /** A Textarea instead of an Input. */
   multiline?: boolean;
@@ -26,6 +27,8 @@ interface TextFieldProps<T extends FieldValues, TOut = T> {
   hint?: string;
   /** Shown on the right of the label row, e.g. a "Forgot password?" link. */
   labelAction?: ReactNode;
+  /** Extra classes for the Input, e.g. a taller field in a dialog. */
+  inputClassName?: string;
 }
 
 export function TextField<T extends FieldValues, TOut = T>({
@@ -38,6 +41,7 @@ export function TextField<T extends FieldValues, TOut = T>({
   placeholder,
   hint,
   labelAction,
+  inputClassName,
 }: TextFieldProps<T, TOut>) {
   const [revealed, setRevealed] = useState(false);
   const isPassword = type === 'password';
@@ -58,7 +62,7 @@ export function TextField<T extends FieldValues, TOut = T>({
                 <Input
                   type={revealed ? 'text' : 'password'}
                   autoComplete={autoComplete}
-                  className="pr-10"
+                  className={cn('pr-10', inputClassName)}
                   {...field}
                 />
               </FormControl>
@@ -77,7 +81,13 @@ export function TextField<T extends FieldValues, TOut = T>({
               {multiline ? (
                 <Textarea autoComplete={autoComplete} placeholder={placeholder} rows={3} {...field} />
               ) : (
-                <Input type={type} autoComplete={autoComplete} placeholder={placeholder} {...field} />
+                <Input
+                  type={type}
+                  autoComplete={autoComplete}
+                  placeholder={placeholder}
+                  className={inputClassName}
+                  {...field}
+                />
               )}
             </FormControl>
           )}

@@ -318,7 +318,7 @@ describe('GET /api/products', () => {
     await seed(['banana', 'Apple', 'cherry', 'Retired']);
     await Product.updateOne({ title: 'Retired' }, { archivedAt: new Date() });
 
-    const res = await list();
+    const res = await list('?sort=title');
     expect(res.body.total).toBe(3);
     expect(res.body.items.map((p: { title: string }) => p.title)).toEqual(['Apple', 'banana', 'cherry']);
   });
@@ -326,11 +326,11 @@ describe('GET /api/products', () => {
   it('pages 20 at a time by default and honours page/limit', async () => {
     await seed(Array.from({ length: 21 }, (_, i) => `Item ${String(i + 1).padStart(2, '0')}`));
 
-    const first = await list();
+    const first = await list('?sort=title');
     expect(first.body).toMatchObject({ page: 1, limit: 20, total: 21, totalPages: 2 });
     expect(first.body.items).toHaveLength(20);
 
-    const second = await list('?page=2');
+    const second = await list('?sort=title&page=2');
     expect(second.body.items.map((p: { title: string }) => p.title)).toEqual(['Item 21']);
 
     expect((await list('?limit=101')).status).toBe(400);
@@ -339,7 +339,7 @@ describe('GET /api/products', () => {
   it('searches title and SKU case-insensitively, treating regex characters literally', async () => {
     await seed(['Wireless Mouse', 'USB Cable (2m)', 'Desk Lamp']);
     const titles = async (search: string) =>
-      (await list(`?search=${encodeURIComponent(search)}`)).body.items.map((p: { title: string }) => p.title);
+      (await list(`?sort=title&search=${encodeURIComponent(search)}`)).body.items.map((p: { title: string }) => p.title);
 
     expect(await titles('mouse')).toEqual(['Wireless Mouse']);
     expect(await titles('sku-desk')).toEqual(['Desk Lamp']);
@@ -386,9 +386,9 @@ describe('GET /api/products filters and sorts', () => {
     for (const quantity of [0, 1, 10, 11]) await setQuantity((await add(`Qty ${quantity}`)).id, quantity);
 
     expect(await titles('?stockStatus=out')).toEqual(['Qty 0']);
-    expect(await titles('?stockStatus=low')).toEqual(['Qty 1', 'Qty 10']);
+    expect(await titles('?sort=title&stockStatus=low')).toEqual(['Qty 1', 'Qty 10']);
     expect(await titles('?stockStatus=in')).toEqual(['Qty 11']);
-    expect(await titles('')).toEqual(['Qty 0', 'Qty 1', 'Qty 10', 'Qty 11']);
+    expect(await titles('?sort=title')).toEqual(['Qty 0', 'Qty 1', 'Qty 10', 'Qty 11']);
   });
 
   it('filters by supplier, where "unassigned" is exactly the products without one', async () => {
@@ -398,7 +398,7 @@ describe('GET /api/products filters and sorts', () => {
     await add('No supplier A', { supplier: undefined });
     await add('No supplier B', { supplier: undefined });
 
-    expect(await titles('?supplier=unassigned')).toEqual(['No supplier A', 'No supplier B']);
+    expect(await titles('?sort=title&supplier=unassigned')).toEqual(['No supplier A', 'No supplier B']);
     expect(await titles(`?supplier=${supplierId}`)).toEqual(['Has supplier']);
     expect(await titles(`?supplier=${otherSupplier}`)).toEqual(['Other supplier']);
   });

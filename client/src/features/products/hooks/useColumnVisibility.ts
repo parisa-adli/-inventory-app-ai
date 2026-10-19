@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { ColumnVisibilityState } from '@tanstack/react-table';
 
-/** The table columns the Columns menu can hide, by id, with the name it shows (all but select, Title and Actions). */
+/** The table columns the Columns menu can hide, by id, with the name it shows (all but select, Product and Actions). */
 export const HIDEABLE_COLUMNS: Record<string, string> = {
   category: 'Category',
   supplier: 'Supplier',

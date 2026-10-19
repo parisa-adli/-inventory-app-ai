@@ -76,7 +76,8 @@ test.describe('products (stubbed API)', () => {
     // Client-side validation from the shared schema
     await dialog.getByRole('button', { name: 'Create product' }).click();
     await expect(dialog.getByText('Title is required')).toBeVisible();
-    await expect(dialog.getByText('Choose a category')).toBeVisible();
+    // The select's placeholder says the same, so look for the field error itself
+    await expect(dialog.locator('[data-slot="form-message"]', { hasText: 'Choose a category' })).toBeVisible();
     await dialog.getByLabel('SKU').fill('ele 001');
     await dialog.getByLabel('Cost price').fill('1.234');
     await dialog.getByRole('button', { name: 'Create product' }).click();

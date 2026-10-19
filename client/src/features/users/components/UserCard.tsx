@@ -1,9 +1,7 @@
 import { ACCOUNT_STATUS, type AdminUser } from '@inventory/shared';
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDate } from '@/lib/format';
-import { ROLE_LABELS } from '../roles';
-import { EmailStatusBadge } from './EmailStatusBadge';
+import { EmailVerification, RoleBadge } from './UserBadges';
 import { UserActions, type UserActionHandlers } from './UserActions';
 
 /** One account on a phone: what the table row shows, with the action buttons at full width below. */
@@ -19,9 +17,9 @@ export function UserCard({ user, actions }: { user: AdminUser; actions: UserActi
         <p className="text-sm break-all text-muted-foreground">{user.email}</p>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
-        <div className="flex flex-wrap gap-2">
-          <EmailStatusBadge verified={user.emailVerified} />
-          <Badge variant="outline">{ROLE_LABELS[user.role]}</Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          <EmailVerification verified={user.emailVerified} />
+          <RoleBadge role={user.role} />
         </div>
         <dl className="grid grid-cols-2 gap-x-4 gap-y-1">
           <dt className="text-muted-foreground">Signed up</dt>

@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { ACCOUNT_STATUS, type AccountStatus, type AdminUser } from '@inventory/shared';
+import { ACCOUNT_STATUS, type AdminUser } from '@inventory/shared';
 import { useAuthUser } from '@/features/auth/hooks/useAuth';
 import { Pager } from '@/components/Pager';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -17,16 +16,32 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { formatDate } from '@/lib/format';
-import { EmailStatusBadge } from '../components/EmailStatusBadge';
+import { AllUsersTable } from '../components/AllUsersTable';
+import { CredentialDialogs, type CredentialAction } from '../components/CredentialDialogs';
 import { PendingCountBadge } from '../components/PendingCountBadge';
+import { EmailVerification, RoleBadge } from '../components/UserBadges';
 import { UserActions, type UserActionHandlers } from '../components/UserActions';
 import { UserCard } from '../components/UserCard';
+import type { UserMenuHandlers } from '../components/UserRowMenu';
 import { UsersToolbar } from '../components/UsersToolbar';
-import { useUserListParams } from '../hooks/useUserListParams';
-import { useActivateUser, useReactivateUser, useRejectUser, useRevokeUser, useUsers } from '../hooks/useUsers';
-import { ROLE_LABELS } from '../roles';
+import { ALL_OPTION, useUserListParams, type UsersTab } from '../hooks/useUserListParams';
+import {
+  useActivateUser,
+  useChangeRole,
+  useReactivateUser,
+  useRejectUser,
+  useRevokeUser,
+  useUsers,
+} from '../hooks/useUsers';
 
-const VIEWS: Record<AccountStatus, { tab: string; title: string; hint: string; empty: string }> = {
+// In tab order: All comes first and is the default
+const VIEWS: Record<UsersTab, { tab: string; title: string; hint: string; empty: string }> = {
+  [ALL_OPTION]: {
+    tab: 'All Users',
+    title: 'All users',
+    hint: "Everyone with an account. Change a user's status, role and sign-in methods from their row's menu.",
+    empty: 'No users yet.',
+  },
   pending: {
     tab: 'Pending',
     title: 'Pending users',
@@ -63,18 +78,23 @@ const CONFIRM_COPY = {
   },
 };
 
-/** Admin-only. Pending users to activate or reject, active users to revoke, rejected users to reactivate. */
+/**
+ * Admin-only. Every account with its menu (All), pending users to activate or reject, active users to revoke,
+ * rejected users to reactivate.
+ */
 export default function Users() {
   const list = useUserListParams();
   const { status, page, setPage } = list;
   // Confirmed for both reject (pending) and revoke (active): the same server transition
   const [toReject, setToReject] = useState<AdminUser | null>(null);
+  const [credentialAction, setCredentialAction] = useState<CredentialAction | null>(null);
   const users = useUsers(list.params);
   const me = useAuthUser().data;
   const activate = useActivateUser();
   const reject = useRejectUser();
   const revoke = useRevokeUser();
   const reactivate = useReactivateUser();
+  const changeRole = useChangeRole();
   const view = VIEWS[status];
   const revoking = toReject?.status === ACCOUNT_STATUS.ACTIVE;
   const confirmMutation = revoking ? revoke : reject;
@@ -100,6 +120,13 @@ export default function Users() {
     },
   };
 
+  const menuActions: UserMenuHandlers = {
+    ...actions,
+    onChangeRole: (user, role) => changeRole.mutate({ id: user.id, role }),
+    onIssueTempPassword: (user) => setCredentialAction({ kind: 'temp-password', user }),
+    onUnlinkTelegram: (user) => setCredentialAction({ kind: 'unlink-telegram', user }),
+  };
+
   // A stale link or a change elsewhere left us past the last page: go to the last one that exists
   useEffect(() => {
     if (data && !users.isPlaceholderData && page > data.totalPages) setPage(data.totalPages, { replace: true });
@@ -112,7 +139,7 @@ export default function Users() {
         <p className="text-sm text-muted-foreground">{view.hint}</p>
       </div>
 
-      <Tabs value={status} onValueChange={(value: string) => list.setStatus(value as AccountStatus)}>
+      <Tabs value={status} onValueChange={(value: string) => list.setStatus(value as UsersTab)}>
         <TabsList>
           {Object.entries(VIEWS).map(([value, { tab }]) => (
             <TabsTrigger key={value} value={value}>
@@ -141,7 +168,9 @@ export default function Users() {
         </p>
       )}
 
-      {data && data.items.length > 0 && (
+      {data && data.items.length > 0 && status === ALL_OPTION && <AllUsersTable users={data.items} actions={menuActions} />}
+
+      {data && data.items.length > 0 && status !== ALL_OPTION && (
         <TooltipProvider>
           <ul className="space-y-3 sm:hidden" aria-label="Users">
             {data.items.map((user) => (
@@ -169,10 +198,10 @@ export default function Users() {
                     <TableCell className="font-medium">{user.name}</TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>
-                      <Badge variant="outline">{ROLE_LABELS[user.role]}</Badge>
+                      <RoleBadge role={user.role} />
                     </TableCell>
                     <TableCell>
-                      <EmailStatusBadge verified={user.emailVerified} />
+                      <EmailVerification verified={user.emailVerified} />
                     </TableCell>
                     <TableCell>{formatDate(user.createdAt)}</TableCell>
                     <TableCell className={user.lastLoginAt ? undefined : 'text-muted-foreground'}>
@@ -221,6 +250,8 @@ export default function Users() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <CredentialDialogs action={credentialAction} onClose={() => setCredentialAction(null)} />
     </div>
   );
 }

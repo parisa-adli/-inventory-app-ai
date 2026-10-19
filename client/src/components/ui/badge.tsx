@@ -13,12 +13,15 @@ const badgeVariants = cva(
           'border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80',
         destructive: 'border-transparent bg-destructive/10 text-destructive dark:bg-destructive/20',
         outline: 'text-foreground',
-        // Status colors (DESIGN.md §2.2), defined here once: stock status and movement type
+        // Status colors (DESIGN.md §2.2), defined here once: stock status, movement type, account status and role
         success:
           'border-transparent bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400',
         warning:
           'border-transparent bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400',
         info: 'border-transparent bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-400',
+        // The Admin role badge on the Users page
+        violet:
+          'border-transparent bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-400',
       },
     },
     defaultVariants: {

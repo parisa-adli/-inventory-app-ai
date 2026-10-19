@@ -3,7 +3,12 @@ import { SearchInput } from '@/components/SearchInput';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ALL_OPTION, USER_SORT_PRESETS, type useUserListParams } from '../hooks/useUserListParams';
-import { ROLE_LABELS } from '../roles';
+import { ROLE_LABELS, STATUS_LABELS } from '../roles';
+
+const STATUS_OPTIONS = [
+  { value: ALL_OPTION, label: 'All Status' },
+  ...Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label })),
+];
 
 const ROLE_OPTIONS = [
   { value: ALL_OPTION, label: 'All roles' },
@@ -11,7 +16,7 @@ const ROLE_OPTIONS = [
 ];
 
 const VERIFIED_OPTIONS = [
-  { value: ALL_OPTION, label: 'Any email status' },
+  { value: ALL_OPTION, label: 'Any Email' },
   { value: 'true', label: 'Verified' },
   { value: 'false', label: 'Not verified' },
 ];
@@ -43,11 +48,17 @@ function FilterSelect({
   );
 }
 
-/** Search, role, email status and "Sort by" on one row, plus "Clear filters" while any filter is set (DESIGN.md §5). */
+/**
+ * Search, role, email status and "Sort by" on one row, plus "Clear filters" while any filter is set (DESIGN.md §5).
+ * The All tab adds a status select before the role.
+ */
 export function UsersToolbar({ list }: { list: ReturnType<typeof useUserListParams> }) {
   return (
     <div className="flex flex-col gap-3 lg:flex-row">
       <SearchInput value={list.search} onSearch={list.setSearch} placeholder="Search name or email…" />
+      {list.status === ALL_OPTION && (
+        <FilterSelect label="Status" value={list.statusFilter} onChange={list.setStatusFilter} options={STATUS_OPTIONS} />
+      )}
       <FilterSelect label="Role" value={list.role} onChange={list.setRole} options={ROLE_OPTIONS} />
       <FilterSelect label="Email status" value={list.verified} onChange={list.setVerified} options={VERIFIED_OPTIONS} />
       <FilterSelect

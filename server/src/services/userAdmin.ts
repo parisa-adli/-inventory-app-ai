@@ -21,6 +21,7 @@ interface UserLike {
   status: AdminUser['status'];
   emailVerified: boolean;
   telegramChatId?: string | null;
+  telegramUsername?: string | null;
   mustChangePassword?: boolean | null;
   statusReason?: string | null;
   statusChangedAt?: Date | null;
@@ -37,6 +38,7 @@ export const toAdminUser = (user: UserLike): AdminUser => ({
   status: user.status,
   emailVerified: user.emailVerified,
   telegramLinked: Boolean(user.telegramChatId),
+  telegramUsername: (user.telegramChatId && user.telegramUsername) || null,
   mustChangePassword: Boolean(user.mustChangePassword),
   statusReason: user.statusReason ?? null,
   statusChangedAt: user.statusChangedAt ? user.statusChangedAt.toISOString() : null,

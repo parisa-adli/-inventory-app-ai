@@ -23,10 +23,14 @@ export const USER_SORT_PRESETS = [
   { value: 'lastLoginAt-desc', label: 'Recently active', sort: 'lastLoginAt', order: 'desc' },
 ] as const satisfies { value: string; label: string; sort: UserSort; order: SortOrder }[];
 
-/** The "All" choice of the role and email-status selects (a Select item cannot have an empty value). */
+/** The "All" choice of the selects, and the All tab (a Select item cannot have an empty value). */
 export const ALL_OPTION = 'all';
 
+/** The Users page tabs: every account, or one status. */
+export type UsersTab = typeof ALL_OPTION | AccountStatus;
+
 const STATUSES = Object.values(ACCOUNT_STATUS);
+const TABS: readonly UsersTab[] = [ALL_OPTION, ...STATUSES];
 const ROLES = Object.values(USER_ROLES);
 const VERIFIED = ['true', 'false'] as const;
 
@@ -34,14 +38,18 @@ const pick = <T extends string>(value: string | null, allowed: readonly T[]): T 
   allowed.includes(value as T) ? (value as T) : undefined;
 
 /**
- * List state of the Users page, kept in the URL (?status=&search=&role=&verified=&sort=&order=&page=)
- * so a refresh or a shared link keeps the view. Defaults are left out of the URL and invalid values
+ * List state of the Users page, kept in the URL (?status=&statusFilter=&search=&role=&verified=&sort=&order=&page=)
+ * so a refresh or a shared link keeps the view. `status` is the tab (All when absent); `statusFilter` is the
+ * All tab's status select and is ignored on the other tabs. Defaults are left out of the URL and invalid values
  * fall back to them. Filters persist across tabs; any change other than paging returns to page 1.
  */
 export const useUserListParams = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const status: AccountStatus = pick(searchParams.get('status'), STATUSES) ?? ACCOUNT_STATUS.PENDING;
+  const status: UsersTab = pick(searchParams.get('status'), TABS) ?? ALL_OPTION;
+  const statusFilter = status === ALL_OPTION ? pick(searchParams.get('statusFilter'), STATUSES) : undefined;
+  // What the server filters on: the tab, or on the All tab its status select (absent: every status)
+  const listStatus = status === ALL_OPTION ? statusFilter : status;
   const search = (searchParams.get('search') ?? '').trim();
   const role: UserRole | undefined = pick(searchParams.get('role'), ROLES);
   const verified = pick(searchParams.get('verified'), VERIFIED);
@@ -51,16 +59,16 @@ export const useUserListParams = () => {
 
   const params = useMemo<UsersListParams>(
     () => ({
-      status,
       page,
       limit: USERS_PAGE_SIZE_DEFAULT,
       sort,
       order,
+      ...(listStatus && { status: listStatus }),
       ...(search && { search }),
       ...(role && { role }),
       ...(verified && { verified: verified === 'true' }),
     }),
-    [status, page, sort, order, search, role, verified]
+    [listStatus, page, sort, order, search, role, verified]
   );
 
   const update = useCallback(
@@ -81,7 +89,7 @@ export const useUserListParams = () => {
   );
 
   const setStatus = useCallback(
-    (value: AccountStatus) => update({ status: value === ACCOUNT_STATUS.PENDING ? null : value, page: 1 }),
+    (value: UsersTab) => update({ status: value === ALL_OPTION ? null : value, page: 1 }),
     [update]
   );
   /** A new search starts at page 1; typing replaces the history entry. */
@@ -97,7 +105,14 @@ export const useUserListParams = () => {
     (value: string) => update({ verified: pick(value, VERIFIED) ?? null, page: 1 }),
     [update]
   );
-  const clearFilters = useCallback(() => update({ search: null, role: null, verified: null, page: 1 }), [update]);
+  const setStatusFilter = useCallback(
+    (value: string) => update({ statusFilter: pick(value, STATUSES) ?? null, page: 1 }),
+    [update]
+  );
+  const clearFilters = useCallback(
+    () => update({ search: null, role: null, verified: null, statusFilter: null, page: 1 }),
+    [update]
+  );
   const setPage = useCallback(
     (value: number, options?: { replace?: boolean }) => update({ page: value }, options),
     [update]
@@ -114,13 +129,15 @@ export const useUserListParams = () => {
   return {
     params,
     status,
+    statusFilter: statusFilter ?? ALL_OPTION,
     search,
     role: role ?? ALL_OPTION,
     verified: verified ?? ALL_OPTION,
     page,
     sortPreset: `${sort}-${order}`,
-    hasFilters: Boolean(search || role || verified),
+    hasFilters: Boolean(search || role || verified || statusFilter),
     setStatus,
+    setStatusFilter,
     setSearch,
     setRole,
     setVerified,

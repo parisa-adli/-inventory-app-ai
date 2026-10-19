@@ -11,6 +11,8 @@ export interface AdminUser {
   emailVerified: boolean;
   /** Whether a Telegram chat is linked. The chat id itself stays on the server. */
   telegramLinked: boolean;
+  /** Telegram @handle without the "@"; null when unlinked or the Telegram account has none. */
+  telegramUsername: string | null;
   /** Set by an admin's temporary password; cleared when the user picks their own. */
   mustChangePassword: boolean;
   /** Why the account was rejected; null when none was given or the account is not rejected. */

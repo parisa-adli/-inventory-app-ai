@@ -78,7 +78,7 @@ describe('GET /api/users', () => {
   it('lists only users with the requested status, newest first, without credentials', async () => {
     const cookie = await adminSession();
     await makeUser({ name: 'Old', emailVerified: true, createdAt: new Date('2026-01-01') });
-    await makeUser({ name: 'New', emailVerified: false, createdAt: new Date('2026-02-01'), telegramChatId: '42' });
+    await makeUser({ name: 'New', emailVerified: false, createdAt: new Date('2026-02-01'), telegramChatId: '42', telegramUsername: 'new_handle' });
     await makeUser({ name: 'Rejected', status: 'rejected' });
 
     const res = await request(app).get('/api/users?status=pending').set('Cookie', cookie);
@@ -86,7 +86,12 @@ describe('GET /api/users', () => {
     expect(res.status).toBe(200);
     expect(res.body.items.map((u: { name: string }) => u.name)).toEqual(['New', 'Old']);
     expect(res.body).toMatchObject({ page: 1, limit: 20, total: 2, totalPages: 1 });
-    expect(res.body.items[0]).toMatchObject({ emailVerified: false, telegramLinked: true, status: 'pending' });
+    expect(res.body.items[0]).toMatchObject({
+      emailVerified: false,
+      telegramLinked: true,
+      telegramUsername: 'new_handle',
+      status: 'pending',
+    });
     expect(JSON.stringify(res.body)).not.toMatch(/passwordHash|telegramChatId/);
   });
 

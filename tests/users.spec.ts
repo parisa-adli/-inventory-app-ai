@@ -50,7 +50,7 @@ const stubUsers = async (page: Page, body: (url: URL) => unknown = () => page1([
 };
 
 const choose = async (page: Page, select: string, option: string) => {
-  await page.getByRole('combobox', { name: select }).click();
+  await page.getByRole('combobox', { name: select, exact: true }).click();
   await page.getByRole('option', { name: option, exact: true }).click();
 };
 
@@ -59,7 +59,7 @@ test.describe('admin users page (stubbed API)', () => {
     await signInAs(page, admin);
     await page.route('**/api/users?*', (route) => route.fulfill({ json: page1([verified, unverified]) }));
 
-    await page.goto('/app/users');
+    await page.goto('/app/users?status=pending');
 
     await expect(page.getByRole('heading', { name: 'Pending users' })).toBeVisible();
     const verifiedRow = page.getByRole('row', { name: /Vera Verified/ });
@@ -82,7 +82,7 @@ test.describe('admin users page (stubbed API)', () => {
       return route.fulfill({ json: { ...verified, status: 'active' } });
     });
 
-    await page.goto('/app/users');
+    await page.goto('/app/users?status=pending');
     await page.getByRole('row', { name: /Vera Verified/ }).getByRole('button', { name: 'Activate' }).click();
 
     await expect(page.getByText('Vera Verified was activated')).toBeVisible();
@@ -98,7 +98,7 @@ test.describe('admin users page (stubbed API)', () => {
       return route.fulfill({ json: { ...unverified, status: 'rejected' } });
     });
 
-    await page.goto('/app/users');
+    await page.goto('/app/users?status=pending');
     await page.getByRole('button', { name: 'Reject' }).click();
     await page.getByRole('button', { name: 'Cancel' }).click();
     expect(rejectCalls).toBe(0);
@@ -119,7 +119,7 @@ test.describe('admin users page (stubbed API)', () => {
       })
     );
 
-    await page.goto('/app/users');
+    await page.goto('/app/users?status=pending');
     await page.getByRole('button', { name: 'Activate' }).click();
 
     await expect(page.getByText('This user has not verified their email address yet.')).toBeVisible();
@@ -129,7 +129,7 @@ test.describe('admin users page (stubbed API)', () => {
     await signInAs(page, admin);
     await page.route('**/api/users?*', (route) => route.fulfill({ json: page1([]) }));
 
-    await page.goto('/app/users');
+    await page.goto('/app/users?status=pending');
 
     await expect(page.getByText('No users are waiting for approval.')).toBeVisible();
   });
@@ -148,7 +148,7 @@ test.describe('admin users page (stubbed API)', () => {
       return route.fulfill({ json: { ...active, status: 'rejected' } });
     });
 
-    await page.goto('/app/users');
+    await page.goto('/app/users?status=pending');
     await page.getByRole('tab', { name: 'Active' }).click();
 
     await expect(page.getByRole('heading', { name: 'Active users' })).toBeVisible();
@@ -178,7 +178,7 @@ test.describe('admin users page (stubbed API)', () => {
       return route.fulfill({ json: { ...rejected, status: 'active' } });
     });
 
-    await page.goto('/app/users');
+    await page.goto('/app/users?status=pending');
     await page.getByRole('tab', { name: 'Rejected' }).click();
 
     await expect(page.getByRole('row', { name: /Uli Unverified/ }).getByRole('button')).toBeDisabled();
@@ -213,7 +213,7 @@ test.describe('users list filters, sort and URL state (stubbed API)', () => {
     await signInAs(page, admin);
     const queries = await stubUsers(page);
 
-    await page.goto('/app/users');
+    await page.goto('/app/users?status=pending');
     await expect(page.getByRole('row', { name: /Vera Verified/ })).toBeVisible();
     expect(queries.at(-1)).toEqual({ status: 'pending', page: '1', limit: '20', sort: 'createdAt', order: 'desc' });
 
@@ -249,7 +249,7 @@ test.describe('users list filters, sort and URL state (stubbed API)', () => {
     await stubUsers(page);
 
     await page.goto('/app/dashboard');
-    await page.goto('/app/users');
+    await page.goto('/app/users?status=pending');
     await page.getByLabel('Search').fill('ve');
     await expect(page).toHaveURL(/search=ve/);
     await page.getByLabel('Search').fill('vera');
@@ -293,18 +293,18 @@ test.describe('users list filters, sort and URL state (stubbed API)', () => {
 
     await page.goto('/app/users?status=nope&search=%20%20&role=owner&verified=maybe&sort=email&order=up&page=-3');
 
-    await expect(page.getByRole('tab', { name: 'Pending' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('tab', { name: 'All Users' })).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByRole('combobox', { name: 'Sort by' })).toHaveText('Newest');
     // A blank search is no filter
     await expect(page.getByRole('button', { name: 'Clear filters' })).toHaveCount(0);
-    expect(queries.at(-1)).toEqual({ status: 'pending', page: '1', limit: '20', sort: 'createdAt', order: 'desc' });
+    expect(queries.at(-1)).toEqual({ page: '1', limit: '20', sort: 'createdAt', order: 'desc' });
   });
 
   test('Clear filters resets the filters and keeps the tab and sort', async ({ page }) => {
     await signInAs(page, admin);
     await stubUsers(page);
 
-    await page.goto('/app/users');
+    await page.goto('/app/users?status=pending');
     await expect(page.getByRole('row', { name: /Vera Verified/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Clear filters' })).toHaveCount(0);
 
@@ -314,7 +314,7 @@ test.describe('users list filters, sort and URL state (stubbed API)', () => {
     await expect(page).toHaveURL(/\/app\/users\?status=active&sort=name$/);
     await expect(page.getByLabel('Search')).toHaveValue('');
     await expect(page.getByRole('combobox', { name: 'Role' })).toHaveText('All roles');
-    await expect(page.getByRole('combobox', { name: 'Email status' })).toHaveText('Any email status');
+    await expect(page.getByRole('combobox', { name: 'Email status' })).toHaveText('Any Email');
     await expect(page.getByRole('button', { name: 'Clear filters' })).toHaveCount(0);
   });
 
@@ -322,7 +322,7 @@ test.describe('users list filters, sort and URL state (stubbed API)', () => {
     await signInAs(page, admin);
     await stubUsers(page, (url) => ({ ...page1([verified], 3), page: Number(url.searchParams.get('page')), total: 45 }));
 
-    await page.goto('/app/users?page=2');
+    await page.goto('/app/users?status=pending&page=2');
     await expect(page.getByText('Page 2 of 3')).toBeVisible();
     await choose(page, 'Role', 'Admin');
     await expect(page).not.toHaveURL(/page=/);
@@ -345,7 +345,7 @@ test.describe('users list filters, sort and URL state (stubbed API)', () => {
       return { ...page1(current > 2 ? [] : [verified], 2), page: current, total: 21 };
     });
 
-    await page.goto('/app/users?page=5');
+    await page.goto('/app/users?status=pending&page=5');
 
     await expect(page).toHaveURL(/page=2/);
     await expect(page.getByRole('row', { name: /Vera Verified/ })).toBeVisible();
@@ -355,7 +355,7 @@ test.describe('users list filters, sort and URL state (stubbed API)', () => {
     await signInAs(page, admin);
     await stubUsers(page, () => page1([]));
 
-    await page.goto('/app/users?role=admin');
+    await page.goto('/app/users?status=pending&role=admin');
 
     await expect(page.getByText('No users match these filters.')).toBeVisible();
     await expect(page.getByText('No users are waiting for approval.')).toHaveCount(0);
@@ -365,7 +365,7 @@ test.describe('users list filters, sort and URL state (stubbed API)', () => {
     await signInAs(page, admin);
     await stubUsers(page, () => page1([verified, { ...unverified, role: 'admin' }]));
 
-    await page.goto('/app/users');
+    await page.goto('/app/users?status=pending');
 
     await expect(page.getByRole('row', { name: /Vera Verified/ }).getByRole('cell', { name: 'Staff' })).toBeVisible();
     await expect(page.getByRole('row', { name: /Uli Unverified/ }).getByRole('cell', { name: 'Admin' })).toBeVisible();
@@ -379,7 +379,7 @@ test.describe('last sign-in (stubbed API)', () => {
     await signInAs(page, admin);
     const queries = await stubUsers(page);
 
-    await page.goto('/app/users');
+    await page.goto('/app/users?status=pending');
     await expect(page.getByRole('row', { name: /Vera Verified/ })).toBeVisible();
     await choose(page, 'Sort by', 'Recently active');
 
@@ -393,7 +393,7 @@ test.describe('last sign-in (stubbed API)', () => {
     await signInAs(page, admin);
     await stubUsers(page, () => page1([{ ...verified, lastLoginAt: '2026-06-15T12:00:00.000Z' }, unverified]));
 
-    await page.goto('/app/users');
+    await page.goto('/app/users?status=pending');
 
     await expect(page.getByRole('columnheader', { name: 'Last sign-in' })).toBeVisible();
     await expect(page.getByRole('row', { name: /Vera Verified/ }).getByRole('cell', { name: 'Jun 15, 2026' })).toBeVisible();
@@ -430,7 +430,7 @@ test.describe('pending count badge (stubbed API)', () => {
     await signInAs(page, admin);
     const countCalls = await stubPending(page, () => 3);
 
-    await page.goto('/app/users?role=admin&search=vera&sort=name');
+    await page.goto('/app/users?status=pending&role=admin&search=vera&sort=name');
 
     await expect(usersLink(page)).toHaveAccessibleName('Users 3 awaiting approval');
     await expect(pendingTab(page)).toHaveAccessibleName('Pending 3 awaiting approval');
@@ -457,7 +457,7 @@ test.describe('pending count badge (stubbed API)', () => {
     let pending = [verified];
     await stubPending(page, () => pending.length, () => page1(pending));
 
-    await page.goto('/app/users');
+    await page.goto('/app/users?status=pending');
     await expect(pendingTab(page)).toHaveAccessibleName('Pending 1 awaiting approval');
     await expect(page.getByRole('row', { name: /Vera Verified/ })).toBeVisible();
 
@@ -508,7 +508,7 @@ test.describe('pending count badge (stubbed API)', () => {
       return route.fulfill({ json: { ...verified, status: 'active' } });
     });
 
-    await page.goto('/app/users');
+    await page.goto('/app/users?status=pending');
     await expect(pendingTab(page)).toHaveAccessibleName('Pending 2 awaiting approval');
     await page.getByRole('row', { name: /Vera Verified/ }).getByRole('button', { name: 'Activate' }).click();
 
@@ -525,7 +525,7 @@ test.describe('pending count badge (stubbed API)', () => {
       return route.fulfill({ json: { ...unverified, status: 'rejected' } });
     });
 
-    await page.goto('/app/users');
+    await page.goto('/app/users?status=pending');
     await expect(usersLink(page)).toHaveAccessibleName('Users 1 awaiting approval');
     await page.getByRole('button', { name: 'Reject' }).click();
     await page.getByRole('button', { name: 'Reject user' }).click();
@@ -562,7 +562,7 @@ test.describe('account cards on phones (stubbed API)', () => {
   test('shows one card per account and no table, without horizontal scroll', async ({ page }) => {
     await stubUsers(page, () => page1([{ ...verified, lastLoginAt: '2026-06-15T12:00:00.000Z' }, unverified]));
 
-    await page.goto('/app/users');
+    await page.goto('/app/users?status=pending');
 
     const vera = card(page, 'Vera Verified');
     await expect(vera).toBeVisible();
@@ -571,7 +571,7 @@ test.describe('account cards on phones (stubbed API)', () => {
     await expect(vera).toContainText('Staff');
     await expect(vera).toContainText('Mar 1, 2026');
     await expect(vera).toContainText('Jun 15, 2026');
-    await expect(card(page, 'Uli Unverified')).toContainText('Not verified');
+    await expect(card(page, 'Uli Unverified')).toContainText('Unverified');
     await expect(card(page, 'Uli Unverified')).toContainText('Never');
     await expect(page.getByRole('table')).toHaveCount(0);
     await expect(card(page, 'Vera Verified')).not.toContainText('verify their email');
@@ -588,7 +588,7 @@ test.describe('account cards on phones (stubbed API)', () => {
       return route.fulfill({ json: { ...verified, status: 'active' } });
     });
 
-    await page.goto('/app/users');
+    await page.goto('/app/users?status=pending');
     await card(page, 'Vera Verified').getByRole('button', { name: 'Activate' }).click();
 
     await expect(page.getByText('Vera Verified was activated')).toBeVisible();
@@ -603,7 +603,7 @@ test.describe('account cards on phones (stubbed API)', () => {
       return route.fulfill({ json: { ...unverified, status: 'rejected' } });
     });
 
-    await page.goto('/app/users');
+    await page.goto('/app/users?status=pending');
     await card(page, 'Uli Unverified').getByRole('button', { name: 'Reject' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel' }).click();
     expect(rejectCalls).toBe(0);
@@ -617,7 +617,7 @@ test.describe('account cards on phones (stubbed API)', () => {
   test('the disabled Activate explains itself on focus', async ({ page }) => {
     await stubUsers(page, () => page1([unverified]));
 
-    await page.goto('/app/users');
+    await page.goto('/app/users?status=pending');
     const activate = card(page, 'Uli Unverified').getByRole('button', { name: /Activate/ });
     await expect(activate).toBeDisabled();
     // A tap opens no tooltip, so the card says why as well
@@ -634,9 +634,180 @@ test.describe('users page on a desktop (stubbed API)', () => {
     await signInAs(page, admin);
     await stubUsers(page, () => page1([verified, unverified]));
 
-    await page.goto('/app/users');
+    await page.goto('/app/users?status=pending');
 
     await expect(page.getByRole('row', { name: /Vera Verified/ })).toBeVisible();
     await expect(page.getByRole('article')).toHaveCount(0);
+  });
+});
+
+test.describe('all users tab (stubbed API)', () => {
+  test.use({ locale: 'en-US', timezoneId: 'UTC' });
+
+  const self = {
+    ...admin,
+    status: 'active',
+    telegramLinked: false,
+    telegramUsername: null,
+    createdAt: '2026-01-01T10:00:00.000Z',
+    lastLoginAt: null,
+  };
+  const linked = {
+    ...verified,
+    id: 'u3',
+    name: 'Tess Telegram',
+    status: 'active',
+    telegramLinked: true,
+    telegramUsername: 'tess_tg',
+    lastLoginAt: '2026-06-15T12:00:00.000Z',
+  };
+  const rejected = { ...unverified, id: 'u4', name: 'Rex Rejected', status: 'rejected', statusReason: 'Duplicate account' };
+
+  const openMenu = async (page: Page, name: string) => {
+    await page.getByRole('button', { name: `Actions for ${name}` }).click();
+    return page.getByRole('menu');
+  };
+
+  test('is the default tab and shows every column and badge', async ({ page }) => {
+    await signInAs(page, admin);
+    const queries = await stubUsers(page, () => page1([linked, unverified, rejected, self]));
+
+    await page.goto('/app/users');
+
+    await expect(page.getByRole('tab', { name: 'All Users' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('heading', { name: 'All users' })).toBeVisible();
+    expect(queries.at(-1)).toEqual({ page: '1', limit: '20', sort: 'createdAt', order: 'desc' });
+    for (const column of ['Name', 'Email', 'Telegram', 'Role', 'Status', 'Joined', 'Last Login']) {
+      await expect(page.getByRole('columnheader', { name: column, exact: true })).toBeVisible();
+    }
+
+    const tess = page.getByRole('row', { name: /Tess Telegram/ });
+    await expect(tess).toContainText('@tess_tg');
+    await expect(tess).toContainText('Verified');
+    await expect(tess).toContainText('Active');
+    await expect(tess.getByRole('cell', { name: 'Jun 15, 2026' })).toBeVisible();
+    const uli = page.getByRole('row', { name: /Uli Unverified/ });
+    await expect(uli).toContainText('Unverified');
+    await expect(uli).toContainText('Pending');
+    await expect(uli.getByRole('cell', { name: 'Never' })).toBeVisible();
+    await expect(page.getByRole('row', { name: /Rex Rejected/ })).toContainText('Duplicate account');
+  });
+
+  test('the status filter sends status= and is cleared with the other filters', async ({ page }) => {
+    await signInAs(page, admin);
+    const queries = await stubUsers(page, () => page1([linked]));
+
+    await page.goto('/app/users');
+    await choose(page, 'Status', 'Rejected');
+
+    await expect(page).toHaveURL(/statusFilter=rejected/);
+    await expect.poll(() => queries.at(-1)).toMatchObject({ status: 'rejected' });
+    await page.getByRole('button', { name: 'Clear filters' }).click();
+    await expect(page).not.toHaveURL(/statusFilter/);
+    await expect(page.getByRole('combobox', { name: 'Status', exact: true })).toHaveText('All Status');
+
+    // Only the All tab has it
+    await page.getByRole('tab', { name: 'Active' }).click();
+    await expect(page.getByRole('combobox', { name: 'Status', exact: true })).toHaveCount(0);
+  });
+
+  test('the menu offers the status actions that fit, and never rejecting or demoting yourself', async ({ page }) => {
+    await signInAs(page, admin);
+    await stubUsers(page, () => page1([linked, unverified, rejected, self]));
+    await page.goto('/app/users');
+
+    let menu = await openMenu(page, 'Uli Unverified');
+    await expect(menu.getByRole('menuitem', { name: /Activate/ })).toHaveAttribute('data-disabled', '');
+    await expect(menu.getByRole('menuitem', { name: 'Reject' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Make admin' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Unlink Telegram' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+
+    menu = await openMenu(page, 'Rex Rejected');
+    await expect(menu.getByRole('menuitem', { name: /Reactivate/ })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Reject' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+
+    menu = await openMenu(page, 'Tess Telegram');
+    await expect(menu.getByRole('menuitem', { name: 'Reject' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Unlink Telegram' })).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    menu = await openMenu(page, 'Admin');
+    await expect(menu.getByRole('menuitem', { name: 'Reject' })).toHaveCount(0);
+    await expect(menu.getByRole('menuitem', { name: 'Make staff' })).toHaveCount(0);
+    await expect(menu.getByRole('menuitem', { name: 'Issue temporary password' })).toBeVisible();
+  });
+
+  test('Reject from the menu revokes an active user after confirmation', async ({ page }) => {
+    await signInAs(page, admin);
+    await stubUsers(page, () => page1([linked]));
+    let revoked = false;
+    await page.route('**/api/users/u3/reject', (route) => {
+      revoked = true;
+      return route.fulfill({ json: { ...linked, status: 'rejected' } });
+    });
+
+    await page.goto('/app/users');
+    await (await openMenu(page, 'Tess Telegram')).getByRole('menuitem', { name: 'Reject' }).click();
+    await page.getByRole('button', { name: 'Revoke user' }).click();
+
+    await expect(page.getByText('Tess Telegram was revoked')).toBeVisible();
+    expect(revoked).toBe(true);
+  });
+
+  test('Make admin sends the role and toasts', async ({ page }) => {
+    await signInAs(page, admin);
+    await stubUsers(page, () => page1([linked]));
+    let body: unknown;
+    await page.route('**/api/users/u3', (route) => {
+      body = route.request().postDataJSON();
+      return route.fulfill({ json: { ...linked, role: 'admin' } });
+    });
+
+    await page.goto('/app/users');
+    await (await openMenu(page, 'Tess Telegram')).getByRole('menuitem', { name: 'Make admin' }).click();
+
+    await expect(page.getByText('Tess Telegram is now Admin')).toBeVisible();
+    expect(body).toEqual({ role: 'admin' });
+  });
+
+  test('a temporary password is confirmed first, then shown once', async ({ page }) => {
+    await signInAs(page, admin);
+    await stubUsers(page, () => page1([linked]));
+    let issued = 0;
+    await page.route('**/api/users/u3/password/temp', (route) => {
+      issued += 1;
+      return route.fulfill({ json: { temporaryPassword: 'Temp-Pass-1234' } });
+    });
+
+    await page.goto('/app/users');
+    await (await openMenu(page, 'Tess Telegram')).getByRole('menuitem', { name: 'Issue temporary password' }).click();
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    expect(issued).toBe(0);
+
+    await (await openMenu(page, 'Tess Telegram')).getByRole('menuitem', { name: 'Issue temporary password' }).click();
+    await page.getByRole('button', { name: 'Issue password' }).click();
+    await expect(page.getByRole('alertdialog')).toContainText('Temp-Pass-1234');
+    await page.getByRole('button', { name: 'Done' }).click();
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    expect(issued).toBe(1);
+  });
+
+  test('Unlink Telegram confirms, then shows a refusal as a toast', async ({ page }) => {
+    await signInAs(page, admin);
+    await stubUsers(page, () => page1([linked]));
+    await page.route('**/api/users/u3/credentials/telegram', (route) =>
+      route.fulfill({
+        status: 409,
+        json: { error: { code: 'LAST_SIGN_IN_METHOD', message: 'This is their only way to sign in.' } },
+      })
+    );
+
+    await page.goto('/app/users');
+    await (await openMenu(page, 'Tess Telegram')).getByRole('menuitem', { name: 'Unlink Telegram' }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Unlink Telegram' }).click();
+
+    await expect(page.getByText('This is their only way to sign in.')).toBeVisible();
   });
 });

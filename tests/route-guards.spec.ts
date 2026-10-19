@@ -85,7 +85,7 @@ test.describe('route guards (stubbed API)', () => {
       await page.getByRole('button', { name: 'Sign in' }).click();
 
       await expect(page).toHaveURL('/app/users');
-      await expect(page.getByRole('heading', { name: 'Pending users' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'All users' })).toBeVisible();
     });
 
     test('an off-site or auth-page ?next= is ignored', async ({ page }) => {
@@ -242,7 +242,7 @@ test.describe('route guards (stubbed API)', () => {
     test('admin opens the admin page', async ({ page }) => {
       await stubApi(page, admin);
       await page.goto('/app/users');
-      await expect(page.getByRole('heading', { name: 'Pending users' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'All users' })).toBeVisible();
     });
 
     test('signing out lands on a plain /login, and Back does not show the shell', async ({ page }) => {
@@ -252,7 +252,7 @@ test.describe('route guards (stubbed API)', () => {
       // Two shell pages in history, so Back after signing out has somewhere in the shell to go
       await page.goto('/');
       await page.getByRole('link', { name: 'Users' }).first().click();
-      await expect(page.getByRole('heading', { name: 'Pending users' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'All users' })).toBeVisible();
       await appShell(page).click();
       await page.getByRole('menuitem', { name: 'Sign out' }).click();
       await expect(page).toHaveURL('/login');

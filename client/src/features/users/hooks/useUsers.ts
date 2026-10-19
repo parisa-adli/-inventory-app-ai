@@ -1,9 +1,10 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ACCOUNT_STATUS, PERMISSIONS, type UsersPage } from '@inventory/shared';
+import { ACCOUNT_STATUS, PERMISSIONS, type AdminUser, type UsersPage } from '@inventory/shared';
 import { useCan } from '@/features/auth/hooks/useCan';
 import { getApiError } from '@/lib/apiError';
 import * as usersApi from '../api/usersApi';
+import { ROLE_LABELS } from '../roles';
 import { USER_SORT_PRESETS } from './useUserListParams';
 
 export const usersKeys = {
@@ -62,15 +63,15 @@ export const usePendingCount = () => {
   });
 };
 
-const useStatusMutation = (
-  mutationFn: (id: string) => Promise<{ name: string }>,
-  success: (name: string) => string
+const useStatusMutation = <TVariables = string>(
+  mutationFn: (variables: TVariables) => Promise<AdminUser>,
+  success: (user: AdminUser) => string
 ) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn,
     onSuccess: (user) => {
-      toast.success(success(user.name));
+      toast.success(success(user));
     },
     onError: (err) => {
       toast.error(getApiError(err).message);
@@ -80,11 +81,29 @@ const useStatusMutation = (
   });
 };
 
-export const useActivateUser = () => useStatusMutation(usersApi.activateUser, (name) => `${name} was activated`);
+export const useActivateUser = () => useStatusMutation(usersApi.activateUser, ({ name }) => `${name} was activated`);
 
-export const useRejectUser = () => useStatusMutation(usersApi.rejectUser, (name) => `${name} was rejected`);
+export const useRejectUser = () => useStatusMutation(usersApi.rejectUser, ({ name }) => `${name} was rejected`);
 
-export const useRevokeUser = () => useStatusMutation(usersApi.rejectUser, (name) => `${name} was revoked`);
+export const useRevokeUser = () => useStatusMutation(usersApi.rejectUser, ({ name }) => `${name} was revoked`);
 
 export const useReactivateUser = () =>
-  useStatusMutation(usersApi.reactivateUser, (name) => `${name} was reactivated`);
+  useStatusMutation(usersApi.reactivateUser, ({ name }) => `${name} was reactivated`);
+
+export const useChangeRole = () =>
+  useStatusMutation(usersApi.changeUserRole, ({ name, role }) => `${name} is now ${ROLE_LABELS[role]}`);
+
+export const useUnlinkTelegram = () =>
+  useStatusMutation(usersApi.unlinkUserTelegram, ({ name }) => `Telegram was unlinked from ${name}'s account`);
+
+/** The password comes back once and is shown in a dialog, so success has no toast. */
+export const useIssueTemporaryPassword = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: usersApi.issueTemporaryPassword,
+    onError: (err) => {
+      toast.error(getApiError(err).message);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: usersKeys.all }),
+  });
+};

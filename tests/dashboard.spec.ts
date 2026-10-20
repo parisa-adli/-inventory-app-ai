@@ -264,82 +264,60 @@ test.describe('dashboard (stubbed API)', () => {
     await expect(page.getByRole('tab', { name: 'Value' })).toHaveAttribute('aria-selected', 'true');
   });
 
-  test('Custom opens a range calendar; Apply keeps the days in the URL and names them', async ({ page }) => {
+  test('Custom adds From and To days, starting at the last 30 days; each end moves in the URL', async ({ page }) => {
     const queries = await stubApi(page);
     await page.goto('/app/dashboard');
 
     const picker = page.getByRole('button', { name: /^Time range/ });
+    const from = page.getByRole('button', { name: 'From', exact: true });
+    const to = page.getByRole('button', { name: 'To', exact: true });
+    await expect(from).toHaveCount(0);
     await picker.click();
     await page.getByRole('menuitemradio', { name: 'Custom' }).click();
-    const dialog = page.getByRole('dialog', { name: 'Custom range' });
-    // Opened with the mouse, focus still moves into the calendar
-    await expect(dialog.locator(':focus')).toHaveCount(1);
-    await expect(dialog.getByRole('button', { name: 'Apply' })).toBeDisabled();
-    // Two months side by side at this width, the future out of reach
-    await expect(dialog.getByRole('grid')).toHaveCount(2);
-    await expect(dialog.getByRole('button', { name: /October 19th, 2026/ })).toBeDisabled();
-    await dialog.getByRole('button', { name: /October 5th, 2026/ }).click();
-    await dialog.getByRole('button', { name: /October 12th, 2026/ }).click();
-    await expect(dialog).toContainText('Oct 5 – 12, 2026');
-    await dialog.getByRole('button', { name: 'Apply' }).click();
 
-    await expect(page).toHaveURL(/\?range=custom&from=2026-10-05&to=2026-10-12$/);
-    await expect(picker).toHaveText('Oct 5 – 12, 2026');
-    await expect(picker).toBeFocused();
-    await expect.poll(() => queries.chart.at(-1)?.get('from')).toBe('2026-10-05');
-    expect(queries.chart.at(-1)?.get('to')).toBe('2026-10-12');
+    await expect(page).toHaveURL(/\?range=custom&from=2026-09-19&to=2026-10-18$/);
+    await expect(picker).toHaveText('Custom');
+    await expect(from).toHaveText('Sep 19, 2026');
+    await expect(to).toHaveText('Oct 18, 2026');
+    await expect(page.getByRole('region', { name: 'Sep 19 – Oct 18, 2026' })).toBeVisible();
     await expect.poll(() => queries.period.at(-1)?.get('range')).toBe('custom');
+
+    await from.click();
+    const calendar = page.getByRole('dialog');
+    // Opens on the picked day's month; From cannot pass To
+    await expect(calendar.getByRole('button', { name: /September 19th, 2026/ })).toBeVisible();
+    await calendar.getByRole('button', { name: /next month/i }).click();
+    await expect(calendar.getByRole('button', { name: /October 19th, 2026/ })).toBeDisabled();
+    await calendar.getByRole('button', { name: /October 5th, 2026/ }).click();
+    await expect(calendar).toHaveCount(0);
+    await expect(page).toHaveURL(/\?range=custom&from=2026-10-05&to=2026-10-18$/);
+
+    await to.click();
+    // To cannot go before From, nor into the future
+    await expect(calendar.getByRole('button', { name: /October 4th, 2026/ })).toBeDisabled();
+    await expect(calendar.getByRole('button', { name: /October 19th, 2026/ })).toBeDisabled();
+    await calendar.getByRole('button', { name: /October 12th, 2026/ }).click();
+    await expect(page).toHaveURL(/\?range=custom&from=2026-10-05&to=2026-10-12$/);
+    await expect(to).toHaveText('Oct 12, 2026');
+    await expect.poll(() => queries.chart.at(-1)?.get('to')).toBe('2026-10-12');
+    expect(queries.chart.at(-1)?.get('from')).toBe('2026-10-05');
     await expect(page.getByRole('region', { name: 'Oct 5 – 12, 2026' })).toBeVisible();
 
-    // Reopened, the calendar starts from the kept days and is checked in the menu
+    // Picking the set day again keeps it: both ends are always set
+    await to.click();
+    await calendar.getByRole('button', { name: /October 12th, 2026/ }).click();
+    await expect(page).toHaveURL(/to=2026-10-12$/);
+
+    // Custom again keeps the days; a preset drops them and the day buttons
     await picker.click();
-    await expect(page.getByRole('menuitemradio', { name: 'Custom', checked: true })).toBeVisible();
-  });
-
-  test('the custom calendar closes on Cancel and Escape, focus back on the button; Tab stays inside it', async ({ page }) => {
-    await stubApi(page);
-    await page.goto('/app/dashboard');
-    const picker = page.getByRole('button', { name: /^Time range/ });
-    const dialog = page.getByRole('dialog', { name: 'Custom range' });
-    const openCustom = async () => {
-      await picker.click();
-      await page.getByRole('menuitemradio', { name: 'Custom' }).click();
-      await expect(dialog).toBeVisible();
-    };
-
-    await openCustom();
-    await dialog.getByRole('button', { name: 'Cancel' }).click();
-    await expect(dialog).toHaveCount(0);
-    await expect(picker).toBeFocused();
-    await expect(page).toHaveURL(/\/app\/dashboard$/);
-
-    // Keyboard only
-    await page.keyboard.press('Enter');
-    await page.getByRole('menuitemradio', { name: 'Custom' }).focus();
-    await page.keyboard.press('Enter');
-    await expect(dialog.locator(':focus')).toHaveCount(1);
-    await page.keyboard.press('Escape');
-    await expect(dialog).toHaveCount(0);
-    await expect(picker).toBeFocused();
-
-    await openCustom();
-    // Tab cycles within the open calendar, so it is never left floating open behind the focus
-    await dialog.getByRole('button', { name: /previous month/i }).focus();
-    await page.keyboard.press('Shift+Tab');
-    await expect(dialog.locator(':focus')).toHaveCount(1);
-  });
-
-  test('pressing the button while the calendar is open opens the menu', async ({ page }) => {
-    await stubApi(page);
-    await page.goto('/app/dashboard');
-    const picker = page.getByRole('button', { name: /^Time range/ });
+    await page.getByRole('menuitemradio', { name: 'Custom', checked: true }).click();
+    await expect(page).toHaveURL(/\?range=custom&from=2026-10-05&to=2026-10-12$/);
+    await expect(page.getByRole('menu')).toHaveCount(0);
     await picker.click();
-    await page.getByRole('menuitemradio', { name: 'Custom' }).click();
-    await expect(page.getByRole('dialog', { name: 'Custom range' })).toBeVisible();
-
-    await picker.click();
-    await expect(page.getByRole('dialog', { name: 'Custom range' })).toHaveCount(0);
-    await expect(page.getByRole('menu')).toBeVisible();
+    await page.getByRole('menuitemradio', { name: '7 days' }).click();
+    await expect(page).toHaveURL(/\?range=7d$/);
+    await expect(from).toHaveCount(0);
+    await expect(to).toHaveCount(0);
   });
 
   test('custom days the server would refuse fall back to 30 days', async ({ page }) => {
@@ -351,15 +329,6 @@ test.describe('dashboard (stubbed API)', () => {
       await expect.poll(() => queries.chart.at(-1)?.get('range')).toBe('30d');
       expect(queries.chart.at(-1)?.has('from')).toBe(false);
     }
-  });
-
-  test('one month at a time below md, so the calendar does not stack two', async ({ page }) => {
-    await page.setViewportSize({ width: 700, height: 900 });
-    await stubApi(page);
-    await page.goto('/app/dashboard');
-    await page.getByRole('button', { name: /^Time range/ }).click();
-    await page.getByRole('menuitemradio', { name: 'Custom' }).click();
-    await expect(page.getByRole('dialog', { name: 'Custom range' }).getByRole('grid')).toHaveCount(1);
   });
 
   test('the chart switches between units and value, kept in ?chart=value', async ({ page }) => {

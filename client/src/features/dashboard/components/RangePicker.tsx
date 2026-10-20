@@ -1,85 +1,50 @@
-import { useRef, useState } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
-import type { DateRange } from 'react-day-picker';
 import { DASHBOARD_FIRST_DAY, DASHBOARD_RANGES, type DashboardRange } from '@inventory/shared';
+import { DayPicker } from '@/components/DayPicker';
 import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { formatDayRange, fromDay, toDay, useDashboardRange } from '../hooks/useDashboardRange';
+import { fromDay, toDay, useDashboardRange } from '../hooks/useDashboardRange';
 
 const RANGES = Object.entries(DASHBOARD_RANGES) as [DashboardRange, string][];
 const FIRST_DAY = fromDay(DASHBOARD_FIRST_DAY);
-/** The Calendar lays two months side by side from `md`; below that they would stack. */
-const TWO_MONTHS_QUERY = '(min-width: 768px)';
+/** Custom starts as the 30 days up to today, which the From / To buttons then move. */
+const CUSTOM_START_DAYS = 30;
 
 /**
- * The dashboard's time range: an outline button naming it ("All time", or the custom days) opening a menu with the
- * current choice checked on the right. Custom opens a range calendar under the button once the menu has closed (two
- * open layers would fight over focus); Apply keeps the picked days. Closing the calendar returns focus to the button.
+ * The dashboard's time range: an outline button naming it opening a menu with the current choice checked on the right.
+ * Custom adds a From and a To day button beside it (as on the Movements page); both ends are always set.
  */
 export function RangePicker() {
   const { range, custom, setRange } = useDashboardRange();
-  const [calendarOpen, setCalendarOpen] = useState(false);
-  const [draft, setDraft] = useState<DateRange | undefined>();
-  const [twoMonths, setTwoMonths] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  // Set when Custom is picked, read as the menu finishes closing
-  const customPicked = useRef(false);
-  // Set when the calendar closes because the button was pressed: the menu opens and takes focus instead
-  const closedByTrigger = useRef(false);
-
-  const openCalendar = () => {
-    setDraft(custom ? { from: fromDay(custom.from), to: fromDay(custom.to) } : undefined);
-    setTwoMonths(window.matchMedia(TWO_MONTHS_QUERY).matches);
-    setCalendarOpen(true);
-  };
-
-  const apply = () => {
-    if (!draft?.from) return;
-    setRange({ from: toDay(draft.from), to: toDay(draft.to ?? draft.from) });
-    setCalendarOpen(false);
-  };
-
   const today = new Date();
-  const triggerLabel = custom ? formatDayRange(custom.from, custom.to) : DASHBOARD_RANGES[range];
+
+  const pickCustom = () => {
+    if (custom) return;
+    const from = new Date(today.getFullYear(), today.getMonth(), today.getDate() - (CUSTOM_START_DAYS - 1));
+    setRange({ from: toDay(from), to: toDay(today) });
+  };
 
   return (
-    <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+    <div className="flex flex-wrap items-center gap-2">
       <DropdownMenu modal={false}>
-        <PopoverAnchor asChild>
-          <DropdownMenuTrigger asChild>
-            <Button
-              ref={triggerRef}
-              variant="outline"
-              aria-label={`Time range: ${triggerLabel}`}
-              className="h-10 rounded-lg font-normal"
-            >
-              {triggerLabel}
-              <ChevronDown className="text-muted-foreground" aria-hidden />
-            </Button>
-          </DropdownMenuTrigger>
-        </PopoverAnchor>
-        <DropdownMenuContent
-          align="end"
-          className="w-44"
-          onCloseAutoFocus={(event: Event) => {
-            if (!customPicked.current) return;
-            customPicked.current = false;
-            event.preventDefault();
-            openCalendar();
-          }}
-        >
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            aria-label={`Time range: ${DASHBOARD_RANGES[range]}`}
+            className="h-10 rounded-lg font-normal"
+          >
+            {DASHBOARD_RANGES[range]}
+            <ChevronDown className="text-muted-foreground" aria-hidden />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44">
           {RANGES.map(([value, label]) => (
             <DropdownMenuItem
               key={value}
               role="menuitemradio"
               aria-checked={value === range}
-              onSelect={() => {
-                if (value === 'custom') customPicked.current = true;
-                else setRange(value);
-              }}
+              onSelect={() => (value === 'custom' ? pickCustom() : setRange(value))}
               className={cn('justify-between', value === range && 'bg-accent/60')}
             >
               {label}
@@ -88,42 +53,28 @@ export function RangePicker() {
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
-      <PopoverContent
-        align="end"
-        aria-label="Custom range"
-        className="w-auto p-0"
-        onInteractOutside={(event: Event) => {
-          if (triggerRef.current?.contains(event.target as Node)) closedByTrigger.current = true;
-        }}
-        onCloseAutoFocus={(event: Event) => {
-          event.preventDefault();
-          if (!closedByTrigger.current) triggerRef.current?.focus();
-          closedByTrigger.current = false;
-        }}
-      >
-        <Calendar
-          mode="range"
-          selected={draft}
-          onSelect={setDraft}
-          numberOfMonths={twoMonths ? 2 : 1}
-          defaultMonth={draft?.from ?? (twoMonths ? new Date(today.getFullYear(), today.getMonth() - 1) : today)}
-          startMonth={FIRST_DAY}
-          disabled={[{ before: FIRST_DAY }, { after: today }]}
-        />
-        <div className="flex items-center justify-between gap-3 border-t p-3">
-          <p className="text-sm text-muted-foreground">
-            {draft?.from ? formatDayRange(toDay(draft.from), toDay(draft.to ?? draft.from)) : 'Pick the first day'}
-          </p>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setCalendarOpen(false)}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={apply} disabled={!draft?.from}>
-              Apply
-            </Button>
+      {custom && (
+        <>
+          <div className="flex items-center gap-2">
+            <span className="text-sm">From</span>
+            <DayPicker
+              label="From"
+              value={fromDay(custom.from)}
+              onChange={(day) => day && setRange({ from: toDay(day), to: custom.to })}
+              disabled={[{ before: FIRST_DAY }, { after: fromDay(custom.to) }]}
+            />
           </div>
-        </div>
-      </PopoverContent>
-    </Popover>
+          <div className="flex items-center gap-2">
+            <span className="text-sm">To</span>
+            <DayPicker
+              label="To"
+              value={fromDay(custom.to)}
+              onChange={(day) => day && setRange({ from: custom.from, to: toDay(day) })}
+              disabled={[{ before: fromDay(custom.from) }, { after: today }]}
+            />
+          </div>
+        </>
+      )}
+    </div>
   );
 }

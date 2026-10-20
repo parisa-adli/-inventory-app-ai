@@ -1,13 +1,13 @@
 import { useCallback, useState } from 'react';
 import { X } from 'lucide-react';
 import { STOCK_MOVEMENTS_PAGE_SIZE_DEFAULT, STOCK_MOVEMENT_TYPES, type StockMovementType } from '@inventory/shared';
+import { DayPicker } from '@/components/DayPicker';
 import { ListMessage } from '@/components/ListMessage';
 import { Pager } from '@/components/Pager';
 import { SearchInput } from '@/components/SearchInput';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { DayPicker } from '../components/DayPicker';
 import { MovementsSummary } from '../components/MovementsSummary';
 import { MovementsTable } from '../components/MovementsTable';
 import { toInstantRange } from '../dateRange';

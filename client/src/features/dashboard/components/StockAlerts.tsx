@@ -1,22 +1,27 @@
-import { Link } from 'react-router';
-import { STOCK_STATUSES } from '@inventory/shared';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { StockBadge } from '@/features/products/components/StockStatusBadge';
-import { useSettings } from '@/lib/settings';
-import { useDashboardAlerts } from '../hooks/useDashboard';
-import { productsLink } from '../productsLink';
-import { Widget, WidgetEmpty, WidgetError } from './Widget';
+import { Link } from 'react-router'
+import { STOCK_STATUSES } from '@inventory/shared'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { StockBadge } from '@/features/products/components/StockStatusBadge'
+import { useDashboardAlerts } from '../hooks/useDashboard'
+import { productsLink } from '../productsLink'
+import { Widget, WidgetEmpty, WidgetError } from './Widget'
 
 /**
  * Active products to reorder (C26): out of stock first, then low by quantity. At most 5 rows (a muted line says how
  * many qualify when there are more), then links to the Products page under each stock-status filter.
  */
 export function StockAlerts() {
-  const { data, isPending, isError, refetch } = useDashboardAlerts();
-  const { lowStockThreshold } = useSettings();
+  const { data, isPending, isError, refetch } = useDashboardAlerts()
   return (
-    <Widget title="Stock alerts" description={`Out of stock, then low. Low = 1–${lowStockThreshold} units.`}>
+    <Widget title="Stock alerts">
       {isPending ? (
         <div className="space-y-3">
           {Array.from({ length: 5 }, (_, i) => (
@@ -34,9 +39,7 @@ export function StockAlerts() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Product</TableHead>
-                  <TableHead>SKU</TableHead>
                   <TableHead className="text-right">Quantity</TableHead>
-                  <TableHead>Unit</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -48,9 +51,9 @@ export function StockAlerts() {
                         {alert.title}
                       </Link>
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-muted-foreground">{alert.sku}</TableCell>
-                    <TableCell className="text-right tabular-nums">{alert.quantity}</TableCell>
-                    <TableCell className="text-muted-foreground">{alert.unit}</TableCell>
+                    <TableCell className="text-right whitespace-nowrap tabular-nums">
+                      {alert.quantity} <span className="text-muted-foreground">{alert.unit}</span>
+                    </TableCell>
                     <TableCell className="whitespace-nowrap">
                       <StockBadge status={alert.status} />
                     </TableCell>
@@ -59,23 +62,24 @@ export function StockAlerts() {
               </TableBody>
             </Table>
           </div>
-          {data.total > data.items.length && (
-            <p className="text-sm text-muted-foreground">
-              Showing {data.items.length} of {data.total}
-            </p>
-          )}
         </>
       )}
       {!isPending && !isError && (
         <p className="flex gap-4 text-sm">
-          <Link to={productsLink({ stockStatus: STOCK_STATUSES.LOW })} className="font-medium hover:underline">
+          <Link
+            to={productsLink({ stockStatus: STOCK_STATUSES.LOW })}
+            className="font-medium hover:underline"
+          >
             View low stock
           </Link>
-          <Link to={productsLink({ stockStatus: STOCK_STATUSES.OUT })} className="font-medium hover:underline">
+          <Link
+            to={productsLink({ stockStatus: STOCK_STATUSES.OUT })}
+            className="font-medium hover:underline"
+          >
             View out of stock
           </Link>
         </p>
       )}
     </Widget>
-  );
+  )
 }

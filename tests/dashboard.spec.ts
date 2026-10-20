@@ -176,18 +176,19 @@ test.describe('dashboard (stubbed API)', () => {
 
     const alerts = page.getByRole('region', { name: 'Stock alerts' });
     await expect(alerts).toContainText('Low = 1–5 units');
-    for (const header of ['Product', 'SKU', 'Quantity', 'Unit', 'Status']) {
+    for (const header of ['Product', 'Quantity', 'Status']) {
       await expect(alerts.getByRole('columnheader', { name: header })).toBeVisible();
     }
     const rows = alerts.getByRole('row');
     await expect(rows).toHaveCount(3);
     await expect(rows.nth(1)).toContainText('USB Hub');
-    await expect(rows.nth(1)).toContainText('ELE-009');
-    await expect(rows.nth(1)).toContainText('0');
-    await expect(rows.nth(1)).toContainText('pcs');
+    for (const header of ['SKU', 'Unit']) {
+      await expect(alerts.getByRole('columnheader', { name: header })).toHaveCount(0);
+    }
+    await expect(rows.nth(1).getByRole('cell').nth(1)).toHaveText('0 pcs');
     await expect(rows.nth(1)).toContainText('Out of stock');
     await expect(rows.nth(2)).toContainText('Low stock');
-    await expect(rows.nth(2)).toContainText('kg');
+    await expect(rows.nth(2).getByRole('cell').nth(1)).toHaveText('3 kg');
     // Nothing is hidden, so no footer
     await expect(alerts.getByText(/Showing/)).toHaveCount(0);
 

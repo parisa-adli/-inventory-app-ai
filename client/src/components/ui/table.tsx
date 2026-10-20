@@ -1,10 +1,18 @@
 import * as React from "react"
 
+import { useDragScroll } from "@/lib/useDragScroll"
 import { cn } from "@/lib/utils"
 
 function Table({ className, ...props }: React.ComponentProps<"table">) {
+  // Every table can be scrolled sideways by dragging it with the mouse
+  const containerRef = useDragScroll<HTMLDivElement>()
+
   return (
-    <div data-slot="table-container" className="relative w-full overflow-auto">
+    <div
+      ref={containerRef}
+      data-slot="table-container"
+      className="relative w-full overflow-auto data-drag-scroll:cursor-grab data-dragging:cursor-grabbing data-dragging:select-none data-dragging:**:cursor-grabbing"
+    >
       <table
         data-slot="table"
         className={cn("w-full caption-bottom text-sm", className)}

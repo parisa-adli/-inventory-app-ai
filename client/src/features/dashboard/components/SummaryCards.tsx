@@ -58,12 +58,12 @@ function CardGroup<T extends object>({
       {error ? (
         <WidgetError what={error.what} onRetry={error.onRetry} />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {cards.map(({ key, label, money, stockStatus }) => (
             <section
               key={String(key)}
               aria-label={label}
-              className="relative rounded-xl border bg-card px-4 py-3 has-[a:hover]:bg-muted/40 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring"
+              className="relative min-w-0 rounded-xl border bg-card px-3 py-2 sm:px-4 sm:py-3 has-[a:hover]:bg-muted/40 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring"
             >
               <h3 className="text-xs text-muted-foreground">
                 {stockStatus ? (
@@ -75,11 +75,11 @@ function CardGroup<T extends object>({
                 )}
               </h3>
               {data ? (
-                <p className="mt-1 text-2xl font-semibold tabular-nums">
+                <p className="mt-1 text-lg font-semibold break-words tabular-nums sm:text-2xl">
                   {money ? formatMoney(data[key] as number) : units.format(data[key] as number)}
                 </p>
               ) : (
-                <Skeleton className="mt-1 h-8 w-24" />
+                <Skeleton className="mt-1 h-7 w-20 sm:h-8 sm:w-24" />
               )}
             </section>
           ))}

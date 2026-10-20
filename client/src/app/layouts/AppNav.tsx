@@ -2,7 +2,6 @@ import { useState, type ComponentType } from 'react'
 import { Link, NavLink } from 'react-router'
 import {
   ArrowLeftRight,
-  Boxes,
   ChevronDown,
   FolderTree,
   LayoutDashboard,
@@ -85,7 +84,7 @@ const useNavItems = () => {
 function Logo() {
   return (
     <span className="flex items-center gap-2 text-lg font-semibold">
-      <Boxes className="size-5" />
+      <img src="/favicon.svg" alt="" className="size-6" />
       Inventory Manager
     </span>
   )

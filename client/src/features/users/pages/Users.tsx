@@ -163,7 +163,7 @@ export default function Users() {
       )}
 
       {data && data.items.length === 0 && (
-        <p className="rounded-md border bg-white p-6 text-center text-sm text-muted-foreground">
+        <p className="rounded-md border bg-card p-6 text-center text-sm text-muted-foreground">
           {list.hasFilters ? 'No users match these filters.' : view.empty}
         </p>
       )}

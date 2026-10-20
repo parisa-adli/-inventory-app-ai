@@ -28,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import { useAuthUser, useLogout } from '@/features/auth/hooks/useAuth'
 import { PendingCountBadge } from '@/features/users/components/PendingCountBadge'
 import { cn } from '@/lib/utils'
@@ -218,7 +219,8 @@ export function AppTopBar() {
         Inventory Manager
       </Link>
 
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-1">
+        <ThemeToggle />
         <AccountMenu user={user} />
       </div>
     </header>

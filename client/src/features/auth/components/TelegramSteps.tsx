@@ -12,7 +12,7 @@ type TelegramAuth = ReturnType<typeof useTelegramAuth>;
 const formatCountdown = (seconds: number): string =>
   `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 
-/** The QR code in the white, bordered box from the design. */
+/** The QR code in the white, bordered box from the design; white in dark mode too, so it still scans. */
 function QrBox({ value }: { value: string }) {
   return (
     <div className="mx-auto w-fit rounded-xl border bg-white p-4">

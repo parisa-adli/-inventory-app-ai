@@ -69,7 +69,7 @@ export function OtpInput({
               index > 0 && 'border-l',
               index === 0 && 'rounded-l-lg',
               index === length - 1 && 'rounded-r-lg',
-              isActive && 'z-10 ring-[3px] border border-gray-400 ring-ring/40'
+              isActive && 'z-10 ring-[3px] border border-ring ring-ring/40'
             )}
           >
             {value[index] ??

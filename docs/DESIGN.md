@@ -4,7 +4,7 @@
 > Stack: shadcn/ui (style: new-york, base color: neutral) + Tailwind CSS + lucide-react icons
 
 This file is the single source of truth for UI. Every page and component must follow it.
-Tokens live in `app/globals.css` (shadcn CSS variables). **Use the semantic Tailwind classes below, never raw hex values.**
+Tokens live in `client/src/index.css` (shadcn CSS variables). **Use the semantic Tailwind classes below, never raw hex values.**
 
 ---
 
@@ -32,7 +32,7 @@ Tokens live in `app/globals.css` (shadcn CSS variables). **Use the semantic Tail
 | `--ring`                               | oklch(0.708 0 0) | #a1a1a1 | `ring-ring`                             | focus ring                           |
 | `--destructive`                        | shadcn default   | red     | `bg-destructive`, `text-destructive`    | delete, errors                       |
 
-Dark-mode values come from shadcn's neutral `.dark` block in `globals.css`. Do not hand-write them.
+Dark-mode values come from shadcn's neutral `.dark` block in `client/src/index.css`. Do not hand-write them.
 
 ### 2.2 Status colors (the only exception to monochrome)
 
@@ -63,7 +63,7 @@ Dark-mode values come from shadcn's neutral `.dark` block in `globals.css`. Do n
 - **App shell:** a left sidebar plus a top bar (see `docs/design/dashboard.png`; built in `client/src/app/layouts/AppNav.tsx`).
   - Sidebar: `w-64`, `border-r bg-muted/40`, full height and sticky. On top, a 56px logo row (`h-14 border-b`): the lucide `Boxes` icon + "Inventory Manager", `text-lg font-semibold`, linking home.
   - Nav links stack vertically below it, each with a `size-4` lucide icon: `gap-3 rounded-md px-3 py-2 text-sm text-foreground`, hover `bg-muted`. Inactive links use the same text color as the active one; the active link is set apart by `bg-muted font-medium`.
-  - Top bar: `h-14 border-b`, `sticky top-0 z-30 bg-background` so it stays while the page scrolls. On the right is one account control (see `docs/design/avatar.png`): a ghost button with an initials `Avatar`, the name and a `ChevronDown`, which gets `bg-accent` while open. It opens a `DropdownMenu` with the email (muted), a separator, then Profile (`UserRound`) and Sign out (`LogOut`). Signed out, it shows a ghost "Log in" link with a `LogIn` icon. The theme toggle is not built yet.
+  - Top bar: `h-14 border-b`, `sticky top-0 z-30 bg-background` so it stays while the page scrolls. On the right is one account control (see `docs/design/avatar.png`): a ghost button with an initials `Avatar`, the name and a `ChevronDown`, which gets `bg-accent` while open. It opens a `DropdownMenu` with the email (muted), a separator, then Profile (`UserRound`) and Sign out (`LogOut`). Signed out, it shows a ghost "Log in" link with a `LogIn` icon. Left of it sits the theme toggle (`components/ThemeToggle.tsx`): a ghost icon button showing the mode a click switches to: `Moon` in light mode (to dark), `Sun` in dark mode (to light); no menu. The choice is kept in the viewer's `localStorage` (`theme`, light when unset) and applied before first paint by a script in `client/index.html`. Auth pages show the same toggle in the top-right corner.
   - Below `md`: the sidebar is hidden. The top bar shows a ghost `Menu` icon button, the "Inventory Manager" text (`text-base font-semibold`, no icon, links home) and the account control (avatar only). The same sidebar content opens in a left `Sheet` (`w-72`), which closes on navigation, backdrop click and Escape.
 - **Content container:** `mx-auto max-w-5xl px-4 py-8`.
 - **Breadcrumbs:** at the top of every page's content (`AppBreadcrumbs`, shadcn `Breadcrumb`, `mb-4`): "Dashboard › <page>", Dashboard a link and the page `text-foreground`; just "Dashboard" on the dashboard. Each `/app` route names its crumb in its `handle: { crumb }` (`app/router.tsx`).
